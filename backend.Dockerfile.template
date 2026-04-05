@@ -1,0 +1,42 @@
+# Backend Dockerfile Template
+# Save this as backend/Dockerfile when you create the Rails app
+
+FROM ruby:3.2-alpine
+
+# Install dependencies
+RUN apk add --no-cache \
+    build-base \
+    postgresql-dev \
+    tzdata \
+    nodejs \
+    yarn \
+    git
+
+# Set working directory
+WORKDIR /app
+
+# Install bundler
+RUN gem install bundler:2.5.6
+
+# Copy Gemfile and Gemfile.lock
+COPY Gemfile Gemfile.lock ./
+
+# Install gems
+RUN bundle config set --local deployment 'true' && \
+    bundle config set --local without 'development test' && \
+    bundle install --jobs 4 --retry 3
+
+# Copy application code
+COPY . .
+
+# Precompile assets (if any)
+# RUN bundle exec rails assets:precompile
+
+# Expose port
+EXPOSE 3000
+
+# Set timezone to Nepal
+ENV TZ=Asia/Kathmandu
+
+# Start server
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
