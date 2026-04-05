@@ -178,3 +178,30 @@ env/
 # Keep template files and documentation
 !backend.Dockerfile.template
 !frontend.Dockerfile.template
+
+# Generated progress/status docs (local workflow artifacts)
+ADVANCED_COLUMN_FILTERS.md
+ADVANCED_FILTERS_IMPLEMENTED.md
+ALL_FILTERS_ENABLED.md
+COLUMN_FILTERS_COMPLETE.md
+COMPILE_ERRORS_GUIDE.md
+COMPLETE_TANSTACK_IMPLEMENTATION.md
+DATABASE_INTEGRATION_STATUS.md
+DATABASE_SETUP.md
+DATA_IMPORT_SUCCESS.md
+FILTERS_COMPLETE_GUIDE.md
+FILTER_UPDATE_GUIDE.md
+FINAL_SUMMARY.md
+HEADLESS_UI_COMPLETE.md
+HEADLESS_UI_SELECT_IMPLEMENTED.md
+HYDRATION_FIX.md
+IMPLEMENTATION_COMPLETE.md
+IMPLEMENTATION_PLAN.md
+QUICK_REFERENCE.md
+TANSTACK_TABLE_IMPLEMENTED.md
+TANSTACK_TABLE_SUMMARY.md
+UI_IMPROVEMENTS_COMPLETE.md
+
+# Local, non-versioned skill drafts
+.cursor/skills/bankbi-data-integration/
+.cursor/skills/bankbi-ui-styleguide/
