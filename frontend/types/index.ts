@@ -41,9 +41,6 @@ export interface BranchMetrics {
 
 export interface ProvinceMetrics {
   province: string;
-  amount: number;
-  count: number;
-  branches: number;
   total_amount: number;
   transaction_count: number;
   branch_count: number;
@@ -53,8 +50,6 @@ export interface ProvinceMetrics {
 
 export interface ChannelMetrics {
   channel: string;
-  amount: number;
-  count: number;
   total_amount: number;
   transaction_count: number;
 }

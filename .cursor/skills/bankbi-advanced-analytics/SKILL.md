@@ -10,13 +10,18 @@ Use this skill when implementing KPI tree, risk deep-dive, board packs, schedule
 ## Current State (Important)
 
 Data-backed today:
-- Executive/branch/customer metrics from `tran_summary` via dashboard APIs.
+- Executive overview — full metrics from `tran_summary` via dashboard APIs
+- Branch & regional — live branch/province aggregations
+- Customer & portfolio — live customer top/profile endpoints
+- Branch detail and customer detail — live drill-down pages
 
 Mostly UI scaffold today (static/mock data in page components):
 - KPI tree page
 - Board pack page
 - Scheduled/regulatory runs page
 - Employer/payroll page
+- Financial results page
+- Digital channels page
 - Large parts of risk page
 
 Do not present scaffold pages as production analytics until backend APIs are wired.
@@ -24,17 +29,19 @@ Do not present scaffold pages as production analytics until backend APIs are wir
 ## Integration Pattern for New Analytics
 
 Follow this order:
-1. Add or extend backend aggregation in service/model layer.
+1. Add or extend backend aggregation in `DynamicDashboardService` or create a new dedicated service.
 2. Expose endpoint in `backend/config/routes.rb` and controller under `api/v1`.
-3. Keep filter/date contract compatible with existing `BaseController#filter_params`.
-4. Add typed frontend hook in `frontend/lib/hooks/useDashboardData.ts` (or dedicated hook file).
-5. Update `frontend/types/index.ts` and replace mock arrays in pages.
+3. Use `only:` parameter for selective aggregation where possible.
+4. Keep filter/date contract compatible with existing `BaseController#filter_params`.
+5. Add typed frontend hook in `frontend/lib/hooks/useDashboardData.ts`.
+6. Update `frontend/types/index.ts` and replace mock arrays in pages.
 
 ## Data Contract Rules
 
 - Send raw numerics from API; format in frontend.
 - Use stable keys and avoid per-page custom naming unless required.
-- Keep date-filter behavior consistent with existing pages (period anchored to dataset max date when available).
+- Keep date-filter behavior consistent (period anchored to dataset max date when available).
+- No duplicate field aliases in response (e.g., don't send both `amount` and `total_amount`).
 
 ## Recommended Phase Plan
 
@@ -46,9 +53,11 @@ Targets:
 - `frontend/app/dashboard/board/page.tsx`
 - `frontend/app/dashboard/scheduled/page.tsx`
 - `frontend/app/dashboard/employer/page.tsx`
+- `frontend/app/dashboard/financial/page.tsx`
+- `frontend/app/dashboard/digital/page.tsx`
 
 Deliverables:
-- Real API calls
+- Real API calls via React Query hooks
 - Loading/empty/error states
 - Removed hardcoded demo arrays where backend exists
 
@@ -60,6 +69,8 @@ Create dedicated controller/service pairs for:
 - Board pack summary and generation history
 - Schedule run history/status
 - Employer/payroll breakdown
+- Financial results (P&L, NIM, budget variance)
+- Digital channel metrics
 
 ### Phase 3: Hardening
 
@@ -73,3 +84,4 @@ Create dedicated controller/service pairs for:
 - Each advanced page has explicit empty-state text when data is unavailable.
 - Filters and period controls work consistently across advanced modules.
 - Frontend build/lint and backend syntax checks pass.
+- Dashboard pages do NOT import `Sidebar` (provided by shared layout).

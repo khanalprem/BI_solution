@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FilterBar, FilterLabel, FilterDivider } from './FilterBar';
 import { Select, SearchableSelect } from './Select';
-import apiClient from '@/lib/api';
-import type { DashboardFilters, FilterValuesResponse } from '@/types';
+import { useFilterValues } from '@/lib/hooks/useDashboardData';
+import type { DashboardFilters } from '@/types';
 
 interface AdvancedFiltersProps {
   filters: DashboardFilters;
@@ -13,35 +13,14 @@ interface AdvancedFiltersProps {
 }
 
 export function AdvancedFilters({ filters, onChange, onClear }: AdvancedFiltersProps) {
-  const [filterValues, setFilterValues] = useState<FilterValuesResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: filterValues, isLoading, error } = useFilterValues();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    apiClient
-      .get<FilterValuesResponse>('/filters/values')
-      .then(({ data }) => {
-        if (!active) return;
-        setFilterValues(data);
-        setLoadError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setLoadError(error?.message || 'Unable to load filter values');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (loadError) {
-    return <div className="text-accent-red text-xs">{loadError}</div>;
+  if (error) {
+    return <div className="text-accent-red text-xs">{(error as Error)?.message || 'Unable to load filter values'}</div>;
   }
 
-  if (!filterValues) {
+  if (isLoading || !filterValues) {
     return <div className="text-text-secondary text-xs">Loading filters...</div>;
   }
 

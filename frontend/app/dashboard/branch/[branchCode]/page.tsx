@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
@@ -52,22 +51,19 @@ export default function BranchDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen bg-bg-base">
-        <Sidebar />
-        <main className="ml-[220px] flex-1">
-          <TopBar
-            title="Branch Detail"
-            subtitle={branchCode}
-            period={period}
-            onPeriodChange={setPeriod}
-            customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-            onCustomRangeChange={handleCustomRangeChange}
-            minDate={filterStats?.date_range?.min || undefined}
-            maxDate={filterStats?.date_range?.max || undefined}
-          />
-          <div className="p-6 text-text-secondary">Loading...</div>
-        </main>
-      </div>
+      <>
+        <TopBar
+          title="Branch Detail"
+          subtitle={branchCode}
+          period={period}
+          onPeriodChange={setPeriod}
+          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+          onCustomRangeChange={handleCustomRangeChange}
+          minDate={filterStats?.date_range?.min || undefined}
+          maxDate={filterStats?.date_range?.max || undefined}
+        />
+        <div className="p-6 text-text-secondary">Loading...</div>
+      </>
     );
   }
 
@@ -79,21 +75,19 @@ export default function BranchDetailPage() {
   const avgTxn = totalCount > 0 ? totalAmount / totalCount : 0;
 
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar
-          title={branchCode}
-          subtitle="Branch Detail"
-          period={period}
-          onPeriodChange={setPeriod}
-          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-          onCustomRangeChange={handleCustomRangeChange}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-        />
+    <>
+      <TopBar
+        title={branchCode}
+        subtitle="Branch Detail"
+        period={period}
+        onPeriodChange={setPeriod}
+        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+        onCustomRangeChange={handleCustomRangeChange}
+        minDate={filterStats?.date_range?.min || undefined}
+        maxDate={filterStats?.date_range?.max || undefined}
+      />
 
-        <div className="p-6 flex flex-col gap-4">
+      <div className="p-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <Link href="/dashboard/branch" className="text-xs text-accent-blue hover:underline">
               ← Back to Branch & Regional
@@ -184,9 +178,8 @@ export default function BranchDetailPage() {
                 </TableRow>
               </TableBody>
             </Table>
-          </DataTable>
-        </div>
-      </main>
-    </div>
+        </DataTable>
+      </div>
+    </>
   );
 }

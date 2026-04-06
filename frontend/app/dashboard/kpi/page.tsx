@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { formatNPR } from '@/lib/formatters';
@@ -70,20 +69,16 @@ export default function KPIDashboard() {
   };
   
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
+    <>
+      <TopBar title="KPI Tree Analysis" subtitle="Hierarchical performance breakdown" />
       
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar title="KPI Tree Analysis" subtitle="Hierarchical performance breakdown" />
-        
-        <div className="flex flex-col gap-4 p-6">
-          <ChartCard title="Revenue Breakdown" subtitle="Click to expand/collapse nodes">
-            <div className="py-2">
-              {renderNode(kpiTree)}
-            </div>
-          </ChartCard>
-        </div>
-      </main>
-    </div>
+      <div className="flex flex-col gap-4 p-6">
+        <ChartCard title="Revenue Breakdown" subtitle="Click to expand/collapse nodes">
+          <div className="py-2">
+            {renderNode(kpiTree)}
+          </div>
+        </ChartCard>
+      </div>
+    </>
   );
 }

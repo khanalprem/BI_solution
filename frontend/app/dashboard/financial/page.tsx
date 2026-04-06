@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { ChartCard, ChartLegendItem } from '@/components/ui/ChartCard';
 import { FilterBar, FilterChips, FilterDivider, FilterLabel } from '@/components/ui/FilterBar';
@@ -151,10 +150,8 @@ export default function FinancialDashboard() {
   const cdRatio = 79.6;
 
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar
+    <>
+      <TopBar
           title="Financial Results"
           subtitle="P&L and financial performance"
           period={period}
@@ -510,7 +507,6 @@ export default function FinancialDashboard() {
             </ChartCard>
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }

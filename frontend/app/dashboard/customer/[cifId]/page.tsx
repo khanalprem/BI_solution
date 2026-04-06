@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
@@ -97,22 +96,19 @@ export default function CustomerDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen bg-bg-base">
-        <Sidebar />
-        <main className="ml-[220px] flex-1">
-          <TopBar
-            title="Customer Detail"
-            subtitle={cifId}
-            period={period}
-            onPeriodChange={setPeriod}
-            customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-            onCustomRangeChange={handleCustomRangeChange}
-            minDate={filterStats?.date_range?.min || undefined}
-            maxDate={filterStats?.date_range?.max || undefined}
-          />
-          <div className="p-6 text-text-secondary">Loading...</div>
-        </main>
-      </div>
+      <>
+        <TopBar
+          title="Customer Detail"
+          subtitle={cifId}
+          period={period}
+          onPeriodChange={setPeriod}
+          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+          onCustomRangeChange={handleCustomRangeChange}
+          minDate={filterStats?.date_range?.min || undefined}
+          maxDate={filterStats?.date_range?.max || undefined}
+        />
+        <div className="p-6 text-text-secondary">Loading...</div>
+      </>
     );
   }
 
@@ -129,21 +125,19 @@ export default function CustomerDetailPage() {
   const riskTier = profile?.risk_tier || 1;
 
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar
-          title={customerName}
-          subtitle={`Customer Detail · ${profile?.cif_id || cifId}`}
-          period={period}
-          onPeriodChange={setPeriod}
-          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-          onCustomRangeChange={handleCustomRangeChange}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-        />
+    <>
+      <TopBar
+        title={customerName}
+        subtitle={`Customer Detail · ${profile?.cif_id || cifId}`}
+        period={period}
+        onPeriodChange={setPeriod}
+        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+        onCustomRangeChange={handleCustomRangeChange}
+        minDate={filterStats?.date_range?.min || undefined}
+        maxDate={filterStats?.date_range?.max || undefined}
+      />
 
-        <div className="p-6 flex flex-col gap-4">
+      <div className="p-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <Link href="/dashboard/customer" className="text-xs text-accent-blue hover:underline">
               ← Back to Customer & Portfolio
@@ -305,9 +299,8 @@ export default function CustomerDetailPage() {
             enableFiltering={true}
             enableSorting={true}
             enablePagination={false}
-          />
-        </div>
-      </main>
-    </div>
+        />
+      </div>
+    </>
   );
 }

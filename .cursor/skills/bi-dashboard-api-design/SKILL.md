@@ -17,6 +17,8 @@ Dashboard endpoints:
 - `GET /dashboards/province_summary`
 - `GET /dashboards/channel_breakdown`
 - `GET /dashboards/daily_trend`
+- `GET /dashboards/customers_top`
+- `GET /dashboards/customer_profile`
 
 Filter endpoints:
 - `GET /filters/values`
@@ -54,10 +56,9 @@ Frontend should keep sending camelCase from UI state and convert to snake_case i
 
 Keep JSON stable and explicit for charts/tables:
 - Numeric values must be numbers (not formatted strings)
-- Include both `amount/count` and `total_amount/transaction_count` only where existing pages depend on both
-- Branch performance payload must contain:
-  - `branches`, `provinces`
-  - `total_amount`, `total_count`, `unique_accounts`, `unique_customers`
+- Province breakdown returns: `total_amount`, `transaction_count`, `branch_count`, `unique_accounts`, `avg_per_branch`
+- Channel breakdown returns: `total_amount`, `transaction_count` (no duplicate `amount`/`count` aliases)
+- Branch performance payload must contain: `branches`, `provinces`, `total_amount`, `total_count`, `unique_accounts`, `unique_customers`
 
 Do not rename keys without updating:
 - `frontend/types/index.ts`
@@ -67,28 +68,46 @@ Do not rename keys without updating:
 ## Controller Pattern
 
 For each endpoint:
-1. Parse date from snake_case or camelCase.
+1. Resolve dates using `resolved_dates` helper (not inline per-action).
 2. Use `filter_params` from `BaseController`.
-3. Build cache key from `request.query_parameters` (stable ordering).
-4. Delegate aggregation to service/model scopes.
-5. Return frontend-friendly JSON (avoid leaking DB column names).
+3. Build service via `build_service` helper to avoid repetition.
+4. Call `cached(action_name) { ... }` with block — cache key includes resolved dates.
+5. Use `service.execute(only: [...needed_sections])` to avoid running unnecessary queries.
 
 Current reference files:
 - `backend/app/controllers/api/v1/base_controller.rb`
 - `backend/app/controllers/api/v1/dashboards_controller.rb`
 - `backend/app/services/dynamic_dashboard_service.rb`
+- `backend/app/services/segment_classifier.rb`
+
+## Cache Key Rules
+
+- Cache keys include resolved dates (not raw params) to prevent stale data when default dates shift.
+- Use `cached(action, expires_in: duration)` helper in controller.
+- Dashboard endpoints: 15 minutes
+- Filter values: 1 hour
+- Filter statistics: 30 minutes
 
 ## Performance Rules
 
+- Use `only:` parameter to run only needed aggregation sections.
 - Prefer DB aggregation (`group`, `sum`, `count distinct`) over Ruby loops.
-- Keep endpoints cacheable (15m for dashboards, 1h for filter dimensions).
 - Use `distinct + order + limit` for filter value lists.
 - Preserve support for `min_amount = 0` / `max_amount = 0` (nil check, not presence check).
+
+## Error Handling
+
+- `BaseController` has catch-all `rescue_from StandardError` — returns 500 with logged details.
+- `RecordNotFound` → 404
+- `RecordInvalid` → 422
+- Custom validation errors should use `render json: { error: message }, status: :unprocessable_entity`.
 
 ## Done Checklist
 
 - Endpoint works with both snake_case and camelCase date/filter params.
 - Frontend hook/types updated if payload changed.
+- Uses `only:` for selective aggregation (not full `execute`).
+- Uses `cached()` helper (not inline `Rails.cache.fetch`).
 - `npm run lint` and `npm run build` pass in `frontend/`.
 - Ruby syntax check passes for changed backend files.
 - No temporary/debug markdown files added.

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ChevronDown, LogOut, UserCircle } from 'lucide-react';
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export function Sidebar() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [userName, setUserName] = useState('Prakash Sharma');
   const [userRole, setUserRole] = useState('Admin');
@@ -64,34 +66,34 @@ export function Sidebar() {
         
         <nav className="flex-1">
           <SidebarSection label="Platform">
-            <NavItem href="/dashboard/executive" label="Executive Overview" icon="📊" />
+            <NavItem href="/dashboard/executive" label="Executive Overview" icon="📊" active={pathname === '/dashboard/executive'} />
           </SidebarSection>
           
           <SidebarSection label="Financial performance">
-            <NavItem href="/dashboard/financial" label="Financial results" icon="📈" />
+            <NavItem href="/dashboard/financial" label="Financial results" icon="📈" active={pathname === '/dashboard/financial'} />
           </SidebarSection>
           
           <SidebarSection label="Banking performance">
-            <NavItem href="/dashboard/branch" label="Branch & regional" icon="🏢" />
-            <NavItem href="/dashboard/customer" label="Customer & portfolio" icon="👥" />
-            <NavItem href="/dashboard/employer" label="Employer & payroll" icon="💼" />
-            <NavItem href="/dashboard/risk" label="Loan & risk quality" icon="⚠️" badge="3" />
-            <NavItem href="/dashboard/digital" label="Digital channels" icon="💻" />
+            <NavItem href="/dashboard/branch" label="Branch & regional" icon="🏢" active={pathname?.startsWith('/dashboard/branch') ?? false} />
+            <NavItem href="/dashboard/customer" label="Customer & portfolio" icon="👥" active={pathname?.startsWith('/dashboard/customer') ?? false} />
+            <NavItem href="/dashboard/employer" label="Employer & payroll" icon="💼" active={pathname === '/dashboard/employer'} />
+            <NavItem href="/dashboard/risk" label="Loan & risk quality" icon="⚠️" badge="3" active={pathname === '/dashboard/risk'} />
+            <NavItem href="/dashboard/digital" label="Digital channels" icon="💻" active={pathname === '/dashboard/digital'} />
           </SidebarSection>
           
           <SidebarSection label="Analysis">
-            <NavItem href="/dashboard/kpi" label="KPI Tree Analysis" icon="🌳" />
-            <NavItem href="/dashboard/pivot" label="Pivot Analysis" icon="⊞" />
+            <NavItem href="/dashboard/kpi" label="KPI Tree Analysis" icon="🌳" active={pathname === '/dashboard/kpi'} />
+            <NavItem href="/dashboard/pivot" label="Pivot Analysis" icon="⊞" active={pathname === '/dashboard/pivot'} />
           </SidebarSection>
           
           <SidebarSection label="Regulatory & reporting">
-            <NavItem href="/dashboard/board" label="Board & governance packs" icon="📋" />
-            <NavItem href="/dashboard/scheduled" label="Scheduled & regulatory runs" icon="🕐" />
+            <NavItem href="/dashboard/board" label="Board & governance packs" icon="📋" active={pathname === '/dashboard/board'} />
+            <NavItem href="/dashboard/scheduled" label="Scheduled & regulatory runs" icon="🕐" active={pathname === '/dashboard/scheduled'} />
           </SidebarSection>
           
           <SidebarSection label="Settings">
-            <NavItem href="/dashboard/config" label="Configuration" icon="⚙️" />
-            <NavItem href="/dashboard/profile" label="User Profile" icon="👤" />
+            <NavItem href="/dashboard/config" label="Configuration" icon="⚙️" active={pathname === '/dashboard/config'} />
+            <NavItem href="/dashboard/profile" label="User Profile" icon="👤" active={pathname === '/dashboard/profile'} />
           </SidebarSection>
         </nav>
         
@@ -154,17 +156,23 @@ function NavItem({
   href, 
   label, 
   icon, 
-  badge 
+  badge,
+  active = false,
 }: { 
   href: string; 
   label: string; 
   icon?: string;
   badge?: string;
+  active?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 px-[18px] py-2 text-text-secondary hover:bg-accent-blue-dim hover:text-text-primary transition-all text-[13px] relative"
+      className={`flex items-center gap-3 px-[18px] py-2 transition-all text-[13px] relative ${
+        active
+          ? 'bg-accent-blue-dim text-text-primary font-medium border-r-2 border-accent-blue'
+          : 'text-text-secondary hover:bg-accent-blue-dim hover:text-text-primary'
+      }`}
     >
       {icon && <span className="text-base">{icon}</span>}
       {label}

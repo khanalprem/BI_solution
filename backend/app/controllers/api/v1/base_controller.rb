@@ -1,22 +1,25 @@
 module Api
   module V1
     class BaseController < ActionController::API
-      # No CSRF protection needed in API-only apps
-      
-      # Handle errors
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
-      
+      rescue_from StandardError, with: :internal_error
+
       private
-      
+
       def not_found(exception)
         render json: { error: exception.message }, status: :not_found
       end
-      
+
       def unprocessable_entity(exception)
         render json: { error: exception.message }, status: :unprocessable_entity
       end
-      
+
+      def internal_error(exception)
+        Rails.logger.error("API Error: #{exception.message}\n#{exception.backtrace&.first(10)&.join("\n")}")
+        render json: { error: 'Internal server error' }, status: :internal_server_error
+      end
+
       def parse_date(date_string)
         return nil if date_string.blank?
         Date.parse(date_string)

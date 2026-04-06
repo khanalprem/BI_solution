@@ -1,20 +1,30 @@
-# Dynamic Dashboard Service
-# Aggregates data from tran_summary with flexible filtering
 class DynamicDashboardService
+  VALID_SECTIONS = %i[summary by_branch by_province by_channel trend].freeze
+
   def initialize(start_date:, end_date:, filters: {})
     @start_date = start_date
     @end_date = end_date
     @filters = filters
   end
-  
-  def execute
-    {
-      summary: calculate_summary,
-      by_branch: branch_breakdown,
-      by_province: province_breakdown,
-      by_channel: channel_breakdown,
-      trend: daily_trend
-    }
+
+  # Pass `only:` to run a subset of aggregations instead of all five.
+  #   service.execute(only: [:summary, :by_branch])
+  def execute(only: nil)
+    sections = if only
+                 Array(only).map(&:to_sym) & VALID_SECTIONS
+               else
+                 VALID_SECTIONS
+               end
+
+    sections.each_with_object({}) do |section, hash|
+      hash[section] = case section
+                      when :summary     then calculate_summary
+                      when :by_branch   then branch_breakdown
+                      when :by_province then province_breakdown
+                      when :by_channel  then channel_breakdown
+                      when :trend       then daily_trend
+                      end
+    end
   end
 
   def top_customers(limit: 20)
@@ -42,10 +52,10 @@ class DynamicDashboardService
       {
         cif_id: record.cif_id,
         name: record.customer_name,
-        segment: infer_segment(total_amount),
+        segment: SegmentClassifier.segment_for(total_amount),
         amount: total_amount,
         accounts: accounts,
-        risk: infer_risk_tier(avg_transaction),
+        risk: SegmentClassifier.risk_tier_for(avg_transaction),
         transaction_count: transaction_count
       }
     end
@@ -56,19 +66,10 @@ class DynamicDashboardService
 
     records = filtered_scope
               .select(
-                :tran_date,
-                :acct_num,
-                :acid,
-                :part_tran_type,
-                :tran_amt,
-                :signed_tranamt,
-                :eod_balance,
-                :merchant,
-                :service,
-                :product,
-                :tran_source,
-                :gl_sub_head_code,
-                :row_id
+                :tran_date, :acct_num, :acid, :part_tran_type,
+                :tran_amt, :signed_tranamt, :eod_balance,
+                :merchant, :service, :product, :tran_source,
+                :gl_sub_head_code, :row_id
               )
               .order(tran_date: :desc, row_id: :desc)
               .limit(capped_limit)
@@ -97,119 +98,104 @@ class DynamicDashboardService
   end
 
   private
-  
+
   def calculate_summary
-    filters = base_filters
-    
+    scope = filtered_scope
     {
-      total_amount: TranSummary.total_amount(filters),
-      total_count: TranSummary.total_count(filters),
-      unique_accounts: TranSummary.unique_accounts(filters),
-      unique_customers: TranSummary.unique_customers(filters),
-      avg_transaction_size: TranSummary.average_transaction(filters)
+      total_amount: scope.sum(:tran_amt) || 0,
+      total_count: scope.sum(:tran_count) || 0,
+      unique_accounts: scope.distinct.count(:acct_num),
+      unique_customers: scope.distinct.count(:cif_id),
+      avg_transaction_size: scope.average(:tran_amt)&.to_f || 0
     }
   end
-  
-  def branch_breakdown
-    scope = filtered_scope
-    
-    results = scope.group(:gam_branch, :gam_province)
-                   .select(
-                     'gam_branch as branch_code',
-                     'gam_province as province',
-                     'SUM(tran_amt) as total_amount',
-                     'SUM(tran_count) as transaction_count',
-                     'COUNT(DISTINCT acct_num) as unique_accounts',
-                     'AVG(tran_amt) as avg_transaction'
-                   )
-                   .order('SUM(tran_amt) DESC')
-                   .limit(100)
-    
-    results.map do |record|
-      {
-        branch_code: record.branch_code,
-        province: record.province,
-        total_amount: record.total_amount.to_f,
-        transaction_count: record.transaction_count.to_i,
-        unique_accounts: record.unique_accounts.to_i,
-        avg_transaction: record.avg_transaction.to_f
-      }
-    end
-  end
-  
-  def province_breakdown
-    scope = filtered_scope
-    
-    results = scope.group(:gam_province)
-                   .select(
-                     'gam_province as province',
-                     'SUM(tran_amt) as total_amount',
-                     'SUM(tran_count) as transaction_count',
-                     'COUNT(DISTINCT gam_branch) as branch_count',
-                     'COUNT(DISTINCT acct_num) as unique_accounts'
-                   )
-                   .order('SUM(tran_amt) DESC')
-    
-    results.map do |r|
-      total_amount = r.total_amount.to_f
-      branch_count = r.branch_count.to_i
 
-      {
-        province: r.province,
-        amount: total_amount,
-        count: r.transaction_count.to_i,
-        branches: branch_count,
-        total_amount: total_amount,
-        transaction_count: r.transaction_count.to_i,
-        branch_count: branch_count,
-        unique_accounts: r.unique_accounts.to_i,
-        avg_per_branch: branch_count.positive? ? (total_amount / branch_count) : 0
-      }
-    end
+  def branch_breakdown
+    filtered_scope
+      .group(:gam_branch, :gam_province)
+      .select(
+        'gam_branch as branch_code',
+        'gam_province as province',
+        'SUM(tran_amt) as total_amount',
+        'SUM(tran_count) as transaction_count',
+        'COUNT(DISTINCT acct_num) as unique_accounts',
+        'CASE WHEN SUM(tran_count) > 0 THEN SUM(tran_amt) / SUM(tran_count) ELSE 0 END as avg_transaction'
+      )
+      .order('SUM(tran_amt) DESC')
+      .limit(100)
+      .map do |r|
+        {
+          branch_code: r.branch_code,
+          province: r.province,
+          total_amount: r.total_amount.to_f,
+          transaction_count: r.transaction_count.to_i,
+          unique_accounts: r.unique_accounts.to_i,
+          avg_transaction: r.avg_transaction.to_f
+        }
+      end
   end
-  
+
+  def province_breakdown
+    filtered_scope
+      .group(:gam_province)
+      .select(
+        'gam_province as province',
+        'SUM(tran_amt) as total_amount',
+        'SUM(tran_count) as transaction_count',
+        'COUNT(DISTINCT gam_branch) as branch_count',
+        'COUNT(DISTINCT acct_num) as unique_accounts'
+      )
+      .order('SUM(tran_amt) DESC')
+      .map do |r|
+        total_amount = r.total_amount.to_f
+        branch_count = r.branch_count.to_i
+        {
+          province: r.province,
+          total_amount: total_amount,
+          transaction_count: r.transaction_count.to_i,
+          branch_count: branch_count,
+          unique_accounts: r.unique_accounts.to_i,
+          avg_per_branch: branch_count.positive? ? (total_amount / branch_count) : 0
+        }
+      end
+  end
+
   def channel_breakdown
-    scope = filtered_scope
-    
-    results = scope.group(:tran_source)
-                   .select(
-                     'tran_source as channel',
-                     'SUM(tran_amt) as amount',
-                     'SUM(tran_count) as count'
-                   )
-                   .order('SUM(tran_amt) DESC')
-    
-    results.map do |r|
-      {
-        channel: r.channel,
-        amount: r.amount.to_f,
-        count: r.count.to_i,
-        total_amount: r.amount.to_f,
-        transaction_count: r.count.to_i
-      }
-    end
+    filtered_scope
+      .group(:tran_source)
+      .select(
+        'tran_source as channel',
+        'SUM(tran_amt) as total_amount',
+        'SUM(tran_count) as transaction_count'
+      )
+      .order('SUM(tran_amt) DESC')
+      .map do |r|
+        {
+          channel: r.channel,
+          total_amount: r.total_amount.to_f,
+          transaction_count: r.transaction_count.to_i
+        }
+      end
   end
-  
+
   def daily_trend
-    scope = filtered_scope
-    
-    results = scope.group(:tran_date)
-                   .select(
-                     'tran_date',
-                     'SUM(tran_amt) as amount',
-                     'SUM(tran_count) as count'
-                   )
-                   .order(:tran_date)
-    
-    results.map do |r|
-      {
-        date: r.tran_date,
-        amount: r.amount.to_f,
-        count: r.count.to_i
-      }
-    end
+    filtered_scope
+      .group(:tran_date)
+      .select(
+        'tran_date',
+        'SUM(tran_amt) as amount',
+        'SUM(tran_count) as count'
+      )
+      .order(:tran_date)
+      .map do |r|
+        {
+          date: r.tran_date,
+          amount: r.amount.to_f,
+          count: r.count.to_i
+        }
+      end
   end
-  
+
   def apply_filters(scope)
     {
       gam_branch: @filters[:branch],
@@ -233,7 +219,7 @@ class DynamicDashboardService
 
     scope = scope.where('tran_amt >= ?', @filters[:min_amount]) unless @filters[:min_amount].nil?
     scope = scope.where('tran_amt <= ?', @filters[:max_amount]) unless @filters[:max_amount].nil?
-    
+
     scope
   end
 
@@ -241,36 +227,11 @@ class DynamicDashboardService
     scope = TranSummary.by_date_range(@start_date, @end_date)
     apply_filters(scope)
   end
-  
-  def base_filters
-    {
-      start_date: @start_date,
-      end_date: @end_date
-    }.merge(@filters)
-  end
-
-  def infer_segment(total_amount)
-    case total_amount
-    when 1_000_000_000..Float::INFINITY then 'Private Banking'
-    when 200_000_000...1_000_000_000 then 'Affluent'
-    when 50_000_000...200_000_000 then 'SME'
-    else 'Mass Retail'
-    end
-  end
-
-  def infer_risk_tier(avg_transaction)
-    case avg_transaction
-    when 5_000_000..Float::INFINITY then 3
-    when 1_000_000...5_000_000 then 2
-    else 1
-    end
-  end
 
   def normalize_text(value)
     text = value.to_s.strip
     return nil if text.blank?
     return nil if text.casecmp('null').zero?
-
     text
   end
 

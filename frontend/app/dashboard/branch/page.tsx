@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
@@ -229,21 +228,18 @@ export default function BranchDashboard() {
   
   if (isLoading) {
     return (
-      <div className="flex">
-        <Sidebar />
-        <main className="ml-[220px] flex-1">
-          <TopBar
-            title="Branch & Regional Performance"
-            period={period}
-            onPeriodChange={handlePeriodChange}
-            customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-            onCustomRangeChange={handleCustomRangeChange}
-            minDate={filterStats?.date_range?.min || undefined}
-            maxDate={filterStats?.date_range?.max || undefined}
-          />
-          <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
-        </main>
-      </div>
+      <>
+        <TopBar
+          title="Branch & Regional Performance"
+          period={period}
+          onPeriodChange={handlePeriodChange}
+          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+          onCustomRangeChange={handleCustomRangeChange}
+          minDate={filterStats?.date_range?.min || undefined}
+          maxDate={filterStats?.date_range?.max || undefined}
+        />
+        <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
+      </>
     );
   }
   
@@ -251,11 +247,8 @@ export default function BranchDashboard() {
   const allBranches = data?.branches || [];
   
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
-      
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar
+    <>
+      <TopBar
           title="Branch & Regional Performance"
           subtitle="Branch-level insights"
           period={period}
@@ -411,7 +404,6 @@ export default function BranchDashboard() {
             }
           />
         </div>
-      </main>
-    </div>
+    </>
   );
 }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
+ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -441,14 +441,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["acct_num"], name: "index_tran_summary_on_acct_num"
+    t.index ["cif_id", "tran_date"], name: "idx_tran_summary_cif_date"
     t.index ["cif_id"], name: "index_tran_summary_on_cif_id"
     t.index ["gam_branch"], name: "index_tran_summary_on_gam_branch"
     t.index ["gam_province"], name: "index_tran_summary_on_gam_province"
+    t.index ["part_tran_type"], name: "idx_tran_summary_part_tran_type"
     t.index ["tran_branch"], name: "index_tran_summary_on_tran_branch"
+    t.index ["tran_date", "cif_id"], name: "idx_tran_summary_date_cif"
+    t.index ["tran_date", "gam_branch", "gam_province"], name: "idx_tran_summary_date_branch_province"
     t.index ["tran_date", "gam_branch"], name: "index_tran_summary_on_tran_date_and_gam_branch"
     t.index ["tran_date", "gam_province"], name: "index_tran_summary_on_tran_date_and_gam_province"
+    t.index ["tran_date", "tran_source"], name: "idx_tran_summary_date_source"
     t.index ["tran_date"], name: "index_tran_summary_on_tran_date"
     t.index ["tran_province"], name: "index_tran_summary_on_tran_province"
+    t.index ["tran_source"], name: "idx_tran_summary_tran_source"
     t.index ["tran_type"], name: "index_tran_summary_on_tran_type"
   end
 

@@ -136,6 +136,36 @@ export function getDateRange(
   return { startDate, endDate };
 }
 
+/**
+ * Parse an ISO date string (YYYY-MM-DD) into a local Date without timezone shift.
+ * Use this instead of `new Date("2021-02-18")` which interprets as UTC.
+ */
+export function toLocalDate(value?: string | null): Date | undefined {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Format a Date to ISO string (YYYY-MM-DD) using local components.
+ */
+export function toIsoDate(date?: Date | null): string {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Recharts tooltip style constant for consistent chart theming
+export const CHART_TOOLTIP_STYLE: React.CSSProperties = {
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  borderRadius: '8px',
+  fontSize: '12px',
+};
+
 // Nepal provinces
 export const NEPAL_PROVINCES = [
   { value: '', label: 'All Provinces' },

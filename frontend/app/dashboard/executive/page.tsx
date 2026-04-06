@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
@@ -166,58 +165,49 @@ export default function ExecutiveDashboard() {
   
   if (error) {
     return (
-      <div className="flex">
-        <Sidebar />
-        <main className="ml-[220px] flex-1">
-          <TopBar
-            title="Executive Overview"
-            subtitle="Last refreshed just now"
-            period={period}
-            onPeriodChange={handlePeriodChange}
-            customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-            onCustomRangeChange={handleCustomRangeChange}
-            minDate={filterStats?.date_range?.min || undefined}
-            maxDate={filterStats?.date_range?.max || undefined}
-          />
-          <div className="p-6">
-            <div className="bg-accent-red-dim border border-[rgba(239,68,68,0.2)] text-accent-red p-4 rounded-lg">
-              Error loading dashboard data. Please ensure backend is running on port 3001.
-            </div>
+      <>
+        <TopBar
+          title="Executive Overview"
+          subtitle="Last refreshed just now"
+          period={period}
+          onPeriodChange={handlePeriodChange}
+          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+          onCustomRangeChange={handleCustomRangeChange}
+          minDate={filterStats?.date_range?.min || undefined}
+          maxDate={filterStats?.date_range?.max || undefined}
+        />
+        <div className="p-6">
+          <div className="bg-accent-red-dim border border-[rgba(239,68,68,0.2)] text-accent-red p-4 rounded-lg">
+            Error loading dashboard data. Please ensure backend is running on port 3001.
           </div>
-        </main>
-      </div>
+        </div>
+      </>
     );
   }
   
   if (isLoading) {
     return (
-      <div className="flex">
-        <Sidebar />
-        <main className="ml-[220px] flex-1">
-          <TopBar
-            title="Executive Overview"
-            subtitle="Loading..."
-            period={period}
-            onPeriodChange={handlePeriodChange}
-            customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-            onCustomRangeChange={handleCustomRangeChange}
-            minDate={filterStats?.date_range?.min || undefined}
-            maxDate={filterStats?.date_range?.max || undefined}
-          />
-          <div className="p-6">
-            <div className="text-text-secondary">Loading dashboard data...</div>
-          </div>
-        </main>
-      </div>
+      <>
+        <TopBar
+          title="Executive Overview"
+          subtitle="Loading..."
+          period={period}
+          onPeriodChange={handlePeriodChange}
+          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
+          onCustomRangeChange={handleCustomRangeChange}
+          minDate={filterStats?.date_range?.min || undefined}
+          maxDate={filterStats?.date_range?.max || undefined}
+        />
+        <div className="p-6">
+          <div className="text-text-secondary">Loading dashboard data...</div>
+        </div>
+      </>
     );
   }
   
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
-      
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar
+    <>
+      <TopBar
           title="Executive Overview"
           subtitle={getSubtitle()}
           period={period}
@@ -241,9 +231,7 @@ export default function ExecutiveDashboard() {
             <KPICard
               label="Total Transaction Amount"
               value={formatNPR(data?.summary?.total_amount || 0)}
-              change={8.4}
-              changeType="up"
-              subtitle={`${data?.summary?.total_count || 0} txns`}
+              subtitle={`${(data?.summary?.total_count || 0).toLocaleString()} txns`}
               iconBg="var(--accent-blue-dim)"
               highlighted
             />
@@ -251,8 +239,6 @@ export default function ExecutiveDashboard() {
             <KPICard
               label="Unique Accounts"
               value={(data?.summary?.unique_accounts || 0).toLocaleString()}
-              change={5.1}
-              changeType="up"
               subtitle="Active accounts"
               iconBg="var(--accent-green-dim)"
             />
@@ -260,8 +246,6 @@ export default function ExecutiveDashboard() {
             <KPICard
               label="Unique Customers"
               value={(data?.summary?.unique_customers || 0).toLocaleString()}
-              change={3.2}
-              changeType="up"
               subtitle="Total customers"
               iconBg="var(--accent-purple-dim)"
             />
@@ -269,8 +253,6 @@ export default function ExecutiveDashboard() {
             <KPICard
               label="Avg Transaction Size"
               value={formatNPR(data?.summary?.avg_transaction_size || 0)}
-              change={2.7}
-              changeType="up"
               subtitle="Per transaction"
               iconBg="var(--accent-teal-dim)"
             />
@@ -278,8 +260,6 @@ export default function ExecutiveDashboard() {
             <KPICard
               label="Transaction Count"
               value={(data?.summary?.total_count || 0).toLocaleString()}
-              change={11.2}
-              changeType="up"
               subtitle="Total transactions"
               iconBg="var(--accent-amber-dim)"
             />
@@ -404,7 +384,6 @@ export default function ExecutiveDashboard() {
             }
           />
         </div>
-      </main>
-    </div>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import type {
   DashboardFilters,
   ExecutiveDashboardData,
   FilterStatisticsResponse,
+  FilterValuesResponse,
   ProvinceMetrics,
   TopCustomer,
   TrendData,
@@ -125,6 +126,18 @@ export function useFilterStatistics() {
       return data;
     },
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useFilterValues() {
+  return useQuery({
+    queryKey: ['filter-values'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<FilterValuesResponse>('/filters/values');
+      return data;
+    },
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
   });
 }
 

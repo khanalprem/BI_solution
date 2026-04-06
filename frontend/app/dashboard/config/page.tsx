@@ -1,6 +1,5 @@
 'use client';
 
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { DataTable, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '@/components/ui/DataTable';
 import { Pill } from '@/components/ui/Pill';
@@ -14,14 +13,11 @@ export default function ConfigDashboard() {
   ];
   
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
+    <>
+      <TopBar title="Configuration" subtitle="System settings & user management" />
       
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar title="Configuration" subtitle="System settings & user management" />
-        
-        <div className="flex flex-col gap-4 p-6">
-          <DataTable
+      <div className="flex flex-col gap-4 p-6">
+        <DataTable
             title="User Access Management"
             subtitle={`${users.length} users`}
             actions={
@@ -62,9 +58,8 @@ export default function ConfigDashboard() {
                 ))}
               </TableBody>
             </Table>
-          </DataTable>
-        </div>
-      </main>
-    </div>
+        </DataTable>
+      </div>
+    </>
   );
 }

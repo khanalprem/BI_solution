@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,13 +37,10 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-bg-base">
-      <Sidebar />
+    <>
+      <TopBar title="User Profile" subtitle="Manage your account details" />
 
-      <main className="ml-[220px] flex-1 flex flex-col min-w-0">
-        <TopBar title="User Profile" subtitle="Manage your account details" />
-
-        <div className="p-6">
+      <div className="p-6">
           <Card className="max-w-2xl p-5 rounded-xl">
             <CardContent className="p-0">
               <h2 className="text-base font-semibold mb-4">Profile Information</h2>
@@ -89,8 +85,7 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
-        </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
