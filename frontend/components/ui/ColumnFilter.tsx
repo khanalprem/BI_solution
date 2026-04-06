@@ -2,6 +2,25 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Column } from '@tanstack/react-table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+
+function toLocalDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function toIsoDate(date?: Date): string {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 interface ColumnFilterProps<TData> {
   column: Column<TData, unknown>;
@@ -73,12 +92,12 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
           <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl py-2">
             {/* Search */}
             <div className="px-3 pb-2 border-b border-border">
-              <input
+              <Input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search..."
-                className="w-full px-2 py-1.5 text-xs bg-bg-input border border-border rounded outline-none focus:border-accent-blue"
+                className="h-8 text-xs"
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
@@ -115,11 +134,10 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
                       key={String(value)}
                       className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent-blue-dim cursor-pointer"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={isSelected}
-                        onChange={() => toggleValue(value as string)}
-                        className="w-3 h-3 rounded border-border text-accent-blue focus:ring-accent-blue focus:ring-offset-0"
+                        onCheckedChange={() => toggleValue(value as string)}
+                        className="h-3.5 w-3.5"
                       />
                       <span className="text-xs flex-1 truncate">{String(value)}</span>
                       <span className="text-[10px] text-text-muted">({count})</span>
@@ -140,42 +158,33 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
 
       case 'date-range':
         const dateRange = (columnFilterValue as [string, string]) || ['', ''];
+        const fromDate = toLocalDate(dateRange[0]);
+        const endDate = toLocalDate(dateRange[1]);
         return (
           <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
             <div className="space-y-3">
-              <div>
-                <label className="text-[10px] text-text-muted block mb-1">From Date</label>
-                <input
-                  type="date"
-                  value={dateRange[0] || ''}
-                  onChange={(e) => {
-                    const newRange: [string, string] = [e.target.value, dateRange[1]];
-                    column.setFilterValue(newRange[0] || newRange[1] ? newRange : undefined);
-                  }}
-                  className="w-full px-2 py-1.5 text-xs bg-bg-input border border-border rounded outline-none focus:border-accent-blue"
-                />
-              </div>
-              
-              <div>
-                <label className="text-[10px] text-text-muted block mb-1">To Date</label>
-                <input
-                  type="date"
-                  value={dateRange[1] || ''}
-                  onChange={(e) => {
-                    const newRange: [string, string] = [dateRange[0], e.target.value];
-                    column.setFilterValue(newRange[0] || newRange[1] ? newRange : undefined);
-                  }}
-                  className="w-full px-2 py-1.5 text-xs bg-bg-input border border-border rounded outline-none focus:border-accent-blue"
-                />
+              <Calendar
+                mode="range"
+                selected={{ from: fromDate, to: endDate }}
+                defaultMonth={fromDate || endDate || new Date()}
+                numberOfMonths={1}
+                onSelect={(range) => {
+                  const start = toIsoDate(range?.from);
+                  const end = toIsoDate(range?.to);
+                  column.setFilterValue(start || end ? [start, end] : undefined);
+                }}
+              />
+
+              <div className="text-[10px] text-text-muted px-1">
+                {dateRange[0] || dateRange[1]
+                  ? `${dateRange[0] || '...'} to ${dateRange[1] || '...'}`
+                  : 'Select a start and end date'}
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => column.setFilterValue(undefined)}
-                  className="flex-1 px-3 py-1.5 text-xs bg-bg-input border border-border rounded hover:bg-bg-card-hover"
-                >
+                <Button variant="outline" size="sm" className="flex-1 h-8" onClick={() => column.setFilterValue(undefined)}>
                   Clear
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -188,7 +197,7 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] text-text-muted block mb-1">Min</label>
-                <input
+                <Input
                   type="number"
                   value={numRange[0] || ''}
                   onChange={(e) => {
@@ -196,13 +205,13 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
                     column.setFilterValue(newRange[0] || newRange[1] ? newRange : undefined);
                   }}
                   placeholder="Minimum value"
-                  className="w-full px-2 py-1.5 text-xs bg-bg-input border border-border rounded outline-none focus:border-accent-blue"
+                  className="h-8 text-xs"
                 />
               </div>
               
               <div>
                 <label className="text-[10px] text-text-muted block mb-1">Max</label>
-                <input
+                <Input
                   type="number"
                   value={numRange[1] || ''}
                   onChange={(e) => {
@@ -210,16 +219,13 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
                     column.setFilterValue(newRange[0] || newRange[1] ? newRange : undefined);
                   }}
                   placeholder="Maximum value"
-                  className="w-full px-2 py-1.5 text-xs bg-bg-input border border-border rounded outline-none focus:border-accent-blue"
+                  className="h-8 text-xs"
                 />
               </div>
 
-              <button
-                onClick={() => column.setFilterValue(undefined)}
-                className="w-full px-3 py-1.5 text-xs bg-bg-input border border-border rounded hover:bg-bg-card-hover"
-              >
+              <Button variant="outline" size="sm" className="w-full h-8" onClick={() => column.setFilterValue(undefined)}>
                 Clear
-              </button>
+              </Button>
             </div>
           </div>
         );
@@ -238,20 +244,22 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <input
+              <Input
                 type="text"
                 value={(columnFilterValue ?? '') as string}
                 onChange={(e) => column.setFilterValue(e.target.value || undefined)}
                 placeholder="Type to filter..."
-                className="flex-1 min-w-0 px-2.5 py-2 text-xs bg-bg-input border border-border rounded-lg outline-none focus:border-accent-blue"
+                className="flex-1 min-w-0 h-8 text-xs"
                 autoFocus
               />
-              <button
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
                 onClick={() => column.setFilterValue(undefined)}
-                className="px-3 py-2 text-[11px] bg-bg-input border border-border rounded-lg hover:bg-bg-card-hover"
               >
                 Clear
-              </button>
+              </Button>
             </div>
           </div>
         );

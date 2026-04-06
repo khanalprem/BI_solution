@@ -1,10 +1,41 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ChevronDown, LogOut, UserCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [userName, setUserName] = useState('Prakash Sharma');
+  const [userRole, setUserRole] = useState('Admin');
+
+  useEffect(() => {
+    const storedName = localStorage.getItem('bankbi-user-name');
+    const storedEmail = localStorage.getItem('bankbi-user-email');
+    if (storedName) {
+      setUserName(storedName);
+    } else if (storedEmail) {
+      setUserName(storedEmail);
+    }
+    if (storedEmail) {
+      setUserRole(storedEmail);
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('bankbi-user-email');
+    localStorage.removeItem('bankbi-user-name');
+    document.cookie = 'bankbi-auth=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    window.location.assign('/signout');
+  };
   
   return (
     <>
@@ -60,19 +91,48 @@ export function Sidebar() {
           
           <SidebarSection label="Settings">
             <NavItem href="/dashboard/config" label="Configuration" icon="⚙️" />
+            <NavItem href="/dashboard/profile" label="User Profile" icon="👤" />
           </SidebarSection>
         </nav>
         
         <div className="mt-auto border-t border-border p-3 flex-shrink-0">
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent-blue-dim cursor-pointer">
-            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-white text-[11px] font-semibold flex-shrink-0">
-              PS
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium">Prakash Sharma</div>
-              <div className="text-[10px] text-text-muted">Chief Financial Officer</div>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-accent-blue-dim transition-all text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-blue"
+              >
+                <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-white text-[11px] font-semibold flex-shrink-0">
+                  {userName.slice(0, 2).toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium truncate">{userName}</div>
+                  <div className="text-[10px] text-text-muted truncate">{userRole}</div>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-text-muted" />
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" side="top" className="w-[180px]">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/profile" className="flex items-center gap-2">
+                  <UserCircle className="w-3.5 h-3.5" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleSignOut();
+                }}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
     </>

@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 const BASE_PERIOD_OPTIONS = ['ALL', '1D', 'WTD', 'MTD', 'QTD', 'YTD', 'FY'] as const;
 type PeriodOption = (typeof BASE_PERIOD_OPTIONS)[number] | 'CUSTOM';
@@ -31,7 +35,6 @@ export function TopBar({
   showExportButton = true,
 }: TopBarProps) {
   const [internalPeriod, setInternalPeriod] = useState<PeriodOption>('ALL');
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customStart, setCustomStart] = useState(customRange?.startDate || '');
   const [customEnd, setCustomEnd] = useState(customRange?.endDate || '');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -50,17 +53,6 @@ export function TopBar({
     setInternalPeriod(nextPeriod);
   };
 
-  const applyCustomRange = () => {
-    if (!customStart || !customEnd) return;
-    const normalized = customStart <= customEnd
-      ? { startDate: customStart, endDate: customEnd }
-      : { startDate: customEnd, endDate: customStart };
-
-    onCustomRangeChange?.(normalized);
-    handlePeriodChange('CUSTOM');
-    setShowCustomPicker(false);
-  };
-
   useEffect(() => {
     setMounted(true);
     // Load theme from localStorage on mount
@@ -77,8 +69,8 @@ export function TopBar({
     setCustomEnd(customEndDate || '');
   }, [customStartDate, customEndDate]);
   
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
+  const toggleTheme = (checked: boolean) => {
+    const newTheme = checked ? 'light' : 'dark';
     setTheme(newTheme);
     document.documentElement.dataset.theme = newTheme;
     localStorage.setItem('bankbi-theme', newTheme);
@@ -96,103 +88,68 @@ export function TopBar({
       </div>
       
       <div className="flex items-center gap-2">
-        <div className="flex bg-bg-input border border-border rounded-lg overflow-hidden">
+        <RadioGroup
+          value={currentPeriod === 'CUSTOM' ? '' : currentPeriod}
+          onValueChange={(value) => {
+            if (!value) return;
+            handlePeriodChange(value as PeriodOption);
+          }}
+          className="flex bg-bg-input border border-border rounded-lg overflow-hidden gap-0"
+        >
           {BASE_PERIOD_OPTIONS.map((p) => (
-            <button
-              key={p}
-              onClick={() => handlePeriodChange(p)}
-              className={`
-                px-3 py-1 text-[11px] font-medium transition-all
+            <div key={p}>
+              <RadioGroupItem value={p} id={`period-${p}`} className="sr-only peer" />
+              <label
+                htmlFor={`period-${p}`}
+                className={`
+                block cursor-pointer px-3 py-1 text-[11px] font-medium transition-all
                 ${currentPeriod === p
-                  ? 'bg-accent-blue text-white'
-                  : 'text-text-secondary hover:text-text-primary'
-                }
+                    ? 'bg-accent-blue text-white'
+                    : 'text-text-secondary hover:text-text-primary'
+                  }
               `}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowCustomPicker((prev) => !prev)}
-            className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all
-              ${currentPeriod === 'CUSTOM'
-                ? 'bg-accent-blue text-white border-accent-blue'
-                : 'bg-bg-card border-border text-text-secondary hover:border-border-strong hover:text-text-primary'
-              }
-            `}
-          >
-            📅 Custom
-          </button>
-
-          {showCustomPicker && (
-            <div className="absolute right-0 top-10 w-[280px] p-3 rounded-xl border border-border bg-bg-card shadow-lg z-[120]">
-              <div className="text-[11px] text-text-muted mb-2">Select custom date range</div>
-              <div className="grid grid-cols-1 gap-2">
-                <label className="text-[10px] text-text-muted uppercase tracking-wider">
-                  Start Date
-                  <input
-                    type="date"
-                    value={customStart}
-                    min={minDate}
-                    max={maxDate}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className="mt-1 w-full bg-bg-input border border-border rounded-md px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                  />
-                </label>
-                <label className="text-[10px] text-text-muted uppercase tracking-wider">
-                  End Date
-                  <input
-                    type="date"
-                    value={customEnd}
-                    min={minDate}
-                    max={maxDate}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className="mt-1 w-full bg-bg-input border border-border rounded-md px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                  />
-                </label>
-              </div>
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  onClick={() => setShowCustomPicker(false)}
-                  className="px-2.5 py-1.5 text-xs rounded-md border border-border text-text-secondary hover:text-text-primary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={applyCustomRange}
-                  disabled={!customStart || !customEnd}
-                  className="px-2.5 py-1.5 text-xs rounded-md bg-accent-blue text-white disabled:opacity-50"
-                >
-                  Apply
-                </button>
-              </div>
+              >
+                {p}
+              </label>
             </div>
-          )}
-        </div>
+          ))}
+        </RadioGroup>
+
+        <DateRangePicker
+          startDate={customStart}
+          endDate={customEnd}
+          minDate={minDate}
+          maxDate={maxDate}
+          active={currentPeriod === 'CUSTOM'}
+          onApply={(range) => {
+            setCustomStart(range.startDate);
+            setCustomEnd(range.endDate);
+            onCustomRangeChange?.(range);
+            handlePeriodChange('CUSTOM');
+          }}
+        />
         
         {showFiltersButton && (
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-card border border-border text-text-secondary text-xs font-medium hover:border-border-strong hover:text-text-primary transition-all">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
             ⚙ Filters
-          </button>
+          </Button>
         )}
 
         {showExportButton && (
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-blue text-white text-xs font-medium hover:opacity-90 transition-opacity">
+          <Button size="sm" className="h-8 gap-1.5 text-xs">
             ⬇ Export
-          </button>
+          </Button>
         )}
         
         {mounted && (
-          <button
-            onClick={toggleTheme}
-            className="w-8 h-8 rounded-lg bg-bg-card border border-border flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"
-          >
-            {theme === 'dark' ? '☀' : '🌙'}
-          </button>
+          <div className="flex items-center gap-2 px-2 h-8 rounded-lg border border-border bg-bg-card">
+            <span className="text-[11px] text-text-muted">{theme === 'dark' ? '☀' : '🌙'}</span>
+            <Switch
+              checked={theme === 'light'}
+              onCheckedChange={toggleTheme}
+              aria-label="Toggle theme"
+            />
+          </div>
         )}
       </div>
     </header>

@@ -29,6 +29,7 @@ apiClient.interceptors.response.use(
       // Handle unauthorized
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
+        document.cookie = 'bankbi-auth=; Path=/; Max-Age=0; SameSite=Lax';
         window.location.href = '/signin';
       }
     }
