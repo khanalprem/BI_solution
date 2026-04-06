@@ -74,15 +74,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
     t.index ["name"], name: "index_categories_on_name", unique: true
   end
 
-  create_table "companies", force: :cascade do |t|
-    t.string "symbol", null: false
-    t.string "name", null: false
-    t.string "sector"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["symbol"], name: "index_companies_on_symbol", unique: true
-  end
-
   create_table "customers", force: :cascade do |t|
     t.string "customer_id"
     t.string "full_name"
@@ -92,16 +83,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["customer_id"], name: "index_customers_on_customer_id", unique: true
-  end
-
-  create_table "data_sync_statuses", force: :cascade do |t|
-    t.string "source", null: false
-    t.datetime "last_success_at"
-    t.text "last_error"
-    t.string "last_payload_hash"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["source"], name: "index_data_sync_statuses_on_source", unique: true
   end
 
   create_table "disclaimers", force: :cascade do |t|
@@ -136,21 +117,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
     t.string "default_from_email", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-  end
-
-  create_table "eod_bars", force: :cascade do |t|
-    t.string "symbol", null: false
-    t.date "date", null: false
-    t.decimal "open", precision: 15, scale: 4
-    t.decimal "high", precision: 15, scale: 4
-    t.decimal "low", precision: 15, scale: 4
-    t.decimal "close", precision: 15, scale: 4
-    t.bigint "volume"
-    t.decimal "turnover", precision: 18, scale: 4
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["date", "symbol"], name: "index_eod_bars_on_date_and_symbol"
-    t.index ["symbol", "date"], name: "index_eod_bars_on_symbol_and_date", unique: true
   end
 
   create_table "get_starteds", force: :cascade do |t|
@@ -229,33 +195,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_05_152432) do
     t.boolean "is_active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-  end
-
-  create_table "live_bars", force: :cascade do |t|
-    t.string "symbol", null: false
-    t.string "timeframe", default: "1m", null: false
-    t.datetime "time_bucket", null: false
-    t.decimal "open", precision: 15, scale: 4, null: false
-    t.decimal "high", precision: 15, scale: 4, null: false
-    t.decimal "low", precision: 15, scale: 4, null: false
-    t.decimal "close", precision: 15, scale: 4, null: false
-    t.bigint "volume"
-    t.decimal "turnover", precision: 18, scale: 4
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["symbol", "timeframe", "time_bucket"], name: "idx_live_bars_symbol_tf_bucket", unique: true
-    t.index ["timeframe", "time_bucket"], name: "index_live_bars_on_timeframe_and_time_bucket"
-  end
-
-  create_table "live_ticks", force: :cascade do |t|
-    t.string "symbol", null: false
-    t.datetime "time", null: false
-    t.decimal "last_price", precision: 15, scale: 4, null: false
-    t.bigint "volume"
-    t.decimal "change", precision: 15, scale: 4
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["symbol", "time"], name: "index_live_ticks_on_symbol_and_time"
   end
 
   create_table "nepse_eod_bars", force: :cascade do |t|
