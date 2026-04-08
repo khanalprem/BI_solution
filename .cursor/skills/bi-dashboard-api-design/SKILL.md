@@ -20,6 +20,20 @@ Use this skill when touching `backend/app/controllers/api/v1/*`, services, or fr
 | GET | `/dashboards/daily_trend` | `#daily_trend` | 15 min |
 | GET | `/dashboards/customers_top` | `#customers_top` | 15 min |
 | GET | `/dashboards/customer_profile` | `#customer_profile` | 15 min |
+| GET | `/dashboards/financial_summary` | `#financial_summary` | 15 min |
+| GET | `/dashboards/digital_channels` | `#digital_channels` | 15 min |
+| GET | `/dashboards/risk_summary` | `#risk_summary` | 15 min |
+| GET | `/dashboards/kpi_summary` | `#kpi_summary` | 15 min |
+| GET | `/dashboards/employer_summary` | `#employer_summary` | 15 min |
+
+### Production Data Endpoints (all 19 tables)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/production/catalog` | Lists all 19 tables + procedures + dimensions |
+| GET | `/production/table?table_name=X&page=1&page_size=25` | Paginated rows from any table |
+| GET | `/production/lookup?data_type=branch` | Calls `get_static_data` procedure |
+| GET | `/production/explorer` | Calls `get_tran_summary` with dimension/measures |
 
 ### Filter Endpoints
 

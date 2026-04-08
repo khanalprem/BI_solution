@@ -31,37 +31,101 @@ Use this skill when implementing KPI tree, pivot analysis, multi-period comparis
 
 This is the primary procedure for any multi-period or paginated analytics.
 
-### Rails — calling the procedure
+### Key facts from production (verified by inspection)
+
+- `partitionby_clause`: always pass `PARTITION BY <dimension>` — this makes `RN` reset per group and `total_rows` count per group. Passing `''` makes `count(1) OVER()` count ALL rows across all UNION periods (wrong for multi-period).
+- `eab_join`: appended AFTER the pagination window on `tb2`. Must reference `tb2.acid`.
+- `e.tran_date_bal`: the correct EAB balance column (NOT `eod_balance`, NOT `balance`).
+- EAB date condition: use `>= eod_date::date AND < end_eod_date::date` — `end_eod_date` is **exclusive** in production data. `BETWEEN` fails because it's inclusive.
+- When using EAB join, `acid` must be in `select_inner` and `groupby_clause`.
+- Empty period params (`prevdate_where => ''` etc.) produce `WHERE 1=0` — safe, returns no rows for that period.
+
+### Rails — calling the procedure (correct pattern)
 
 ```ruby
-def call_tran_summary(where_clause:, select_inner:, groupby:, page: 1, page_size: 50)
-  conn = ActiveRecord::Base.connection
-  conn.execute(<<~SQL)
-    CALL public.get_tran_summary(
-      select_outer => 'SELECT tb2.*',
-      select_inner => #{conn.quote(select_inner)},
-      where_clause => #{conn.quote(where_clause)},
-      prevdate_where => '',
-      thismonth_where => '',
-      thisyear_where => '',
-      prevmonth_where => '',
-      prevyear_where => '',
-      prevmonthmtd_where => '',
-      prevyearytd_where => '',
-      prevmonthsamedate_where => '',
-      prevyearsamedate_where => '',
-      groupby_clause => #{conn.quote(groupby)},
-      having_clause => '',
-      orderby_clause => 'ORDER BY tran_date',
-      partitionby_clause => '',
-      eab_join => '',
-      user_id => '',
-      page => #{page},
-      page_size => #{page_size}
-    )
-  SQL
-  conn.execute("SELECT * FROM result").to_a
-end
+# Simple aggregation — no EAB, no multi-period
+conn.execute(<<~SQL.squish)
+  CALL public.get_tran_summary(
+    select_outer => 'SELECT tb2.*',
+    select_inner => 'SELECT gam_branch AS dimension, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count',
+    where_clause => #{conn.quote(where_clause)},
+    prevdate_where => '', thismonth_where => '', thisyear_where => '',
+    prevmonth_where => '', prevyear_where => '', prevmonthmtd_where => '',
+    prevyearytd_where => '', prevmonthsamedate_where => '', prevyearsamedate_where => '',
+    groupby_clause => 'GROUP BY gam_branch',
+    having_clause => '',
+    orderby_clause => 'ORDER BY SUM(tran_amt) DESC',
+    partitionby_clause => 'PARTITION BY gam_branch',
+    eab_join => '',
+    user_id => '',
+    page => 1,
+    page_size => 50
+  )
+SQL
+rows = conn.exec_query('SELECT * FROM result').to_a
+```
+
+### With EAB balance (tran_date_bal)
+
+```ruby
+# acid must be in select_inner and groupby_clause
+# end_date is the date to look up balance for
+conn.execute(<<~SQL.squish)
+  CALL public.get_tran_summary(
+    select_outer => 'SELECT tb2.*, e.tran_date_bal AS eab_balance',
+    select_inner => 'SELECT acid, gam_branch AS dimension, SUM(tran_amt) AS total_amount',
+    where_clause => #{conn.quote(where_clause)},
+    prevdate_where => '', thismonth_where => '', thisyear_where => '',
+    prevmonth_where => '', prevyear_where => '', prevmonthmtd_where => '',
+    prevyearytd_where => '', prevmonthsamedate_where => '', prevyearsamedate_where => '',
+    groupby_clause => 'GROUP BY acid, gam_branch',
+    having_clause => '',
+    orderby_clause => 'ORDER BY SUM(tran_amt) DESC',
+    partitionby_clause => 'PARTITION BY gam_branch',
+    eab_join => 'LEFT JOIN eab e ON e.acid = tb2.acid AND #{end_date} >= e.eod_date::date AND #{end_date} < e.end_eod_date::date',
+    user_id => '',
+    page => 1,
+    page_size => 50
+  )
+SQL
+```
+
+### PARTITION BY — NULL handling
+
+When `tran_source` is NULL (branch transactions), `PARTITION BY tran_source` groups NULLs together correctly in PostgreSQL. Always pass a non-empty `partitionby_clause` to get correct per-group `total_rows`.
+
+```ruby
+# NULL-safe: PostgreSQL PARTITION BY treats all NULLs as one group
+partitionby_clause = 'PARTITION BY tran_source'  # NULLs grouped together ✓
+# '' would make count(1) OVER() count everything — wrong for multi-group ✗
+```
+
+### EAB table schema (production-verified)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| acid | varchar(50) | joins tran_summary.acid |
+| eod_date | timestamp | balance valid FROM (inclusive) |
+| end_eod_date | timestamp | balance valid UNTIL (exclusive — use `<` not `<=`) |
+| tran_date_bal | numeric(18,2) | **use this for EOD balance** |
+| value_date_bal | numeric(18,2) | value date balance |
+| tran_date_tot_tran | varchar | total transactions |
+| value_date_tot_tran | numeric | value date total transactions |
+| eab_crncy_code | varchar | currency |
+| lchg_time | timestamp | last changed |
+
+**Correct join:**
+```sql
+LEFT JOIN eab e ON e.acid = tb2.acid
+  AND '2024-01-31' >= e.eod_date::date
+  AND '2024-01-31' < e.end_eod_date::date
+-- Then use: e.tran_date_bal AS eab_balance
+```
+
+**Wrong (BETWEEN is inclusive — misses open-ended records):**
+```sql
+-- DO NOT USE:
+AND '2024-01-31' BETWEEN e.eod_date AND e.end_eod_date
 ```
 
 ### Multi-period comparison example

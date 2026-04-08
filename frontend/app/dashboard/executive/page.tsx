@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
-import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
+import { useDashboardData, useFilterStatistics, useDemographics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
 import { SparkLine, PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
@@ -96,6 +96,7 @@ export default function ExecutiveDashboard() {
 
   const { data, isLoading, error } = useDashboardData(filters);
   const { data: filterStats } = useFilterStatistics();
+  const { data: demographics } = useDemographics();
 
   const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
   const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min) ?? undefined, [filterStats?.date_range?.min]);
@@ -484,6 +485,82 @@ export default function ExecutiveDashboard() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* ── Customer Age Group Demographics ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+          {/* Age Group Bar Chart */}
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="text-[12px] font-semibold text-text-primary mb-0.5">Customer Age Distribution</div>
+            <div className="text-[10px] text-text-muted mb-3">Transaction volume by age group · via customers.date_of_birth</div>
+            <PremiumBarChart
+              data={(demographics?.age_groups || []) as unknown as Record<string, unknown>[]}
+              xAxisKey="age_group"
+              series={[
+                { dataKey: 'total_amount',  name: 'Total Amount',  color: '#3b82f6' },
+                { dataKey: 'credit_amount', name: 'Credit (CR)',   color: '#10b981' },
+                { dataKey: 'debit_amount',  name: 'Debit (DR)',    color: '#8b5cf6' },
+              ]}
+              formatValue={formatNPR}
+              height={220}
+            />
+          </div>
+
+          {/* Age Group Table */}
+          <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+            <div className="px-4 py-3 border-b border-border">
+              <div className="text-[12px] font-semibold text-text-primary">Age Group Breakdown</div>
+              <div className="text-[10px] text-text-muted mt-0.5">
+                {demographics?.total_customers?.toLocaleString() || '—'} customers with date of birth on record
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className="border-b border-border bg-bg-base">
+                    {['Age Group', 'Customers', 'Total Amount', 'Transactions', 'CR Amount', 'DR Amount'].map(h => (
+                      <th key={h} className={`px-3 py-2 ${h === 'Age Group' ? 'text-left' : 'text-right'} text-[10px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(demographics?.age_groups || []).map((row) => {
+                    const maxAmt = Math.max(1, ...(demographics?.age_groups || []).map(r => r.total_amount));
+                    const pct = (row.total_amount / maxAmt) * 100;
+                    return (
+                      <tr key={row.age_group} className="hover:bg-bg-input/50 transition-colors">
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-accent-blue flex-shrink-0" />
+                            <span className="font-medium text-text-primary">{row.age_group}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-text-secondary">{row.customers.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <div className="w-[40px] h-1 rounded-sm bg-bg-input overflow-hidden">
+                              <div className="h-full rounded-sm bg-accent-blue" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="font-semibold text-text-primary">{formatNPR(row.total_amount)}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-text-secondary">{row.transaction_count.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right text-accent-green">{formatNPR(row.credit_amount)}</td>
+                        <td className="px-3 py-2.5 text-right text-accent-purple">{formatNPR(row.debit_amount)}</td>
+                      </tr>
+                    );
+                  })}
+                  {(!demographics?.age_groups?.length) && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-6 text-center text-[11px] text-text-muted">
+                        Loading age group data...
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

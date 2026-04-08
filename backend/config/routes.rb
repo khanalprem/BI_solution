@@ -21,6 +21,7 @@ Rails.application.routes.draw do
       get 'dashboards/risk_summary', to: 'dashboards#risk_summary'
       get 'dashboards/kpi_summary', to: 'dashboards#kpi_summary'
       get 'dashboards/employer_summary', to: 'dashboards#employer_summary'
+      get 'dashboards/demographics', to: 'dashboards#demographics'
 
       # Filter endpoints
       get 'filters/values', to: 'filters#values'

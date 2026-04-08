@@ -6,6 +6,7 @@ import type {
   ChannelMetrics,
   CustomerProfileData,
   DashboardFilters,
+  DemographicsData,
   DigitalChannelsData,
   EmployerSummaryData,
   ExecutiveDashboardData,
@@ -276,6 +277,17 @@ export function useEmployerSummary(filters: DashboardFilters) {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useDemographics() {
+  return useQuery<DemographicsData>({
+    queryKey: ['demographics'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<DemographicsData>('/dashboards/demographics');
+      return data;
+    },
+    staleTime: 30 * 60 * 1000,
   });
 }
 

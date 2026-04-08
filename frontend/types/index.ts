@@ -191,7 +191,20 @@ export interface EmployerSummaryData {
   by_branch: { branch: string; province: string; users: number; amount: number; count: number }[];
 }
 
-export interface FilterStatisticsResponse {
+export interface DemographicsData {
+  age_groups: {
+    age_group: string;
+    customers: number;
+    accounts: number;
+    total_amount: number;
+    transaction_count: number;
+    credit_amount: number;
+    debit_amount: number;
+  }[];
+  total_customers: number;
+}
+
+
   date_range: {
     min: string | null;
     max: string | null;

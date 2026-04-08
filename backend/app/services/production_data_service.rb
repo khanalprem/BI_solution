@@ -1,84 +1,120 @@
 class ProductionDataService
+  # All 19 production tables in the nifi database (public schema)
   TABLES = {
     'tran_summary' => {
       label: 'Transaction Summary',
-      description: 'Primary production fact table for BI dashboards.',
+      description: 'Primary partitioned fact table (164K rows). Partitions: tran_summary_2021–2025.',
       category: 'fact'
     },
     'gam' => {
       label: 'General Account Master',
-      description: 'Account master details, balances, and scheme types.',
+      description: 'Account master details, balances, and scheme types (50,003 rows).',
       category: 'master'
     },
     'htd' => {
       label: 'Historical Transaction Detail',
-      description: 'Raw ledger-level transaction history.',
+      description: 'Raw ledger-level transaction history (20M+ rows). Always filter by tran_date.',
+      category: 'fact'
+    },
+    'eab' => {
+      label: 'End-of-Day Balance',
+      description: 'Balance snapshots by ACID and effective date range (150,000 rows).',
+      category: 'fact'
+    },
+    'accounts' => {
+      label: 'Accounts',
+      description: 'Rails-managed account table linked to customers (20,000 rows).',
+      category: 'master'
+    },
+    'transactions' => {
+      label: 'Transactions',
+      description: 'Rails-managed transaction table linked to accounts (14,000 rows).',
       category: 'fact'
     },
     'dates' => {
       label: 'Date Dimension',
-      description: 'Calendar, month, quarter, and year attributes.',
+      description: 'Calendar, month, quarter, and year attributes (7,306 rows).',
       category: 'dimension'
-    },
-    'data_dictionary' => {
-      label: 'Data Dictionary',
-      description: 'Dynamic query metadata and stored procedure references.',
-      category: 'metadata'
-    },
-    'user_master' => {
-      label: 'User Master',
-      description: 'Production user list used by entry and verify flows.',
-      category: 'security'
     },
     'branch' => {
       label: 'Branch Master',
-      description: 'Primary branch metadata keyed by SOL ID.',
+      description: 'Primary branch metadata keyed by SOL ID (100 rows).',
       category: 'dimension'
     },
     'branch_cdc' => {
       label: 'Branch CDC Replica',
-      description: 'Change-data-capture copy of branch metadata.',
-      category: 'dimension'
-    },
-    'gsh' => {
-      label: 'GL Sub Head',
-      description: 'GL sub-head descriptions and parent GL codes.',
+      description: 'Change-data-capture copy of branch metadata (100 rows).',
       category: 'dimension'
     },
     'cluster' => {
       label: 'Cluster',
-      description: 'Branch cluster hierarchy.',
+      description: 'Branch cluster hierarchy (10 rows).',
       category: 'dimension'
     },
     'province' => {
       label: 'Province',
-      description: 'Nepal province lookup in production numbering.',
+      description: 'Nepal province lookup — "province 1"–"province 7" (7 rows).',
       category: 'dimension'
+    },
+    'gsh' => {
+      label: 'GL Sub Head',
+      description: 'GL sub-head descriptions and parent GL codes (101 rows).',
+      category: 'dimension'
+    },
+    'data_dictionary' => {
+      label: 'Data Dictionary',
+      description: 'Dynamic query metadata and stored procedure references (98 rows).',
+      category: 'metadata'
+    },
+    'user_master' => {
+      label: 'User Master',
+      description: 'Production user list used by entry and verify flows (104 rows).',
+      category: 'security'
+    },
+    'user_branch_cluster' => {
+      label: 'User Branch Cluster',
+      description: 'Maps users to allowed branch and cluster scopes (107 rows).',
+      category: 'security'
     },
     'merchant' => {
       label: 'Merchant',
-      description: 'Merchant lookup values.',
+      description: 'Merchant lookup values (1 row).',
       category: 'lookup'
     },
     'product' => {
       label: 'Product',
-      description: 'Product lookup values.',
+      description: 'Product lookup values (1 row).',
       category: 'lookup'
     },
     'service' => {
       label: 'Service',
-      description: 'Service lookup values.',
+      description: 'Service lookup values (1 row).',
       category: 'lookup'
     },
-    'user_branch_cluster' => {
-      label: 'User Branch Cluster',
-      description: 'Maps users to allowed branch and cluster scopes.',
-      category: 'security'
+    'tran_summary_2021' => {
+      label: 'Tran Summary 2021',
+      description: 'Yearly partition of tran_summary for 2021.',
+      category: 'partition'
     },
-    'eab' => {
-      label: 'End-of-Day Balance',
-      description: 'Balance snapshots by ACID and effective date.',
-      category: 'fact'
+    'tran_summary_2022' => {
+      label: 'Tran Summary 2022',
+      description: 'Yearly partition of tran_summary for 2022.',
+      category: 'partition'
+    },
+    'tran_summary_2023' => {
+      label: 'Tran Summary 2023',
+      description: 'Yearly partition of tran_summary for 2023.',
+      category: 'partition'
+    },
+    'tran_summary_2024' => {
+      label: 'Tran Summary 2024',
+      description: 'Yearly partition of tran_summary for 2024.',
+      category: 'partition'
+    },
+    'tran_summary_2025' => {
+      label: 'Tran Summary 2025',
+      description: 'Yearly partition of tran_summary for 2025.',
+      category: 'partition'
     }
   }.freeze
 
@@ -145,6 +181,11 @@ class ProductionDataService
       label: 'Net Flow',
       select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) AS net_flow",
       order_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) DESC"
+    },
+    'eod_balance' => {
+      label: 'EOD Balance (EAB)',
+      select_sql: 'MAX(eod_balance) AS eod_balance',
+      order_sql: 'MAX(eod_balance) DESC'
     }
   }.freeze
 
@@ -243,15 +284,34 @@ class ProductionDataService
     normalized_page_size = [[page_size.to_i, 1].max, 100].min
     dimension_sql = DIMENSIONS.fetch(dimension_key).fetch(:sql)
     selected_measures = measure_keys.map { |key| MEASURES.fetch(key) }
-    select_inner = "SELECT #{dimension_sql} AS dimension, #{selected_measures.map { |meta| meta[:select_sql] }.join(', ')}"
-    where_clause = explorer_where_clause(start_date: start_date, end_date: end_date, filters: filters)
-    groupby_clause = "GROUP BY #{dimension_sql}"
+
+    # Include acid in select/groupby only when EAB balance is needed
+    include_eab = measure_keys.include?('eod_balance')
+    acid_select  = include_eab ? ', acid' : ''
+    acid_groupby = include_eab ? ', acid' : ''
+
+    select_inner   = "SELECT #{dimension_sql} AS dimension#{acid_select}, #{selected_measures.map { |m| m[:select_sql] }.join(', ')}"
+    where_clause   = explorer_where_clause(start_date: start_date, end_date: end_date, filters: filters)
+    groupby_clause = "GROUP BY #{dimension_sql}#{acid_groupby}"
     orderby_clause = "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+
+    # PARTITION BY dimension so RN resets per group — handles both NULL and non-NULL tran_source
+    partitionby_clause = "PARTITION BY #{dimension_sql}"
+
+    # EAB join: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
+    eab_join = if include_eab
+      quoted_end = @connection.quote(end_date.to_s)
+      "LEFT JOIN eab e ON e.acid = tb2.acid AND #{quoted_end} >= e.eod_date::date AND #{quoted_end} < e.end_eod_date::date"
+    else
+      ''
+    end
+
+    select_outer = include_eab ? 'SELECT tb2.*, e.tran_date_bal AS eab_balance' : 'SELECT tb2.*'
 
     with_connection do
       @connection.execute(<<~SQL.squish)
         CALL public.get_tran_summary(
-          select_outer => #{@connection.quote('SELECT tb2.*')},
+          select_outer => #{@connection.quote(select_outer)},
           select_inner => #{@connection.quote(select_inner)},
           where_clause => #{@connection.quote(where_clause)},
           prevdate_where => '',
@@ -266,8 +326,8 @@ class ProductionDataService
           groupby_clause => #{@connection.quote(groupby_clause)},
           having_clause => '',
           orderby_clause => #{@connection.quote(orderby_clause)},
-          partitionby_clause => '',
-          eab_join => '',
+          partitionby_clause => #{@connection.quote(partitionby_clause)},
+          eab_join => #{@connection.quote(eab_join)},
           user_id => '',
           page => #{normalized_page},
           page_size => #{normalized_page_size}

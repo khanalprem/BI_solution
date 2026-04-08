@@ -7,14 +7,14 @@ description: Full-stack implementation guide for BankBI (Rails 7 API + Next.js 1
 
 Use this skill when making changes that span backend API, frontend, and database.
 
-## Stack
+## Environment
 
-| Layer | Tech | Port |
-|-------|------|------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, Recharts | 3000 |
-| Backend | Rails 7 API-only, Ruby | 3001 |
-| Database | PostgreSQL — `nifi` db at 10.1.1.161:5432 | 5432 |
-| Cache | Redis (localhost:6379) | 6379 |
+- Backend `.env`: `DB_HOST=10.1.1.161`, `DB_NAME=nifi`, `DB_USERNAME=postgres`
+- Frontend `.env.local`: `NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1`
+- Rails runs locally on port 3001, connects directly to production `nifi` DB at 10.1.1.161:5432
+- No separate deployed API — run `bundle exec rails s -p 3001` in `backend/`
+
+
 
 ---
 
@@ -25,8 +25,9 @@ BI_solution/
 ├── backend/
 │   ├── app/controllers/api/v1/
 │   │   ├── base_controller.rb       # shared filter_params, parse_date, error handling
-│   │   ├── dashboards_controller.rb # executive, branch_performance, customer_profile, etc.
-│   │   └── filters_controller.rb    # /values, /branches, /statistics
+│   │   ├── dashboards_controller.rb # executive, branch_performance, province_summary, channel_breakdown, daily_trend, customers_top, customer_profile, financial_summary, digital_channels, risk_summary, kpi_summary, employer_summary
+│   │   ├── filters_controller.rb    # /values, /branches, /statistics
+│   │   └── production_controller.rb # /catalog, /table, /lookup, /explorer (all 19 production tables)
 │   ├── app/services/
 │   │   ├── dynamic_dashboard_service.rb  # all aggregation logic
 │   │   └── segment_classifier.rb         # customer segmentation
