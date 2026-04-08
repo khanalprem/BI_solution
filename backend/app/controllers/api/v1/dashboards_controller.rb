@@ -71,6 +71,7 @@ module Api
           dashboard_data = service.execute(only: %i[summary by_branch by_channel trend])
           total_amount = dashboard_data.dig(:summary, :total_amount).to_f
           avg_transaction = dashboard_data.dig(:summary, :avg_transaction_size).to_f
+          accounts = AccountMasterLookup.customer_accounts(cif_id: resolved_cif_id, filters: filter_params)
 
           {
             cif_id: resolved_cif_id,
@@ -78,6 +79,7 @@ module Api
             customer_name: customer_name_for(resolved_cif_id),
             segment: SegmentClassifier.segment_for(total_amount),
             risk_tier: SegmentClassifier.risk_tier_for(avg_transaction),
+            accounts: accounts,
             summary: dashboard_data[:summary],
             by_branch: dashboard_data[:by_branch],
             by_channel: dashboard_data[:by_channel],
@@ -164,10 +166,12 @@ module Api
       end
 
       def customer_name_for(cif_id)
-        TranSummary.by_date_range(resolved_dates[:start_date], resolved_dates[:end_date])
-                   .where(cif_id: cif_id)
-                   .where.not(acct_name: [nil, ''])
-                   .pick(:acct_name) || "Customer #{cif_id}"
+        AccountMasterLookup.customer_name_for(cif_id) ||
+          TranSummary.by_date_range(resolved_dates[:start_date], resolved_dates[:end_date])
+                     .where(cif_id: cif_id)
+                     .where.not(acct_name: [nil, ''])
+                     .pick(:acct_name) ||
+          "Customer #{cif_id}"
       end
     end
   end

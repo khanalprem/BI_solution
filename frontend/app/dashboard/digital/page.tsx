@@ -30,6 +30,7 @@ function getChannelColor(channel: string) {
 
 export default function DigitalDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useDigitalChannels(filters);
@@ -84,9 +85,17 @@ export default function DigitalDashboard() {
         onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
         minDate={filterStats?.date_range?.min || undefined}
         maxDate={filterStats?.date_range?.max || undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
       <div className="flex flex-col gap-4 p-6">
-        <AdvancedFilters filters={filters} onChange={setFilters} onClear={handleClearFilters} />
+        <AdvancedFilters
+          filters={filters}
+          onChange={setFilters}
+          onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
+        />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Filter, MoonStar, SunMedium } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -20,6 +20,9 @@ interface TopBarProps {
   maxDate?: string;
   showFiltersButton?: boolean;
   showExportButton?: boolean;
+  filtersOpen?: boolean;
+  onToggleFilters?: () => void;
+  onExport?: () => void;
 }
 
 export function TopBar({
@@ -33,14 +36,13 @@ export function TopBar({
   maxDate,
   showFiltersButton = true,
   showExportButton = true,
+  filtersOpen = false,
+  onToggleFilters,
+  onExport,
 }: TopBarProps) {
   const [internalPeriod, setInternalPeriod] = useState<PeriodOption>('ALL');
-  const [customStart, setCustomStart] = useState(customRange?.startDate || '');
-  const [customEnd, setCustomEnd] = useState(customRange?.endDate || '');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mounted, setMounted] = useState(false);
-  const customStartDate = customRange?.startDate;
-  const customEndDate = customRange?.endDate;
 
   const currentPeriod = controlledPeriod ?? internalPeriod;
 
@@ -63,12 +65,6 @@ export function TopBar({
     }
   }, []);
 
-  useEffect(() => {
-    if (!customStartDate && !customEndDate) return;
-    setCustomStart(customStartDate || '');
-    setCustomEnd(customEndDate || '');
-  }, [customStartDate, customEndDate]);
-  
   const toggleTheme = (checked: boolean) => {
     const newTheme = checked ? 'light' : 'dark';
     setTheme(newTheme);
@@ -77,7 +73,8 @@ export function TopBar({
   };
   
   return (
-    <header className="bg-bg-surface border-b border-border px-6 h-14 flex items-center gap-4 sticky top-0 z-[90]">
+    <header className="sticky top-0 z-[90] border-b border-border bg-bg-surface/95 px-6 py-3 backdrop-blur">
+      <div className="flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-0">
         <span className="text-[15px] font-semibold">{title}</span>
         {subtitle && (
@@ -87,63 +84,81 @@ export function TopBar({
         )}
       </div>
       
-      <div className="flex items-center gap-2">
-        <RadioGroup
-          value={currentPeriod === 'CUSTOM' ? '' : currentPeriod}
-          onValueChange={(value) => {
-            if (!value) return;
-            handlePeriodChange(value as PeriodOption);
-          }}
-          className="flex bg-bg-input border border-border rounded-lg overflow-hidden gap-0"
-        >
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center rounded-xl border border-border bg-bg-input p-1">
           {BASE_PERIOD_OPTIONS.map((p) => (
-            <div key={p}>
-              <RadioGroupItem value={p} id={`period-${p}`} className="sr-only peer" />
-              <label
-                htmlFor={`period-${p}`}
-                className={`
-                block cursor-pointer px-3 py-1 text-[11px] font-medium transition-all
+            <button
+              key={p}
+              type="button"
+              onClick={() => handlePeriodChange(p)}
+              aria-pressed={currentPeriod === p}
+              className={`
+                rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all
                 ${currentPeriod === p
-                    ? 'bg-accent-blue text-white'
+                    ? 'bg-accent-blue text-white shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                   }
               `}
-              >
-                {p}
-              </label>
-            </div>
+            >
+              {p}
+            </button>
           ))}
-        </RadioGroup>
+          <button
+            type="button"
+            onClick={() => handlePeriodChange('CUSTOM')}
+            aria-pressed={currentPeriod === 'CUSTOM'}
+            className={`
+              rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all
+              ${currentPeriod === 'CUSTOM'
+                  ? 'bg-accent-blue text-white shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+                }
+            `}
+          >
+            Custom
+          </button>
+        </div>
 
         <DateRangePicker
-          startDate={customStart}
-          endDate={customEnd}
+          startDate={customRange?.startDate}
+          endDate={customRange?.endDate}
           minDate={minDate}
           maxDate={maxDate}
           active={currentPeriod === 'CUSTOM'}
           onApply={(range) => {
-            setCustomStart(range.startDate);
-            setCustomEnd(range.endDate);
             onCustomRangeChange?.(range);
             handlePeriodChange('CUSTOM');
           }}
         />
         
-        {showFiltersButton && (
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            ⚙ Filters
+        {showFiltersButton && onToggleFilters && (
+          <Button
+            variant="outline"
+            size="sm"
+            className={`
+              h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold
+              ${filtersOpen ? 'border-accent-blue bg-accent-blue/10 text-accent-blue' : ''}
+            `}
+            onClick={onToggleFilters}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            {filtersOpen ? 'Hide Filters' : 'Show Filters'}
           </Button>
         )}
 
-        {showExportButton && (
-          <Button size="sm" className="h-8 gap-1.5 text-xs">
+        {showExportButton && onExport && (
+          <Button size="sm" className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold" onClick={onExport}>
             ⬇ Export
           </Button>
         )}
         
         {mounted && (
-          <div className="flex items-center gap-2 px-2 h-8 rounded-lg border border-border bg-bg-card">
-            <span className="text-[11px] text-text-muted">{theme === 'dark' ? '☀' : '🌙'}</span>
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-bg-card px-3 h-9">
+            {theme === 'dark' ? (
+              <SunMedium className="h-3.5 w-3.5 text-text-muted" />
+            ) : (
+              <MoonStar className="h-3.5 w-3.5 text-text-muted" />
+            )}
             <Switch
               checked={theme === 'light'}
               onCheckedChange={toggleTheme}
@@ -151,6 +166,7 @@ export function TopBar({
             />
           </div>
         )}
+      </div>
       </div>
     </header>
   );

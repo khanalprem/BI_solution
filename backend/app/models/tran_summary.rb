@@ -49,16 +49,30 @@ class TranSummary < ApplicationRecord
       merchant:        (filters[:merchant]),
       gl_sub_head_code:(filters[:gl_sub_head_code]),
       entry_user:      (filters[:entry_user]),
-      vfd_user:        (filters[:vfd_user]),
-      acct_num:        (filters[:acct_num]),
-      cif_id:          (filters[:cif_id])
+      vfd_user:        (filters[:vfd_user])
     }.each do |column, value|
       scope = scope.where(column => value) if value.present?
+    end
+
+    scope = apply_partial_text_filter(scope, :acct_num, filters[:acct_num])
+    scope = apply_partial_text_filter(scope, :cif_id, filters[:cif_id])
+
+    if filters[:scheme_type].present?
+      account_scope = AccountMasterLookup.account_number_scope(filters)
+      scope = scope.where(acct_num: account_scope) if account_scope.present?
     end
 
     scope = scope.where('tran_amt >= ?', filters[:min_amount]) unless filters[:min_amount].nil?
     scope = scope.where('tran_amt <= ?', filters[:max_amount]) unless filters[:max_amount].nil?
 
     scope
+  end
+
+  def self.apply_partial_text_filter(scope, column, value)
+    term = value.to_s.strip
+    return scope if term.blank?
+
+    pattern = "%#{ActiveRecord::Base.sanitize_sql_like(term)}%"
+    scope.where("#{table_name}.#{column}::text ILIKE ?", pattern)
   end
 end

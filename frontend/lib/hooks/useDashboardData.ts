@@ -13,32 +13,65 @@ import type {
   FilterValuesResponse,
   FinancialSummaryData,
   KpiSummaryData,
+  ProductionCatalogResponse,
+  ProductionExplorerResponse,
+  ProductionTableDetailResponse,
   ProvinceMetrics,
   RiskSummaryData,
   TopCustomer,
   TrendData,
 } from '@/types';
 
+function serializeFilterValue(value?: string | string[]): string | undefined {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return normalized.length > 0 ? normalized.join(',') : undefined;
+  }
+
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
 function toApiFilters(filters: DashboardFilters): Record<string, string | number> {
   const params: Record<string, string | number> = {};
+  const province = serializeFilterValue(filters.province);
+  const branchCode = serializeFilterValue(filters.branchCode);
+  const district = serializeFilterValue(filters.district);
+  const municipality = serializeFilterValue(filters.municipality);
+  const cluster = serializeFilterValue(filters.cluster);
+  const solid = serializeFilterValue(filters.solid);
+  const schemeType = serializeFilterValue(filters.schemeType);
+  const tranType = serializeFilterValue(filters.tranType);
+  const partTranType = serializeFilterValue(filters.partTranType);
+  const tranSource = serializeFilterValue(filters.tranSource);
+  const product = serializeFilterValue(filters.product);
+  const service = serializeFilterValue(filters.service);
+  const merchant = serializeFilterValue(filters.merchant);
+  const glSubHeadCode = serializeFilterValue(filters.glSubHeadCode);
+  const entryUser = serializeFilterValue(filters.entryUser);
+  const vfdUser = serializeFilterValue(filters.vfdUser);
 
   if (filters.startDate) params.start_date = filters.startDate;
   if (filters.endDate) params.end_date = filters.endDate;
-  if (filters.province) params.province = filters.province;
-  if (filters.branchCode) params.branch_code = filters.branchCode;
-  if (filters.district) params.district = filters.district;
-  if (filters.municipality) params.municipality = filters.municipality;
-  if (filters.cluster) params.cluster = filters.cluster;
-  if (filters.solid) params.solid = filters.solid;
-  if (filters.tranType) params.tran_type = filters.tranType;
-  if (filters.partTranType) params.part_tran_type = filters.partTranType;
-  if (filters.tranSource) params.tran_source = filters.tranSource;
-  if (filters.product) params.product = filters.product;
-  if (filters.service) params.service = filters.service;
-  if (filters.merchant) params.merchant = filters.merchant;
-  if (filters.glSubHeadCode) params.gl_sub_head_code = filters.glSubHeadCode;
-  if (filters.entryUser) params.entry_user = filters.entryUser;
-  if (filters.vfdUser) params.vfd_user = filters.vfdUser;
+  if (province) params.province = province;
+  if (branchCode) params.branch_code = branchCode;
+  if (district) params.district = district;
+  if (municipality) params.municipality = municipality;
+  if (cluster) params.cluster = cluster;
+  if (solid) params.solid = solid;
+  if (schemeType) params.scheme_type = schemeType;
+  if (tranType) params.tran_type = tranType;
+  if (partTranType) params.part_tran_type = partTranType;
+  if (tranSource) params.tran_source = tranSource;
+  if (product) params.product = product;
+  if (service) params.service = service;
+  if (merchant) params.merchant = merchant;
+  if (glSubHeadCode) params.gl_sub_head_code = glSubHeadCode;
+  if (entryUser) params.entry_user = entryUser;
+  if (vfdUser) params.vfd_user = vfdUser;
   if (typeof filters.minAmount === 'number') params.min_amount = filters.minAmount;
   if (typeof filters.maxAmount === 'number') params.max_amount = filters.maxAmount;
   if (filters.acctNum) params.acct_num = filters.acctNum;
@@ -243,5 +276,60 @@ export function useEmployerSummary(filters: DashboardFilters) {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProductionCatalog() {
+  return useQuery<ProductionCatalogResponse>({
+    queryKey: ['production-catalog'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ProductionCatalogResponse>('/production/catalog');
+      return data;
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+export function useProductionTable(tableName: string, page: number = 1, pageSize: number = 25) {
+  return useQuery<ProductionTableDetailResponse>({
+    queryKey: ['production-table', tableName, page, pageSize],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ProductionTableDetailResponse>('/production/table', {
+        params: {
+          table_name: tableName,
+          page,
+          page_size: pageSize,
+        },
+      });
+      return data;
+    },
+    enabled: Boolean(tableName),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProductionExplorer(
+  filters: DashboardFilters,
+  dimension: string,
+  measures: string[],
+  page: number = 1,
+  pageSize: number = 25,
+) {
+  const params = useMemo(() => ({
+    ...toApiFilters(filters),
+    dimension,
+    measures: measures.join(','),
+    page,
+    page_size: pageSize,
+  }), [filters, dimension, measures, page, pageSize]);
+
+  return useQuery<ProductionExplorerResponse>({
+    queryKey: ['production-explorer', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ProductionExplorerResponse>('/production/explorer', { params });
+      return data;
+    },
+    enabled: Boolean(dimension) && measures.length > 0,
+    staleTime: 60 * 1000,
   });
 }

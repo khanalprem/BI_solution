@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
+import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { DataTable, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '@/components/ui/DataTable';
@@ -21,8 +23,17 @@ const BOARD_REPORTS = [
   { id: 5, name: 'Annual Strategic Review', frequency: 'Annual', lastRun: '2023-12-31', status: 'completed' },
 ];
 
+interface BoardBranchRow {
+  branch_code: string;
+  province: string;
+  total_amount: number;
+  transaction_count: number;
+  unique_accounts: number;
+}
+
 export default function BoardDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useDashboardData(filters);
@@ -39,10 +50,63 @@ export default function BoardDashboard() {
     );
   }, [period, referenceDate, minReferenceDate]);
 
+  const handleClearFilters = () => {
+    if (period === 'CUSTOM') {
+      setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate }));
+      return;
+    }
+    setFilters(getDateRange(period, referenceDate, minReferenceDate || undefined));
+  };
+
   const summary = data?.summary;
   const trend = data?.trend ?? [];
   const topBranches = (data?.by_branch ?? []).slice(0, 5);
   const topProvinces = (data?.by_province ?? []).slice(0, 7);
+  const branchColumns = useMemo<ColumnDef<BoardBranchRow>[]>(() => [
+    {
+      accessorKey: 'branch_code',
+      header: 'Branch',
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+    },
+    {
+      accessorKey: 'province',
+      header: 'Province',
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+    },
+    {
+      accessorKey: 'total_amount',
+      header: 'Volume',
+      cell: ({ row }) => <strong className="text-text-primary">{formatNPR(row.original.total_amount)}</strong>,
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
+    },
+    {
+      accessorKey: 'transaction_count',
+      header: 'Transactions',
+      cell: ({ row }) => row.original.transaction_count.toLocaleString(),
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
+    },
+    {
+      accessorKey: 'unique_accounts',
+      header: 'Accounts',
+      cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
+    },
+  ], []);
 
   return (
     <>
@@ -55,8 +119,17 @@ export default function BoardDashboard() {
         onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
         minDate={filterStats?.date_range?.min || undefined}
         maxDate={filterStats?.date_range?.max || undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
       <div className="flex flex-col gap-4 p-6">
+        <AdvancedFilters
+          filters={filters}
+          onChange={setFilters}
+          onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
+        />
         {/* Executive KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <KPICard label="Total Transaction Volume" value={formatNPR(summary?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" />
@@ -100,44 +173,16 @@ export default function BoardDashboard() {
         </div>
 
         {/* Top Branches */}
-        {topBranches.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[13px] font-semibold">Top Performing Branches</div>
-              <div className="text-[11px] text-text-muted">Ranked by transaction volume</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium w-8">#</th>
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Branch</th>
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Province</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Volume</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Transactions</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Accounts</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {topBranches.map((b, idx) => (
-                    <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2.5">
-                        <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold ${idx === 0 ? 'bg-amber-500/20 text-amber-400' : idx === 1 ? 'bg-slate-400/20 text-slate-400' : idx === 2 ? 'bg-orange-400/20 text-orange-400' : 'bg-bg-input text-text-muted'}`}>
-                          {idx + 1}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 font-medium">{b.branch_code}</td>
-                      <td className="px-4 py-2.5 text-text-secondary capitalize">{b.province}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{formatNPR(b.total_amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{b.transaction_count.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{b.unique_accounts.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        <AdvancedDataTable
+          title="Top Performing Branches"
+          subtitle="Ranked by transaction volume"
+          data={topBranches}
+          columns={branchColumns}
+          pageSize={10}
+          enableFiltering={true}
+          enableSorting={true}
+          enablePagination={false}
+        />
 
         {/* Governance Reports */}
         <DataTable title="Governance Reports" subtitle={`${BOARD_REPORTS.length} reports available`}>

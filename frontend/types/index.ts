@@ -1,21 +1,24 @@
+export type MultiValueFilter = string | string[];
+
 export interface DashboardFilters {
   startDate: string;
   endDate: string;
-  province?: string;
-  branchCode?: string;
-  district?: string;
-  municipality?: string;
-  cluster?: string;
-  solid?: string;
-  tranType?: string;
-  partTranType?: string;
-  tranSource?: string;
-  product?: string;
-  service?: string;
-  merchant?: string;
-  glSubHeadCode?: string;
-  entryUser?: string;
-  vfdUser?: string;
+  province?: MultiValueFilter;
+  branchCode?: MultiValueFilter;
+  district?: MultiValueFilter;
+  municipality?: MultiValueFilter;
+  cluster?: MultiValueFilter;
+  solid?: MultiValueFilter;
+  schemeType?: MultiValueFilter;
+  tranType?: MultiValueFilter;
+  partTranType?: MultiValueFilter;
+  tranSource?: MultiValueFilter;
+  product?: MultiValueFilter;
+  service?: MultiValueFilter;
+  merchant?: MultiValueFilter;
+  glSubHeadCode?: MultiValueFilter;
+  entryUser?: MultiValueFilter;
+  vfdUser?: MultiValueFilter;
   minAmount?: number;
   maxAmount?: number;
   acctNum?: string;
@@ -90,11 +93,23 @@ export interface CustomerProfileData {
   customer_name: string;
   segment: string;
   risk_tier: number;
+  accounts: CustomerAccountDetail[];
   summary: DashboardSummary;
   by_branch: BranchMetrics[];
   by_channel: ChannelMetrics[];
   trend: TrendData[];
   recent_transactions: CustomerRecentTransaction[];
+}
+
+export interface CustomerAccountDetail {
+  acct_num: string;
+  acid: string;
+  acct_name: string;
+  scheme_type: string;
+  gl_sub_head_code?: string | null;
+  sol_id?: string | null;
+  eod_balance: number;
+  last_changed_at?: string | null;
 }
 
 export interface CustomerRecentTransaction {
@@ -122,11 +137,13 @@ export interface FilterValuesResponse {
   provinces: string[];
   branches: string[];
   clusters: string[];
+  solids: string[];
   districts: string[];
   municipalities: string[];
   tran_types: string[];
   part_tran_types: string[];
   tran_sources: string[];
+  scheme_types: string[];
   products: string[];
   services: string[];
   merchants: string[];
@@ -189,5 +206,66 @@ export interface FilterStatisticsResponse {
     unique_customers: number;
     provinces: number;
     branches: number;
+  };
+}
+
+export interface ProductionOption {
+  value: string;
+  label: string;
+}
+
+export interface ProductionTableSummary {
+  table_name: string;
+  label: string;
+  description: string;
+  category: string;
+  estimated_rows: number;
+  column_count: number;
+}
+
+export interface ProductionProcedure {
+  name: string;
+  description: string;
+  signature?: string;
+}
+
+export interface ProductionCatalogResponse {
+  tables: ProductionTableSummary[];
+  procedures: ProductionProcedure[];
+  lookup_types: string[];
+  dimension_options: ProductionOption[];
+  measure_options: ProductionOption[];
+}
+
+export interface ProductionColumn {
+  name: string;
+  data_type: string;
+}
+
+export interface ProductionTableDetailResponse {
+  table_name: string;
+  label: string;
+  description: string;
+  category: string;
+  estimated_rows: number;
+  columns: ProductionColumn[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  page: number;
+  page_size: number;
+}
+
+export interface ProductionExplorerResponse {
+  dimension: string;
+  measures: string[];
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  total_rows: number;
+  page: number;
+  page_size: number;
+  sql_preview: {
+    select_inner: string;
+    where_clause: string;
+    groupby_clause: string;
+    orderby_clause: string;
   };
 }

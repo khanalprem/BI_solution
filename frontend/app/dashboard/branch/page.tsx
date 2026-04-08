@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
-import { ChartCard } from '@/components/ui/ChartCard';
+import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
-import { Pill } from '@/components/ui/Pill';
 import { useBranchPerformance, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
@@ -35,6 +34,7 @@ type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CU
 
 export default function BranchDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({
     ...getDateRange('ALL'),
   });
@@ -77,6 +77,8 @@ export default function BranchDashboard() {
     setPeriod('CUSTOM');
     setFilters((prev) => ({ ...prev, ...range }));
   };
+
+  const totalNetworkAmount = data?.total_amount || 0;
   
   // Branch columns with ALL filters available
   const branchColumns = useMemo<ColumnDef<BranchData>[]>(
@@ -154,14 +156,15 @@ export default function BranchDashboard() {
         meta: { filterType: 'number-range' }
       },
       {
-        id: 'status',
-        header: 'Status',
-        cell: () => <Pill variant="green">Active</Pill>,
+        id: 'share',
+        header: 'Share of Network',
+        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => rowA.original.total_amount - rowB.original.total_amount,
         enableColumnFilter: false,
-        enableSorting: false,
       },
     ],
-    []
+    [totalNetworkAmount]
   );
   
   // Province columns with ALL filters
@@ -222,8 +225,16 @@ export default function BranchDashboard() {
         filterFn: 'numberRange',
         meta: { filterType: 'number-range' }
       },
+      {
+        id: 'share',
+        header: 'Share of Network',
+        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => rowA.original.total_amount - rowB.original.total_amount,
+        enableColumnFilter: false,
+      },
     ],
-    []
+    [totalNetworkAmount]
   );
   
   if (isLoading) {
@@ -237,6 +248,8 @@ export default function BranchDashboard() {
           onCustomRangeChange={handleCustomRangeChange}
           minDate={filterStats?.date_range?.min || undefined}
           maxDate={filterStats?.date_range?.max || undefined}
+          onToggleFilters={() => setFiltersOpen((current) => !current)}
+          filtersOpen={filtersOpen}
         />
         <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
       </>
@@ -265,6 +278,8 @@ export default function BranchDashboard() {
             filters={filters}
             onChange={setFilters}
             onClear={handleClearFilters}
+            advancedOpen={filtersOpen}
+            onAdvancedOpenChange={setFiltersOpen}
           />
           
           {/* KPI Cards */}
@@ -309,69 +324,84 @@ export default function BranchDashboard() {
               title="Top 10 Branches by Amount"
               subtitle="Highest performing branches"
             >
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={allBranches.slice(0, 10)} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="branch_code" 
-                    stroke="var(--text-muted)" 
-                    style={{ fontSize: '10px' }}
-                    width={70}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      background: 'var(--bg-card)', 
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Bar dataKey="total_amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {allBranches.length === 0 ? (
+                <ChartEmptyState title="No branch performance data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={allBranches.slice(0, 10)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <YAxis 
+                      type="category" 
+                      dataKey="branch_code" 
+                      stroke="var(--text-muted)" 
+                      style={{ fontSize: '10px' }}
+                      width={80}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        background: 'var(--bg-card)', 
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value: number) => [formatNPR(value), 'Amount']}
+                    />
+                    <Bar dataKey="total_amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
             
             <ChartCard
               title="Branch Scatter: Amount vs Count"
               subtitle="Bubble size = unique accounts"
             >
-              <ResponsiveContainer width="100%" height={280}>
-                <ScatterChart>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis 
-                    type="number" 
-                    dataKey="transaction_count" 
-                    name="Transactions" 
-                    stroke="var(--text-muted)" 
-                    style={{ fontSize: '11px' }}
-                  />
-                  <YAxis 
-                    type="number" 
-                    dataKey="total_amount" 
-                    name="Amount" 
-                    stroke="var(--text-muted)" 
-                    style={{ fontSize: '11px' }}
-                  />
-                  <ZAxis 
-                    type="number" 
-                    dataKey="unique_accounts" 
-                    name="Accounts" 
-                    range={[50, 400]} 
-                  />
-                  <Tooltip 
-                    cursor={{ strokeDasharray: '3 3' }}
-                    contentStyle={{ 
-                      background: 'var(--bg-card)', 
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Scatter data={allBranches} fill="#10b981" />
-                </ScatterChart>
-              </ResponsiveContainer>
+              {allBranches.length === 0 ? (
+                <ChartEmptyState title="No branch scatter data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ScatterChart>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis 
+                      type="number" 
+                      dataKey="transaction_count" 
+                      name="Transactions" 
+                      stroke="var(--text-muted)" 
+                      style={{ fontSize: '11px' }}
+                    />
+                    <YAxis 
+                      type="number" 
+                      dataKey="total_amount" 
+                      name="Amount" 
+                      stroke="var(--text-muted)" 
+                      style={{ fontSize: '11px' }}
+                      tickFormatter={(value) => formatNPR(value)}
+                    />
+                    <ZAxis 
+                      type="number" 
+                      dataKey="unique_accounts" 
+                      name="Accounts" 
+                      range={[50, 400]} 
+                    />
+                    <Tooltip 
+                      cursor={{ strokeDasharray: '3 3' }}
+                      contentStyle={{ 
+                        background: 'var(--bg-card)', 
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'Amount') return [formatNPR(value), name];
+                        return [value.toLocaleString(), name];
+                      }}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.branch_code || 'Branch'}
+                    />
+                    <Scatter data={allBranches} fill="#10b981" />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
           </div>
           

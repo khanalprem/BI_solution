@@ -19,6 +19,7 @@ const QUARTER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '
 
 export default function KPIDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useKpiSummary(filters);
@@ -64,9 +65,17 @@ export default function KPIDashboard() {
         onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
         minDate={filterStats?.date_range?.min || undefined}
         maxDate={filterStats?.date_range?.max || undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
       <div className="flex flex-col gap-4 p-6">
-        <AdvancedFilters filters={filters} onChange={setFilters} onClear={handleClearFilters} />
+        <AdvancedFilters
+          filters={filters}
+          onChange={setFilters}
+          onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
+        />
 
         {/* Primary KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

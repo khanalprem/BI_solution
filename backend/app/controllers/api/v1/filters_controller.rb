@@ -7,11 +7,13 @@ module Api
             provinces: distinct_values(:gam_province),
             branches: distinct_values(:gam_branch, limit: 100),
             clusters: distinct_values(:gam_cluster),
+            solids: distinct_values(:gam_solid, limit: 100),
             districts: [],
             municipalities: [],
             tran_types: distinct_values(:tran_type),
             part_tran_types: distinct_values(:part_tran_type),
             tran_sources: distinct_values(:tran_source),
+            scheme_types: AccountMasterLookup.distinct_values(:schm_type, limit: 100),
             products: distinct_values(:product, limit: 50),
             services: distinct_values(:service, limit: 50),
             merchants: distinct_values(:merchant, limit: 50),
@@ -24,14 +26,15 @@ module Api
       end
 
       def branches
-        province = params[:province].presence
-        cache_key = "filter_branches_#{province || 'all'}"
+        province_filter = parse_multi_value_param(params[:province])
+        province_key = Array.wrap(province_filter).sort.join('_').presence || 'all'
+        cache_key = "filter_branches_#{province_key}"
 
         branches = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
           scope = TranSummary.where.not(gam_branch: [nil, ''])
-          scope = scope.where(gam_province: province) if province
+          scope = scope.where(gam_province: province_filter) if province_filter.present?
 
-          if province
+          if province_filter.present?
             scope.distinct
                  .order(:gam_branch)
                  .pluck(:gam_branch, :gam_cluster)
@@ -77,7 +80,7 @@ module Api
       def distinct_values(column, limit: nil)
         relation = TranSummary.where.not(column => [nil, '']).distinct.order(column)
         relation = relation.limit(limit) if limit
-        relation.pluck(column)
+        relation.pluck(column).map(&:to_s)
       end
     end
   end

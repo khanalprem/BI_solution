@@ -26,6 +26,12 @@ Rails.application.routes.draw do
       get 'filters/values', to: 'filters#values'
       get 'filters/branches', to: 'filters#branches'
       get 'filters/statistics', to: 'filters#statistics'
+
+      # Production data explorer
+      get 'production/catalog', to: 'production#catalog'
+      get 'production/table', to: 'production#table'
+      get 'production/lookup', to: 'production#lookup'
+      get 'production/explorer', to: 'production#explorer'
     end
   end
 

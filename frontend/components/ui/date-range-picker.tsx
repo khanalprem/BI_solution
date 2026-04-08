@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarRange, ChevronRight } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -34,6 +34,12 @@ function toIsoDate(value?: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function clampDate(value: Date, minDate?: Date, maxDate?: Date): Date {
+  if (minDate && value < minDate) return minDate;
+  if (maxDate && value > maxDate) return maxDate;
+  return value;
+}
+
 export function DateRangePicker({
   startDate,
   endDate,
@@ -45,6 +51,8 @@ export function DateRangePicker({
   const [open, setOpen] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(startDate || '');
   const [localEndDate, setLocalEndDate] = useState(endDate || '');
+  const minAvailableDate = useMemo(() => toDate(minDate), [minDate]);
+  const maxAvailableDate = useMemo(() => toDate(maxDate) || new Date(), [maxDate]);
 
   useEffect(() => {
     setLocalStartDate(startDate || '');
@@ -61,11 +69,23 @@ export function DateRangePicker({
   const triggerLabel = useMemo(() => {
     const from = toDate(startDate);
     const to = toDate(endDate);
-    if (!from && !to) return 'Custom';
-    if (from && to) return `${format(from, 'MMM d')} - ${format(to, 'MMM d')}`;
-    if (from) return `${format(from, 'MMM d')} - ...`;
-    return `... - ${format(to as Date, 'MMM d')}`;
+    if (!from && !to) return 'Custom range';
+    if (from && to) return `${format(from, 'MMM d, yyyy')} to ${format(to, 'MMM d, yyyy')}`;
+    if (from) return `${format(from, 'MMM d, yyyy')} to ...`;
+    return `... to ${format(to as Date, 'MMM d, yyyy')}`;
   }, [startDate, endDate]);
+
+  const applyPresetRange = (days: number) => {
+    const end = maxAvailableDate;
+    const start = clampDate(subDays(end, days - 1), minAvailableDate, maxAvailableDate);
+    setLocalStartDate(toIsoDate(start));
+    setLocalEndDate(toIsoDate(end));
+  };
+
+  const applyFullRange = () => {
+    setLocalStartDate(toIsoDate(minAvailableDate));
+    setLocalEndDate(toIsoDate(maxAvailableDate));
+  };
 
   const applyRange = () => {
     if (!localStartDate || !localEndDate) return;
@@ -84,16 +104,81 @@ export function DateRangePicker({
           variant="outline"
           size="sm"
           className={cn(
-            'h-8 gap-1.5 px-3 text-xs font-medium',
-            active && 'bg-accent-blue text-white border-accent-blue hover:text-white'
+            'h-9 min-w-[220px] justify-between gap-3 rounded-xl px-3 text-xs font-medium',
+            active && 'border-accent-blue bg-accent-blue text-white hover:text-white'
           )}
         >
-          <CalendarIcon className="h-3.5 w-3.5" />
-          {triggerLabel}
+          <span className="flex items-center gap-2 min-w-0">
+            <CalendarRange className="h-4 w-4 shrink-0" />
+            <span className="truncate">{triggerLabel}</span>
+          </span>
+          <ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-90')} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[320px] p-3">
-        <div className="text-[11px] text-text-muted mb-2">Select custom date range</div>
+      <PopoverContent align="end" className="w-[360px] rounded-2xl border-border p-4 sm:w-[420px]">
+        <div className="mb-3">
+          <div className="text-[13px] font-semibold text-text-primary">Custom Date Range</div>
+          <div className="mt-1 text-[11px] text-text-muted">
+            Available data: {minDate || 'N/A'} to {maxDate || 'N/A'}
+          </div>
+        </div>
+
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Start Date</span>
+            <input
+              type="date"
+              value={localStartDate}
+              min={minDate}
+              max={maxDate}
+              onChange={(event) => setLocalStartDate(event.target.value)}
+              className="w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-xs text-text-primary outline-none focus:border-accent-blue"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">End Date</span>
+            <input
+              type="date"
+              value={localEndDate}
+              min={minDate}
+              max={maxDate}
+              onChange={(event) => setLocalEndDate(event.target.value)}
+              className="w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-xs text-text-primary outline-none focus:border-accent-blue"
+            />
+          </label>
+        </div>
+
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => applyPresetRange(7)}
+            className="rounded-full border border-border bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
+          >
+            Last 7 days
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPresetRange(30)}
+            className="rounded-full border border-border bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
+          >
+            Last 30 days
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPresetRange(90)}
+            className="rounded-full border border-border bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
+          >
+            Last 90 days
+          </button>
+          <button
+            type="button"
+            onClick={applyFullRange}
+            className="rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[11px] text-accent-blue transition-colors hover:border-accent-blue/50"
+          >
+            Full range
+          </button>
+        </div>
+
         <Calendar
           mode="range"
           selected={selectedRange}
@@ -103,10 +188,11 @@ export function DateRangePicker({
             setLocalEndDate(toIsoDate(range?.to));
           }}
           numberOfMonths={1}
-          fromDate={toDate(minDate)}
-          toDate={toDate(maxDate)}
+          fromDate={minAvailableDate}
+          toDate={maxAvailableDate}
+          className="rounded-xl border border-border bg-bg-card"
         />
-        <div className="mt-1 text-[10px] text-text-muted">
+        <div className="mt-2 text-[11px] text-text-muted">
           {localStartDate && localEndDate
             ? `${format(toDate(localStartDate) as Date, 'PPP')} - ${format(toDate(localEndDate) as Date, 'PPP')}`
             : 'Choose start and end dates from calendar'}

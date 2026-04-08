@@ -60,7 +60,7 @@ export function Sidebar() {
           </div>
           <div>
             <div className="text-[15px] font-semibold">BankBI</div>
-            <div className="text-[10px] text-text-muted">NEPAL · NPR · DEMO</div>
+            <div className="text-[10px] text-text-muted">NEPAL · NPR · PRODUCTION</div>
           </div>
         </div>
         

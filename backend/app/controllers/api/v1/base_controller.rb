@@ -34,6 +34,26 @@ module Api
         nil
       end
 
+      def parse_multi_value_param(value)
+        values =
+          case value
+          when Array
+            value
+          else
+            value.to_s.split(',')
+          end
+
+        normalized = values.filter_map do |item|
+          text = item.to_s.strip
+          text.presence
+        end
+
+        return nil if normalized.empty?
+        return normalized.first if normalized.length == 1
+
+        normalized
+      end
+
       def param_value(*keys)
         keys.each do |key|
           value = params[key]
@@ -44,21 +64,22 @@ module Api
 
       def filter_params
         {
-          branch: param_value(:branch_code, :branchCode, :branch),
-          province: param_value(:province),
-          district: param_value(:district),
-          municipality: param_value(:municipality),
-          cluster: param_value(:cluster),
-          solid: param_value(:solid),
-          tran_type: param_value(:tran_type, :tranType),
-          part_tran_type: param_value(:part_tran_type, :partTranType),
-          tran_source: param_value(:tran_source, :tranSource, :channel),
-          product: param_value(:product),
-          service: param_value(:service),
-          merchant: param_value(:merchant),
-          gl_sub_head_code: param_value(:gl_sub_head_code, :glSubHeadCode),
-          entry_user: param_value(:entry_user, :entryUser),
-          vfd_user: param_value(:vfd_user, :vfdUser),
+          branch: parse_multi_value_param(param_value(:branch_code, :branchCode, :branch)),
+          province: parse_multi_value_param(param_value(:province)),
+          district: parse_multi_value_param(param_value(:district)),
+          municipality: parse_multi_value_param(param_value(:municipality)),
+          cluster: parse_multi_value_param(param_value(:cluster)),
+          solid: parse_multi_value_param(param_value(:solid)),
+          scheme_type: parse_multi_value_param(param_value(:scheme_type, :schemeType)),
+          tran_type: parse_multi_value_param(param_value(:tran_type, :tranType)),
+          part_tran_type: parse_multi_value_param(param_value(:part_tran_type, :partTranType)),
+          tran_source: parse_multi_value_param(param_value(:tran_source, :tranSource, :channel)),
+          product: parse_multi_value_param(param_value(:product)),
+          service: parse_multi_value_param(param_value(:service)),
+          merchant: parse_multi_value_param(param_value(:merchant)),
+          gl_sub_head_code: parse_multi_value_param(param_value(:gl_sub_head_code, :glSubHeadCode)),
+          entry_user: parse_multi_value_param(param_value(:entry_user, :entryUser)),
+          vfd_user: parse_multi_value_param(param_value(:vfd_user, :vfdUser)),
           min_amount: parse_decimal(param_value(:min_amount, :minAmount)),
           max_amount: parse_decimal(param_value(:max_amount, :maxAmount)),
           acct_num: param_value(:acct_num, :acctNum),

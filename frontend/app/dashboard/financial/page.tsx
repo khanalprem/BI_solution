@@ -17,6 +17,7 @@ type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CU
 
 export default function FinancialDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useFinancialSummary(filters);
@@ -46,7 +47,7 @@ export default function FinancialDashboard() {
   const avgCredit = data?.avg_credit ?? 0;
   const avgDebit = data?.avg_debit ?? 0;
   const monthlyTrend = data?.monthly_trend ?? [];
-  const byGl = data?.by_gl ?? [];
+  const byGl = useMemo(() => data?.by_gl ?? [], [data?.by_gl]);
 
   // Separate CR and DR GL entries
   const glCr = useMemo(() => byGl.filter((g) => g.type === 'CR').slice(0, 8), [byGl]);
@@ -72,9 +73,17 @@ export default function FinancialDashboard() {
         onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
         minDate={filterStats?.date_range?.min || undefined}
         maxDate={filterStats?.date_range?.max || undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
       <div className="flex flex-col gap-4 p-6">
-        <AdvancedFilters filters={filters} onChange={setFilters} onClear={handleClearFilters} />
+        <AdvancedFilters
+          filters={filters}
+          onChange={setFilters}
+          onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
+        />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

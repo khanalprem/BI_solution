@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
+import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
-import { ChartCard } from '@/components/ui/ChartCard';
+import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { DataTable, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/DataTable';
 import { Pill } from '@/components/ui/Pill';
 import { useBranchPerformance, useChannelBreakdown, useDailyTrend, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -20,6 +21,7 @@ export default function BranchDetailPage() {
   const branchCode = decodeURIComponent(params.branchCode);
 
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({
     ...getDateRange('ALL'),
     branchCode,
@@ -49,6 +51,14 @@ export default function BranchDetailPage() {
     setFilters((prev) => ({ ...prev, ...range, branchCode }));
   };
 
+  const handleClearFilters = () => {
+    if (period === 'CUSTOM') {
+      setFilters((prev) => ({ ...prev, branchCode, startDate: prev.startDate, endDate: prev.endDate }));
+      return;
+    }
+    setFilters({ ...getDateRange(period, referenceDate, minReferenceDate || undefined), branchCode });
+  };
+
   if (isLoading) {
     return (
       <>
@@ -61,6 +71,8 @@ export default function BranchDetailPage() {
           onCustomRangeChange={handleCustomRangeChange}
           minDate={filterStats?.date_range?.min || undefined}
           maxDate={filterStats?.date_range?.max || undefined}
+          onToggleFilters={() => setFiltersOpen((current) => !current)}
+          filtersOpen={filtersOpen}
         />
         <div className="p-6 text-text-secondary">Loading...</div>
       </>
@@ -85,9 +97,18 @@ export default function BranchDetailPage() {
         onCustomRangeChange={handleCustomRangeChange}
         minDate={filterStats?.date_range?.min || undefined}
         maxDate={filterStats?.date_range?.max || undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
 
       <div className="p-6 flex flex-col gap-4">
+          <AdvancedFilters
+            filters={filters}
+            onChange={setFilters}
+            onClear={handleClearFilters}
+            advancedOpen={filtersOpen}
+            onAdvancedOpenChange={setFiltersOpen}
+          />
           <div className="flex items-center justify-between">
             <Link href="/dashboard/branch" className="text-xs text-accent-blue hover:underline">
               ← Back to Branch & Regional
@@ -105,41 +126,52 @@ export default function BranchDetailPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <ChartCard title="Daily Trend" subtitle="Branch amount by date">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={trendData || []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-                  <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {!trendData || trendData.length === 0 ? (
+                <ChartEmptyState title="No branch trend data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={trendData || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: '10px' }} tickFormatter={(value) => String(value).slice(5)} />
+                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                      formatter={(value: number) => [formatNPR(value), 'Amount']}
+                    />
+                    <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
 
             <ChartCard title="Channel Distribution" subtitle="Branch channels by amount">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={channelData || []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-                  <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {!channelData || channelData.length === 0 ? (
+                <ChartEmptyState title="No channel data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={channelData || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: '10px' }} tickFormatter={(value) => formatChannelLabel(String(value))} />
+                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                      formatter={(value: number) => [formatNPR(value), 'Amount']}
+                      labelFormatter={(value) => formatChannelLabel(String(value))}
+                    />
+                    <Bar dataKey="total_amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
           </div>
 
@@ -164,7 +196,7 @@ export default function BranchDetailPage() {
                 </TableRow>
                 <TableRow>
                   <TableCell>Cluster</TableCell>
-                  <TableCell>{branchCode}</TableCell>
+                  <TableCell>{Array.isArray(filters.cluster) ? filters.cluster.join(', ') : filters.cluster || 'Not classified in current data set'}</TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell>Status</TableCell>
@@ -175,6 +207,10 @@ export default function BranchDetailPage() {
                 <TableRow>
                   <TableCell>Last Updated</TableCell>
                   <TableCell>{filterStats?.date_range?.max || '-'}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Channel Coverage</TableCell>
+                  <TableCell>{(channelData || []).length} active channels</TableCell>
                 </TableRow>
               </TableBody>
             </Table>

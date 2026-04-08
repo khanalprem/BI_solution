@@ -97,6 +97,20 @@ export function AdvancedDataTable<TData>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = React.useState('');
 
+  const summarizeFilterValue = React.useCallback((value: unknown): string => {
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '';
+      if (value.length <= 2) return value.join(', ');
+      return `${value.slice(0, 2).join(', ')} +${value.length - 2}`;
+    }
+
+    if (typeof value === 'string') return value;
+
+    if (typeof value === 'number') return value.toString();
+
+    return '';
+  }, []);
+
   const table = useReactTable({
     data,
     columns,
@@ -128,6 +142,26 @@ export function AdvancedDataTable<TData>({
     },
   });
 
+  const activeTableFilters = React.useMemo(() => {
+    return columnFilters
+      .map((filter) => {
+        const column = table.getColumn(filter.id);
+        if (!column) return null;
+
+        const header = column.columnDef.header;
+        const label = typeof header === 'string' ? header : filter.id;
+        const valueLabel = summarizeFilterValue(filter.value);
+
+        return {
+          id: filter.id,
+          label: valueLabel ? `${label}: ${valueLabel}` : label,
+        };
+      })
+      .filter(Boolean) as Array<{ id: string; label: string }>;
+  }, [columnFilters, summarizeFilterValue, table]);
+
+  const hasAnyFilter = activeTableFilters.length > 0 || Boolean(globalFilter);
+
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       {/* Header */}
@@ -156,10 +190,48 @@ export function AdvancedDataTable<TData>({
         </div>
       </div>
 
+      {hasAnyFilter && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-bg-card-hover px-4 py-2.5">
+          {globalFilter && (
+            <button
+              type="button"
+              onClick={() => setGlobalFilter('')}
+              className="inline-flex items-center gap-2 rounded-full border border-accent-blue/25 bg-accent-blue/10 px-2.5 py-1 text-[11px] text-text-primary"
+            >
+              <span>Search: {globalFilter}</span>
+              <span className="text-text-muted">×</span>
+            </button>
+          )}
+
+          {activeTableFilters.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={() => table.getColumn(filter.id)?.setFilterValue(undefined)}
+              className="inline-flex items-center gap-2 rounded-full border border-border-strong bg-bg-input px-2.5 py-1 text-[11px] text-text-primary"
+            >
+              <span>{filter.label}</span>
+              <span className="text-text-muted">×</span>
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              table.resetColumnFilters();
+              setGlobalFilter('');
+            }}
+            className="ml-auto text-[11px] font-medium text-accent-red hover:underline"
+          >
+            Clear table filters
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead className="bg-bg-surface border-b border-border">
+          <thead className="sticky top-0 z-[1] bg-bg-surface border-b border-border">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -227,7 +299,7 @@ export function AdvancedDataTable<TData>({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-border last:border-b-0 hover:bg-bg-card-hover transition-colors"
+                  className="border-b border-border last:border-b-0 odd:bg-transparent even:bg-bg-input/25 hover:bg-bg-card-hover transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-3 text-xs text-text-secondary whitespace-nowrap">

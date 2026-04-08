@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -104,6 +104,7 @@ function SparkCard({
 export default function ExecutiveDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [mapTooltip, setMapTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
 
@@ -183,6 +184,8 @@ export default function ExecutiveDashboard() {
         onCustomRangeChange={handleCustomRangeChange}
         minDate={filterStats?.date_range?.min ?? undefined}
         maxDate={filterStats?.date_range?.max ?? undefined}
+        onToggleFilters={() => setFiltersOpen((current) => !current)}
+        filtersOpen={filtersOpen}
       />
 
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -192,6 +195,8 @@ export default function ExecutiveDashboard() {
           filters={filters}
           onChange={setFilters}
           onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
         />
 
         {/* ── Error ── */}
@@ -281,8 +286,10 @@ export default function ExecutiveDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(v: string) => v?.slice(5) || v} />
                 <YAxis stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(v: number) => formatNPR(v)} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [n === 'amount' ? formatNPR(v) : v.toLocaleString(), n === 'amount' ? 'Amount' : 'Count']} />
+                <YAxis yAxisId="count" orientation="right" stroke="var(--text-muted)" style={{ fontSize: 10 }} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [n === 'amount' ? formatNPR(v) : v.toLocaleString(), n === 'amount' ? 'Amount' : 'Transactions']} />
                 <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line yAxisId="count" type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -297,9 +304,9 @@ export default function ExecutiveDashboard() {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={(data?.by_channel || [] as ChannelMetrics[]).filter((c: ChannelMetrics) => c.channel).slice(0, 8)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: 10 }} />
+                <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
                 <YAxis stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={v => formatNPR(v)} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Amount']} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Amount']} labelFormatter={(value) => formatChannelLabel(String(value))} />
                 <Bar dataKey="total_amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -437,7 +444,7 @@ export default function ExecutiveDashboard() {
             <BarChart data={data?.by_province || []} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={v => formatNPR(v)} />
-              <YAxis type="category" dataKey="province" stroke="var(--text-muted)" style={{ fontSize: 11, textTransform: 'capitalize' }} width={90} />
+              <YAxis type="category" dataKey="province" stroke="var(--text-muted)" style={{ fontSize: 11, textTransform: 'capitalize' }} width={110} tickFormatter={(value) => formatProvinceLabel(String(value))} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Total Amount']} />
               <Bar dataKey="total_amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
             </BarChart>

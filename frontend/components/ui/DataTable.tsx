@@ -9,10 +9,10 @@ interface DataTableProps {
 
 export function DataTable({ title, subtitle, actions, children }: DataTableProps) {
   return (
-    <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div className="px-[18px] py-3.5 border-b border-border flex items-center justify-between">
         <div>
-          <div className="text-[13px] font-semibold">{title}</div>
+          <div className="text-[13px] font-semibold text-text-primary">{title}</div>
           {subtitle && <div className="text-[11px] text-text-muted mt-0.5">{subtitle}</div>}
         </div>
         {actions && <div className="flex gap-2 items-center">{actions}</div>}
@@ -35,7 +35,7 @@ export function Table({ children }: { children: React.ReactNode }) {
 
 export function TableHead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-bg-base">
+    <thead className="sticky top-0 z-[1] bg-bg-base">
       {children}
     </thead>
   );
@@ -56,7 +56,7 @@ export function TableRow({
     <tr
       onClick={onClick}
       className={`
-        border-b border-border last:border-b-0
+        border-b border-border last:border-b-0 even:bg-bg-input/25
         ${onClick ? 'cursor-pointer hover:bg-bg-card-hover transition-colors' : ''}
       `}
     >

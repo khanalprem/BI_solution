@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
-import { ChartCard } from '@/components/ui/ChartCard';
+import { ChartCard, ChartEmptyState, ChartLegendItem } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { Pill } from '@/components/ui/Pill';
 import { useDashboardData, useFilterStatistics, useTopCustomers } from '@/lib/hooks/useDashboardData';
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from 'recharts';
 
 interface CustomerData {
   cif_id: string;
@@ -20,6 +20,8 @@ interface CustomerData {
   amount: number;
   accounts: number;
   risk: number;
+  transaction_count: number;
+  avg_transaction: number;
 }
 
 interface SegmentData {
@@ -34,6 +36,7 @@ type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CU
 
 export default function CustomerDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DashboardFilters>({
     ...getDateRange('ALL'),
   });
@@ -86,6 +89,8 @@ export default function CustomerDashboard() {
       amount: customer.amount,
       accounts: customer.accounts,
       risk: customer.risk,
+      transaction_count: customer.transaction_count,
+      avg_transaction: customer.transaction_count > 0 ? customer.amount / customer.transaction_count : 0,
     }))
   ), [topCustomers]);
 
@@ -194,6 +199,24 @@ export default function CustomerDashboard() {
         meta: { filterType: 'number-range' }
       },
       {
+        accessorKey: 'transaction_count',
+        header: 'Transactions',
+        cell: ({ row }) => row.original.transaction_count.toLocaleString(),
+        enableSorting: true,
+        enableColumnFilter: true,
+        filterFn: 'numberRange',
+        meta: { filterType: 'number-range' }
+      },
+      {
+        accessorKey: 'avg_transaction',
+        header: 'Avg / Txn',
+        cell: ({ row }) => formatNPR(row.original.avg_transaction),
+        enableSorting: true,
+        enableColumnFilter: true,
+        filterFn: 'numberRange',
+        meta: { filterType: 'number-range' }
+      },
+      {
         accessorKey: 'risk',
         header: 'Risk Tier',
         cell: ({ row }) => (
@@ -265,13 +288,17 @@ export default function CustomerDashboard() {
       },
       {
         id: 'growth',
-        header: 'Growth',
-        cell: () => <Pill variant="green">+5.2%</Pill>,
+        header: 'Customer Share',
+        cell: ({ row }) => {
+          const total = segmentData.reduce((sum, segment) => sum + segment.customers, 0);
+          const percentage = total > 0 ? ((row.original.customers / total) * 100).toFixed(1) : '0.0';
+          return `${percentage}%`;
+        },
         enableSorting: false,
         enableColumnFilter: false,
       },
     ],
-    []
+    [segmentData]
   );
 
   if (isLoading) {
@@ -285,6 +312,8 @@ export default function CustomerDashboard() {
           onCustomRangeChange={handleCustomRangeChange}
           minDate={filterStats?.date_range?.min || undefined}
           maxDate={filterStats?.date_range?.max || undefined}
+          onToggleFilters={() => setFiltersOpen((current) => !current)}
+          filtersOpen={filtersOpen}
         />
         <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
       </>
@@ -302,6 +331,8 @@ export default function CustomerDashboard() {
           onCustomRangeChange={handleCustomRangeChange}
           minDate={filterStats?.date_range?.min || undefined}
           maxDate={filterStats?.date_range?.max || undefined}
+          onToggleFilters={() => setFiltersOpen((current) => !current)}
+          filtersOpen={filtersOpen}
         />
         
         <div className="flex flex-col gap-4 p-6">
@@ -310,6 +341,8 @@ export default function CustomerDashboard() {
             filters={filters}
             onChange={setFilters}
             onClear={handleClearFilters}
+            advancedOpen={filtersOpen}
+            onAdvancedOpenChange={setFiltersOpen}
           />
           
           {/* KPI Cards */}
@@ -353,55 +386,75 @@ export default function CustomerDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <ChartCard
               title="Customer Segmentation"
-              subtitle="By customer count and amount"
+              subtitle="Volume and customer count by segment"
+              legend={
+                <>
+                  <ChartLegendItem color="#3b82f6" label="Portfolio Value" />
+                  <ChartLegendItem color="#10b981" label="Customers" />
+                </>
+              }
             >
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={segmentData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis 
-                    dataKey="segment" 
-                    stroke="var(--text-muted)" 
-                    style={{ fontSize: '10px' }}
-                  />
-                  <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      background: 'var(--bg-card)', 
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="customers" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {segmentData.length === 0 ? (
+                <ChartEmptyState title="No segment data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={segmentData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis 
+                      dataKey="segment" 
+                      stroke="var(--text-muted)" 
+                      style={{ fontSize: '10px' }}
+                    />
+                    <YAxis yAxisId="amount" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                    <YAxis yAxisId="customers" orientation="right" stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value: number, name: string) => [
+                        name === 'Portfolio Value' ? formatNPR(value) : value.toLocaleString(),
+                        name,
+                      ]}
+                    />
+                    <Bar yAxisId="amount" dataKey="amount" name="Portfolio Value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="customers" type="monotone" dataKey="customers" name="Customers" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
             
             <ChartCard
               title="Risk Tier Distribution"
-              subtitle="KYC risk breakdown"
+              subtitle="Portfolio exposure by risk tier"
             >
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={riskTierData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis 
-                    dataKey="tier" 
-                    stroke="var(--text-muted)" 
-                    style={{ fontSize: '10px' }}
-                  />
-                  <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      background: 'var(--bg-card)', 
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {riskTierData.length === 0 ? (
+                <ChartEmptyState title="No risk tier data" />
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={riskTierData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis 
+                      dataKey="tier" 
+                      stroke="var(--text-muted)" 
+                      style={{ fontSize: '10px' }}
+                    />
+                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        background: 'var(--bg-card)', 
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value: number) => [formatNPR(value), 'Portfolio Value']}
+                    />
+                    <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
           </div>
           

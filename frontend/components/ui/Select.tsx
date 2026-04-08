@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Listbox, Transition } from '@headlessui/react';
+import { Checkbox } from './checkbox';
 
 interface SelectOption {
   value: string;
@@ -159,6 +160,181 @@ export function MultiSelect({ value, onChange, options, placeholder = 'Select...
         </Transition>
       </div>
     </Listbox>
+  );
+}
+
+interface SearchableMultiSelectProps {
+  value: string[];
+  onChange: (value: string[]) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+export function SearchableMultiSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select...',
+  disabled = false,
+}: SearchableMultiSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return options;
+
+    return options.filter((option) => option.label.toLowerCase().includes(normalizedQuery));
+  }, [options, query]);
+
+  const selectedSet = useMemo(() => new Set(value), [value]);
+
+  const selectedLabels = useMemo(() => {
+    if (value.length === 0) return placeholder;
+
+    const labels = value
+      .map((selectedValue) => options.find((option) => option.value === selectedValue)?.label ?? selectedValue)
+      .filter(Boolean);
+
+    if (labels.length <= 2) return labels.join(', ');
+    return `${labels.slice(0, 2).join(', ')} +${labels.length - 2}`;
+  }, [options, placeholder, value]);
+
+  const toggleOption = (nextValue: string) => {
+    if (selectedSet.has(nextValue)) {
+      onChange(value.filter((item) => item !== nextValue));
+      return;
+    }
+
+    onChange([...value, nextValue]);
+  };
+
+  const selectAllFiltered = () => {
+    const combined = new Set(value);
+    filteredOptions.forEach((option) => combined.add(option.value));
+    onChange(Array.from(combined));
+  };
+
+  const clearFiltered = () => {
+    if (query.trim()) {
+      const filteredValues = new Set(filteredOptions.map((option) => option.value));
+      onChange(value.filter((item) => !filteredValues.has(item)));
+      return;
+    }
+
+    onChange([]);
+  };
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen((current) => !current)}
+        className={`
+          relative w-full bg-bg-input border border-border rounded-md px-3 py-1.5 pr-8
+          text-text-primary text-xs text-left outline-none transition-all
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-border-strong focus:border-accent-blue'}
+        `}
+      >
+        <span className={value.length > 0 ? '' : 'text-text-muted'}>
+          {selectedLabels}
+        </span>
+        {value.length > 0 && (
+          <span className="absolute inset-y-0 right-7 flex items-center text-[10px] font-semibold text-accent-blue">
+            {value.length}
+          </span>
+        )}
+        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+          <svg className="h-4 w-4 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+          </svg>
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-20 mt-1 w-full min-w-[240px] overflow-hidden rounded-lg border border-border bg-bg-card shadow-lg">
+          <div className="border-b border-border p-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search..."
+              className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide">
+            <button
+              type="button"
+              onClick={selectAllFiltered}
+              className="text-accent-blue hover:underline"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={clearFiltered}
+              className="text-text-muted hover:text-accent-red hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="max-h-60 overflow-y-auto py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-text-muted">No results found</div>
+            ) : (
+              filteredOptions.map((option) => {
+                const checked = selectedSet.has(option.value);
+
+                return (
+                  <label
+                    key={option.value}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-accent-blue-dim hover:text-text-primary"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleOption(option.value)}
+                    />
+                    <span className={`truncate ${checked ? 'font-semibold text-text-primary' : ''}`}>
+                      {option.label}
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          <div className="border-t border-border px-3 py-2 text-[10px] text-text-muted">
+            {value.length} selected
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -293,6 +293,8 @@ class DynamicDashboardService
               .order('SUM(tran_amt) DESC')
               .limit(capped_limit)
 
+    names_by_cif = AccountMasterLookup.customer_names_for(results.map(&:cif_id))
+
     results.map do |record|
       total_amount = record.total_amount.to_f
       transaction_count = record.transaction_count.to_i
@@ -301,7 +303,7 @@ class DynamicDashboardService
 
       {
         cif_id: record.cif_id,
-        name: record.customer_name,
+        name: names_by_cif[record.cif_id] || record.customer_name,
         segment: SegmentClassifier.segment_for(total_amount),
         amount: total_amount,
         accounts: accounts,
@@ -476,11 +478,31 @@ class DynamicDashboardService
       merchant: @filters[:merchant],
       gl_sub_head_code: @filters[:gl_sub_head_code],
       entry_user: @filters[:entry_user],
-      vfd_user: @filters[:vfd_user],
-      acct_num: @filters[:acct_num],
-      cif_id: @filters[:cif_id]
+      vfd_user: @filters[:vfd_user]
     }.each do |column, value|
-      scope = scope.where(column => value) if value.present?
+      next if value.blank?
+
+      normalized_value =
+        if value.is_a?(Array)
+          value.filter_map do |item|
+            text = item.to_s.strip
+            text.presence
+          end
+        else
+          value
+        end
+
+      next if normalized_value.blank?
+
+      scope = scope.where(column => normalized_value)
+    end
+
+    scope = apply_partial_text_filter(scope, :acct_num, @filters[:acct_num])
+    scope = apply_partial_text_filter(scope, :cif_id, @filters[:cif_id])
+
+    if @filters[:scheme_type].present?
+      account_scope = AccountMasterLookup.account_number_scope(@filters)
+      scope = scope.where(acct_num: account_scope) if account_scope.present?
     end
 
     scope = scope.where('tran_amt >= ?', @filters[:min_amount]) unless @filters[:min_amount].nil?
@@ -499,6 +521,14 @@ class DynamicDashboardService
     return nil if text.blank?
     return nil if text.casecmp('null').zero?
     text
+  end
+
+  def apply_partial_text_filter(scope, column, value)
+    term = normalize_text(value)
+    return scope if term.blank?
+
+    pattern = "%#{ActiveRecord::Base.sanitize_sql_like(term)}%"
+    scope.where("#{scope.table_name}.#{column}::text ILIKE ?", pattern)
   end
 
   def build_transaction_category(record)

@@ -82,6 +82,33 @@ export function formatPercent(value: number, decimals: number = 1): string {
   return `${value.toFixed(decimals)}%`;
 }
 
+const PROVINCE_DISPLAY_MAP: Record<string, string> = {
+  'province 1': 'Koshi',
+  'province 2': 'Madhesh',
+  'province 3': 'Bagmati',
+  'province 4': 'Gandaki',
+  'province 5': 'Lumbini',
+  'province 6': 'Karnali',
+  'province 7': 'Sudurpashchim',
+};
+
+export function formatProvinceLabel(value?: string | null): string {
+  if (!value) return 'Unknown';
+  const normalized = value.trim().toLowerCase();
+  return PROVINCE_DISPLAY_MAP[normalized] || value;
+}
+
+export function formatChannelLabel(value?: string | null): string {
+  if (!value) return 'Branch / Counter';
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === 'mobile') return 'Mobile Banking';
+  if (normalized === 'internet') return 'Internet Banking';
+  if (normalized === 'branch') return 'Branch / Counter';
+
+  return value;
+}
+
 // Format date
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -164,6 +191,8 @@ export const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '8px',
   fontSize: '12px',
+  color: 'var(--text-primary)',
+  boxShadow: '0 14px 34px rgba(0,0,0,0.24)',
 };
 
 // Nepal provinces

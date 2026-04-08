@@ -1,62 +1,41 @@
 'use client';
 
 import { TopBar } from '@/components/layout/TopBar';
-import { DataTable, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '@/components/ui/DataTable';
+import { RecordTable } from '@/components/ui/RecordTable';
 import { Pill } from '@/components/ui/Pill';
+import { useProductionCatalog, useProductionTable } from '@/lib/hooks/useDashboardData';
 
 export default function ScheduledDashboard() {
-  const schedules = [
-    { id: 1, name: 'NRB Report 1', type: 'Regulatory', schedule: 'Daily 6:00 AM', nextRun: 'Tomorrow 6:00 AM', status: 'active' },
-    { id: 2, name: 'NRB Report 2', type: 'Regulatory', schedule: 'Weekly Mon', nextRun: 'Mon 6:00 AM', status: 'active' },
-    { id: 3, name: 'Internal Audit Report', type: 'Internal', schedule: 'Monthly 1st', nextRun: 'May 1, 6:00 AM', status: 'active' },
-    { id: 4, name: 'Risk Report', type: 'Risk', schedule: 'Daily 5:00 AM', nextRun: 'Tomorrow 5:00 AM', status: 'active' },
-  ];
-  
+  const { data: catalog } = useProductionCatalog();
+  const { data: dictionaryTable, isLoading } = useProductionTable('data_dictionary', 1, 25);
+
   return (
     <>
-      <TopBar title="Scheduled & Regulatory Runs" subtitle="Automated reporting" />
+      <TopBar title="Scheduled & Regulatory Runs" subtitle="Production procedures & dictionary metadata" showFiltersButton={false} showExportButton={false} />
       <div className="flex flex-col gap-4 p-6">
-        <DataTable
-          title="Scheduled Reports"
-          subtitle={`${schedules.length} active schedules`}
-          actions={
-            <button className="px-3 py-1.5 rounded-lg bg-accent-blue text-white text-xs font-medium hover:opacity-90">
-              + New Schedule
-            </button>
-          }
-        >
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>Report Name</TableHeader>
-                <TableHeader>Type</TableHeader>
-                <TableHeader>Schedule</TableHeader>
-                <TableHeader>Next Run</TableHeader>
-                <TableHeader>Status</TableHeader>
-                <TableHeader>Actions</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {schedules.map((schedule) => (
-                <TableRow key={schedule.id}>
-                  <TableCell><strong className="text-text-primary">{schedule.name}</strong></TableCell>
-                  <TableCell>
-                    <Pill variant={schedule.type === 'Regulatory' ? 'red' : schedule.type === 'Risk' ? 'amber' : 'blue'}>
-                      {schedule.type}
-                    </Pill>
-                  </TableCell>
-                  <TableCell>{schedule.schedule}</TableCell>
-                  <TableCell>{schedule.nextRun}</TableCell>
-                  <TableCell><Pill variant="green">Active</Pill></TableCell>
-                  <TableCell>
-                    <button className="text-accent-blue text-xs hover:underline mr-2">Edit</button>
-                    <button className="text-accent-blue text-xs hover:underline">Run Now</button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </DataTable>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(catalog?.procedures || []).map((procedure) => (
+            <div key={procedure.name} className="rounded-xl border border-border bg-bg-card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[13px] font-semibold text-text-primary">{procedure.name}</div>
+                <Pill variant="green">production</Pill>
+              </div>
+              <div className="mt-1 text-[11px] text-text-secondary">{procedure.description}</div>
+              {procedure.signature && (
+                <pre className="mt-3 overflow-x-auto rounded-lg bg-bg-input p-2 text-[10px] text-text-muted">
+                  {procedure.signature}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <RecordTable
+          title="Data Dictionary Preview"
+          subtitle={isLoading ? 'Loading live production metadata...' : 'First 25 rows from production data_dictionary'}
+          columns={dictionaryTable?.columns.map((column) => column.name) || []}
+          rows={dictionaryTable?.rows || []}
+        />
       </div>
     </>
   );

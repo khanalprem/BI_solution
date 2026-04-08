@@ -10,10 +10,11 @@ interface ChartCardProps {
 
 export function ChartCard({ title, subtitle, controls, legend, children }: ChartCardProps) {
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-[18px] flex flex-col">
+    <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card p-[18px] flex flex-col shadow-sm">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(59,130,246,0.08),transparent)]" />
       <div className="flex items-start justify-between mb-4">
         <div>
-          <div className="text-[13px] font-semibold">{title}</div>
+          <div className="text-[13px] font-semibold text-text-primary">{title}</div>
           {subtitle && <div className="text-[11px] text-text-muted mt-0.5">{subtitle}</div>}
         </div>
         {controls && <div className="flex gap-1.5">{controls}</div>}
@@ -57,5 +58,22 @@ export function ChartControlChip({
     >
       {children}
     </button>
+  );
+}
+
+export function ChartEmptyState({
+  title = 'No chart data',
+  subtitle = 'Try changing the date range or filters.',
+}: {
+  title?: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex h-[220px] items-center justify-center rounded-xl border border-dashed border-border bg-bg-input/40 text-center">
+      <div>
+        <div className="text-[12px] font-semibold text-text-primary">{title}</div>
+        <div className="mt-1 text-[11px] text-text-muted">{subtitle}</div>
+      </div>
+    </div>
   );
 }
