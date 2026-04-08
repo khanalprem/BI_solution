@@ -124,11 +124,11 @@ export default function RiskDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4">
             <div className="text-[13px] font-semibold mb-1">Branch Concentration Risk</div>
             <div className="text-[11px] text-text-muted mb-4">Top 3 branches share of total volume</div>
-            <div className="text-[32px] font-bold tracking-tight mb-2" style={{ color: top3BranchShare > 50 ? 'var(--accent-red)' : top3BranchShare > 30 ? 'var(--accent-amber)' : 'var(--accent-green)' }}>
+            <div className={`text-[32px] font-bold tracking-tight mb-2 ${top3BranchShare > 50 ? 'text-accent-red' : top3BranchShare > 30 ? 'text-accent-amber' : 'text-accent-green'}`}>
               {formatPercent(top3BranchShare)}
             </div>
             <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-2">
-              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(top3BranchShare, 100)}%`, background: top3BranchShare > 50 ? 'var(--accent-red)' : top3BranchShare > 30 ? 'var(--accent-amber)' : 'var(--accent-green)' }} />
+              <div className={`h-full rounded-full transition-all ${top3BranchShare > 50 ? 'bg-accent-red' : top3BranchShare > 30 ? 'bg-accent-amber' : 'bg-accent-green'}`} style={{ width: `${Math.min(top3BranchShare, 100)}%` }} />
             </div>
             <Pill variant={getRiskLevel(top3BranchShare)}>
               {top3BranchShare > 60 ? 'High Concentration' : top3BranchShare > 40 ? 'Moderate' : 'Well Distributed'}
@@ -139,11 +139,11 @@ export default function RiskDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4">
             <div className="text-[13px] font-semibold mb-1">Volume Volatility</div>
             <div className="text-[11px] text-text-muted mb-4">Coefficient of variation (monthly)</div>
-            <div className="text-[32px] font-bold tracking-tight mb-2" style={{ color: monthlyVolatility > 50 ? 'var(--accent-red)' : monthlyVolatility > 25 ? 'var(--accent-amber)' : 'var(--accent-green)' }}>
+            <div className={`text-[32px] font-bold tracking-tight mb-2 ${monthlyVolatility > 50 ? 'text-accent-red' : monthlyVolatility > 25 ? 'text-accent-amber' : 'text-accent-green'}`}>
               {formatPercent(monthlyVolatility)}
             </div>
             <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-2">
-              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(monthlyVolatility, 100)}%`, background: monthlyVolatility > 50 ? 'var(--accent-red)' : monthlyVolatility > 25 ? 'var(--accent-amber)' : 'var(--accent-green)' }} />
+              <div className={`h-full rounded-full transition-all ${monthlyVolatility > 50 ? 'bg-accent-red' : monthlyVolatility > 25 ? 'bg-accent-amber' : 'bg-accent-green'}`} style={{ width: `${Math.min(monthlyVolatility, 100)}%` }} />
             </div>
             <Pill variant={monthlyVolatility > 50 ? 'red' : monthlyVolatility > 25 ? 'amber' : 'green'}>
               {monthlyVolatility > 50 ? 'High Volatility' : monthlyVolatility > 25 ? 'Moderate' : 'Stable'}
@@ -172,8 +172,8 @@ export default function RiskDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={byGl.slice(0, 8)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={80} />
+                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                 <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
                   {byGl.slice(0, 8).map((entry, idx) => (
@@ -188,8 +188,8 @@ export default function RiskDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={byProvince}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="province" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                <XAxis dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
                 <Bar dataKey="amount" name="Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="debit_amount" name="Debit" fill="#ef4444" radius={[4, 4, 0, 0]} />

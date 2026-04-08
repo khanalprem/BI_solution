@@ -108,8 +108,8 @@ export default function EmployerDashboard() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={topUsers} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="user" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={90} />
+                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                  <YAxis type="category" dataKey="user" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={90} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), name === 'amount' ? 'Volume' : 'Transactions']} />
                   <Bar dataKey="amount" name="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -122,8 +122,8 @@ export default function EmployerDashboard() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={byBranch.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="branch" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={80} />
+                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                  <YAxis type="category" dataKey="branch" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), '']} />
                   <Bar dataKey="amount" name="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
                 </BarChart>

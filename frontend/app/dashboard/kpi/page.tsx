@@ -125,8 +125,8 @@ export default function KPIDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={byQuarter}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="period" stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                <XAxis dataKey="period" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), name === 'amount' ? 'Volume' : 'Transactions']} />
                 <Bar dataKey="amount" name="amount" radius={[4, 4, 0, 0]}>
                   {byQuarter.map((_, idx) => <Cell key={idx} fill={QUARTER_COLORS[idx % QUARTER_COLORS.length]} />)}
@@ -143,8 +143,8 @@ export default function KPIDashboard() {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={byProduct.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="product" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={100} />
+                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                  <YAxis type="category" dataKey="product" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={100} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                   <Bar dataKey="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -157,8 +157,8 @@ export default function KPIDashboard() {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={byService.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="service" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={100} />
+                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                  <YAxis type="category" dataKey="service" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={100} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                   <Bar dataKey="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
                 </BarChart>

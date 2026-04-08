@@ -165,10 +165,10 @@ export function AdvancedDataTable<TData>({
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="px-[18px] py-3.5 border-b border-border flex items-center justify-between bg-bg-surface">
+      <div className="px-4 py-2.5 border-b border-border flex items-center justify-between bg-bg-surface">
         <div>
-          <div className="text-[13px] font-semibold text-text-primary">{title}</div>
-          {subtitle && <div className="text-[11px] text-text-muted mt-0.5">{subtitle}</div>}
+          <div className="text-[12px] font-semibold text-text-primary">{title}</div>
+          {subtitle && <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>}
         </div>
         <div className="flex gap-2 items-center">
           {/* Global Search */}
@@ -237,7 +237,7 @@ export function AdvancedDataTable<TData>({
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="group px-4 py-3 text-left text-[10px] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap"
+                    className="group px-4 py-2.5 text-left text-[10px] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap"
                   >
                     {header.isPlaceholder ? null : (
                       <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export function AdvancedDataTable<TData>({
                   className="border-b border-border last:border-b-0 odd:bg-transparent even:bg-bg-input/25 hover:bg-bg-card-hover transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-xs text-text-secondary whitespace-nowrap">
+                    <td key={cell.id} className="px-4 py-2 text-[11px] text-text-secondary whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -315,8 +315,8 @@ export function AdvancedDataTable<TData>({
 
       {/* Pagination */}
       {enablePagination && (
-        <div className="px-4 py-3 border-t border-border flex items-center justify-between bg-bg-surface">
-          <div className="text-xs text-text-secondary font-medium">
+        <div className="px-4 py-2 border-t border-border flex items-center justify-between bg-bg-surface">
+          <div className="text-[10px] text-text-secondary font-medium">
             Showing <span className="text-text-primary font-semibold">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to{' '}
             <span className="text-text-primary font-semibold">{Math.min(
               (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,

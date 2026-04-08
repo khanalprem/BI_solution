@@ -76,7 +76,7 @@ export default function FinancialDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-3.5 p-5">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -120,8 +120,8 @@ export default function FinancialDashboard() {
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-              <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+              <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
               <ReferenceLine y={0} stroke="var(--border-strong)" />
               <Line type="monotone" dataKey="credit" stroke="#10b981" strokeWidth={2} dot={false} name="Credit" />
@@ -136,10 +136,10 @@ export default function FinancialDashboard() {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-              <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+              <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Legend wrapperStyle={{ fontSize: '10px' }} />
               <Bar dataKey="credit" name="Credit (CR)" fill="#10b981" radius={[4, 4, 0, 0]} />
               <Bar dataKey="debit" name="Debit (DR)" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -152,8 +152,8 @@ export default function FinancialDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={glCr} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={80} />
+                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={70} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                 <Bar dataKey="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -164,8 +164,8 @@ export default function FinancialDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={glDr} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" style={{ fontSize: '10px' }} width={80} />
+                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={70} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                 <Bar dataKey="amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -176,31 +176,31 @@ export default function FinancialDashboard() {
         {/* GL detail table */}
         {byGl.length > 0 && (
           <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[13px] font-semibold">GL Sub-Head Breakdown</div>
-              <div className="text-[11px] text-text-muted">All GL codes with CR/DR split</div>
+            <div className="px-4 py-2.5 border-b border-border">
+              <div className="text-[12px] font-semibold">GL Sub-Head Breakdown</div>
+              <div className="text-[10px] text-text-muted">All GL codes with CR/DR split</div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
+              <table className="w-full text-[11px]">
                 <thead>
                   <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">GL Code</th>
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Type</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Amount</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Transactions</th>
+                    <th className="text-left px-4 py-2 text-text-muted font-medium text-[10px]">GL Code</th>
+                    <th className="text-left px-4 py-2 text-text-muted font-medium text-[10px]">Type</th>
+                    <th className="text-right px-4 py-2 text-text-muted font-medium text-[10px]">Amount</th>
+                    <th className="text-right px-4 py-2 text-text-muted font-medium text-[10px]">Transactions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {byGl.map((gl, idx) => (
                     <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2.5 font-mono text-text-primary">{gl.gl_code}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${gl.type === 'CR' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                      <td className="px-4 py-2 font-mono text-text-primary">{gl.gl_code}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${gl.type === 'CR' ? 'bg-accent-green-dim text-accent-green' : 'bg-accent-red-dim text-accent-red'}`}>
                           {gl.type}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{formatNPR(gl.amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{gl.count.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{formatNPR(gl.amount)}</td>
+                      <td className="px-4 py-2 text-right text-text-secondary">{gl.count.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal , CHART_TOOLTIP_STYLE} from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -69,21 +69,21 @@ function SparkCard({
 }) {
   const chartData = sparkData.map((v, i) => ({ i, v }));
   return (
-    <div style={{
-      background: highlighted ? `linear-gradient(135deg, ${dimColor} 0%, var(--bg-card) 60%)` : 'var(--bg-card)',
-      border: `1px solid ${highlighted ? color + '33' : 'var(--border)'}`,
-      borderRadius: 'var(--radius)',
-      padding: '14px',
-      display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</span>
-        <div style={{ width: 24, height: 24, borderRadius: 6, background: dimColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div 
+      className={`bg-bg-card rounded-xl p-3.5 flex flex-col gap-1 border ${highlighted ? 'border-[rgba(59,130,246,0.3)]' : 'border-border'}`}
+      style={highlighted ? { background: `linear-gradient(135deg, ${dimColor} 0%, var(--bg-card) 60%)` } : {}}
+    >
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] text-text-muted font-medium uppercase tracking-[0.4px]">{label}</span>
+        <div 
+          className="w-6 h-6 rounded-md flex items-center justify-center" 
+          style={{ background: dimColor }}
+        >
           {icon}
         </div>
       </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>{value}</div>
-      <div style={{ height: 36, margin: '2px -2px' }}>
+      <div className="text-[20px] font-bold text-text-primary leading-tight">{value}</div>
+      <div className="h-9 -mx-0.5 my-0.5">
         <ResponsiveContainer width="100%" height={36}>
           <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
             <defs>
@@ -96,7 +96,7 @@ function SparkCard({
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</div>
+      <div className="text-[10px] text-text-muted">{sub}</div>
     </div>
   );
 }
@@ -163,13 +163,7 @@ export default function ExecutiveDashboard() {
   const topProvince = data?.by_province?.[0] as ProvinceMetrics | undefined;
   const topChannel = (data?.by_channel || [] as ChannelMetrics[]).find((c: ChannelMetrics) => c.channel);
 
-  const tooltipStyle = {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    borderRadius: 8,
-    fontSize: 12,
-    color: 'var(--text-primary)',
-  };
+  const tooltipStyle = CHART_TOOLTIP_STYLE;
 
   if (!mounted) return null;
 
@@ -188,7 +182,7 @@ export default function ExecutiveDashboard() {
         filtersOpen={filtersOpen}
       />
 
-      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="p-5 flex flex-col gap-3.5">
 
         {/* ── Dynamic Filters (Province, Branch, Channel, Product, etc.) ── */}
         <AdvancedFilters
@@ -201,13 +195,13 @@ export default function ExecutiveDashboard() {
 
         {/* ── Error ── */}
         {error && (
-          <div style={{ background: 'var(--accent-red-dim)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--accent-red)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 13 }}>
+          <div className="bg-accent-red-dim border border-accent-red/20 text-accent-red px-4 py-3 rounded-xl text-[12px]">
             Error loading data. Ensure backend is running on port 3001.
           </div>
         )}
 
         {/* ── KPI Cards (6 — derived from CR/DR data) ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
           {/* 1. Total Volume (= Net Revenue equivalent) */}
           <SparkCard
             label="Total Volume" highlighted
@@ -265,18 +259,18 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Revenue Trend + Channel Breakdown ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 10 }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-2.5">
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="flex justify-between items-start mb-2.5">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Daily Transaction Trend</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Transaction amount over time (NPR)</div>
+                <div className="text-[12px] font-semibold text-text-primary">Daily Transaction Trend</div>
+                <div className="text-[10px] text-text-muted mt-0.5">Transaction amount over time (NPR)</div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div className="flex gap-1.5">
                 {['Amount','Count'].map((c, i) => (
-                  <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: i === 0 ? '#3b82f6' : '#10b981' }} />
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c}</span>
+                  <div key={c} className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-accent-blue' : 'bg-accent-green'}`} />
+                    <span className="text-[10px] text-text-muted">{c}</span>
                   </div>
                 ))}
               </div>
@@ -284,9 +278,9 @@ export default function ExecutiveDashboard() {
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={data?.trend || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(v: string) => v?.slice(5) || v} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(v: number) => formatNPR(v)} />
-                <YAxis yAxisId="count" orientation="right" stroke="var(--text-muted)" style={{ fontSize: 10 }} />
+                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v: string) => v?.slice(5) || v} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v: number) => formatNPR(v)} />
+                <YAxis yAxisId="count" orientation="right" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [n === 'amount' ? formatNPR(v) : v.toLocaleString(), n === 'amount' ? 'Amount' : 'Transactions']} />
                 <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
                 <Line yAxisId="count" type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} dot={false} />
@@ -294,18 +288,18 @@ export default function ExecutiveDashboard() {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="flex justify-between items-start mb-2.5">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Transaction by Channel</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Breakdown by tran source</div>
+                <div className="text-[12px] font-semibold text-text-primary">Transaction by Channel</div>
+                <div className="text-[10px] text-text-muted mt-0.5">Breakdown by tran source</div>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={(data?.by_channel || [] as ChannelMetrics[]).filter((c: ChannelMetrics) => c.channel).slice(0, 8)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={v => formatNPR(v)} />
+                <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={v => formatNPR(v)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Amount']} labelFormatter={(value) => formatChannelLabel(String(value))} />
                 <Bar dataKey="total_amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -314,7 +308,7 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── 4 Derived Stat Cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           {[
             {
               title: 'Credit Ratio', sub: 'CR / Total volume',
@@ -345,30 +339,30 @@ export default function ExecutiveDashboard() {
               bar: 100,
             },
           ].map(card => (
-            <div key={card.title} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{card.title}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{card.sub}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: card.color, margin: '8px 0 4px', textTransform: 'capitalize', lineHeight: 1.2 }}>{card.value}</div>
-              <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', margin: '6px 0' }}>
-                <div style={{ width: `${card.bar}%`, height: '100%', borderRadius: 2, background: card.color, transition: 'width 0.6s ease' }} />
+            <div key={card.title} className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+              <div className="text-[10px] text-text-muted font-semibold uppercase tracking-[0.4px]">{card.title}</div>
+              <div className="text-[10px] text-text-muted mt-0.5">{card.sub}</div>
+              <div className="text-xl font-bold my-2 capitalize leading-tight" style={{ color: card.color }}>{card.value}</div>
+              <div className="h-1 rounded-sm bg-bg-input my-1.5">
+                <div className="h-full rounded-sm transition-[width] duration-700 hover:opacity-90" style={{ width: `${card.bar}%`, background: card.color }} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{card.detail}</div>
+              <div className="text-[10px] text-text-muted capitalize">{card.detail}</div>
             </div>
           ))}
         </div>
 
         {/* ── Nepal Province Map ── */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+          <div className="flex justify-between items-center mb-3">
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Nepal Province Performance Map</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Transaction volume by province · hover for details</div>
+              <div className="text-[12px] font-semibold text-text-primary">Nepal Province Performance Map</div>
+              <div className="text-[10px] text-text-muted mt-0.5">Transaction volume by province · hover for details</div>
             </div>
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <svg viewBox="0 0 880 280" preserveAspectRatio="xMidYMid meet"
-              style={{ width: '100%', display: 'block', maxHeight: 240 }}
+              className="w-full block max-h-[240px]"
               onMouseLeave={() => setMapTooltip(null)}
             >
               {PROVINCE_PATHS.map(prov => {
@@ -381,7 +375,7 @@ export default function ExecutiveDashboard() {
                       fill={fill}
                       stroke={stroke}
                       strokeWidth="1.2"
-                      style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
+                      className="cursor-pointer transition-colors duration-200"
                       onMouseEnter={e => {
                         const rect = (e.target as SVGElement).closest('svg')!.getBoundingClientRect();
                         setMapTooltip({
@@ -393,7 +387,7 @@ export default function ExecutiveDashboard() {
                     />
                     {prov.label.map((line, li) => (
                       <text key={li} x={prov.lx} y={prov.ly[li]} textAnchor="middle"
-                        style={{ fontSize: 9, fill: 'var(--text-muted)', fontWeight: 500, pointerEvents: 'none' }}>
+                        className="text-[9px] fill-text-muted font-medium pointer-events-none">
                         {line}
                       </text>
                     ))}
@@ -403,7 +397,7 @@ export default function ExecutiveDashboard() {
               {CITIES.map(city => (
                 <circle key={city.name} cx={city.cx} cy={city.cy} r={city.r}
                   fill={city.color} stroke="var(--bg-card)" strokeWidth="2"
-                  style={{ cursor: 'pointer' }}
+                  className="cursor-pointer"
                   onMouseEnter={e => {
                     const rect = (e.target as SVGElement).closest('svg')!.getBoundingClientRect();
                     setMapTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, text: city.name });
@@ -412,39 +406,37 @@ export default function ExecutiveDashboard() {
               ))}
             </svg>
             {mapTooltip && (
-              <div style={{
-                position: 'absolute', left: mapTooltip.x + 8, top: mapTooltip.y,
-                background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text-primary)',
-                pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 10,
-              }}>{mapTooltip.text}</div>
+              <div 
+                className="absolute bg-bg-surface border border-border rounded-md px-2.5 py-1 text-[10px] text-text-primary whitespace-nowrap z-10 pointer-events-none"
+                style={{ left: mapTooltip.x + 8, top: mapTooltip.y }}
+              >{mapTooltip.text}</div>
             )}
           </div>
 
           {/* Map Legend */}
-          <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+          <div className="flex gap-4 mt-2 flex-wrap">
             {[
               { bg: 'rgba(16,185,129,0.13)', border: '#10b981', label: 'Lower volume' },
               { bg: 'rgba(245,158,11,0.18)', border: '#f59e0b', label: 'Medium volume' },
               { bg: 'rgba(59,130,246,0.25)', border: '#3b82f6', label: 'High volume' },
             ].map(l => (
-              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: l.bg, border: `1px solid ${l.border}` }} />
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.label}</span>
+              <div key={l.label} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: l.bg, border: `1px solid ${l.border}` }} />
+                <span className="text-[10px] text-text-muted">{l.label}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* ── Province Performance Bar ── */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Province Performance</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>Transaction breakdown by province</div>
+        <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+          <div className="text-[12px] font-semibold text-text-primary mb-1">Province Performance</div>
+          <div className="text-[10px] text-text-muted mb-3">Transaction breakdown by province</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data?.by_province || []} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: 10 }} tickFormatter={v => formatNPR(v)} />
-              <YAxis type="category" dataKey="province" stroke="var(--text-muted)" style={{ fontSize: 11, textTransform: 'capitalize' }} width={110} tickFormatter={(value) => formatProvinceLabel(String(value))} />
+              <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={v => formatNPR(v)} />
+              <YAxis type="category" dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} tickFormatter={(value) => formatProvinceLabel(String(value))} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Total Amount']} />
               <Bar dataKey="total_amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -452,58 +444,53 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Branch League Table ── */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-border">
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Branch Performance League</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Top branches by transaction volume</div>
+              <div className="text-[12px] font-semibold text-text-primary">Branch Performance League</div>
+              <div className="text-[10px] text-text-muted mt-0.5">Top branches by transaction volume</div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text-muted)', border: '1px solid var(--border)', cursor: 'pointer' }}>Sort</button>
-              <button style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text-muted)', border: '1px solid var(--border)', cursor: 'pointer' }}>Export CSV</button>
+            <div className="flex gap-2">
+              <button className="text-[10px] px-2.5 py-1 rounded-md bg-bg-input text-text-muted border border-border hover:bg-bg-card-hover transition-colors">Sort</button>
+              <button className="text-[10px] px-2.5 py-1 rounded-md bg-bg-input text-text-muted border border-border hover:bg-bg-card-hover transition-colors">Export CSV</button>
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[11px]">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr className="border-b border-border bg-bg-base">
                   {['Branch','Province','Total Amount','Transactions','Accounts','Avg/Txn','Performance'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: h === 'Branch' ? 'left' : 'right', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} className={`px-3 py-2 ${h === 'Branch' ? 'text-left' : 'text-right'} text-[10px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap`}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {(data?.by_branch || [] as BranchMetrics[]).slice(0, 15).map((branch: BranchMetrics, i: number) => {
                   const topAmt = data?.by_branch?.[0]?.total_amount || 1;
                   const pct = (branch.total_amount / topAmt) * 100;
                   const rankColor = i === 0 ? '#f59e0b' : i === 1 ? '#9ba3bc' : i === 2 ? '#cd7c39' : 'var(--text-muted)';
                   return (
-                    <tr key={branch.branch_code} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <td style={{ padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{
-                            width: 20, height: 20, borderRadius: 4, fontSize: 10, fontWeight: 700,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: i < 3 ? `${rankColor}22` : 'var(--bg-input)',
-                            color: i < 3 ? rankColor : 'var(--text-muted)',
-                          }}>{i + 1}</div>
-                          <span style={{ fontWeight: 500, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{branch.branch_code}</span>
+                    <tr key={branch.branch_code} className="hover:bg-bg-input/50 transition-colors">
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                            style={{ background: i < 3 ? `${rankColor}22` : 'var(--bg-input)', color: i < 3 ? rankColor : 'var(--text-muted)' }}
+                          >{i + 1}</div>
+                          <span className="font-medium text-text-primary capitalize">{branch.branch_code}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{branch.province}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>{formatNPR(branch.total_amount)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>{branch.transaction_count.toLocaleString()}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>{branch.unique_accounts.toLocaleString()}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>{formatNPR(branch.avg_transaction)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                          <div style={{ width: 60, height: 5, borderRadius: 3, background: 'var(--bg-input)', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-blue)', borderRadius: 3 }} />
+                      <td className="px-3 py-2.5 text-right text-text-secondary capitalize">{branch.province}</td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-text-primary">{formatNPR(branch.total_amount)}</td>
+                      <td className="px-3 py-2.5 text-right text-text-secondary">{branch.transaction_count.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right text-text-secondary">{branch.unique_accounts.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right text-text-secondary">{formatNPR(branch.avg_transaction)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-[60px] h-1.5 rounded-sm bg-bg-input overflow-hidden">
+                            <div className="h-full rounded-sm bg-accent-blue" style={{ width: `${pct}%` }} />
                           </div>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pct.toFixed(0)}%</span>
+                          <span className="text-[9px] text-text-muted">{pct.toFixed(0)}%</span>
                         </div>
                       </td>
                     </tr>
@@ -515,72 +502,72 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Bottom Row: Risk Monitor + Alerts + Supplementary KPIs ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
 
           {/* Risk Exposure Monitor */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="flex justify-between items-center mb-3.5">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Risk Exposure Monitor</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Normalized 0–100 risk score</div>
+                <div className="text-[12px] font-semibold text-text-primary">Risk Exposure Monitor</div>
+                <div className="text-[10px] text-text-muted mt-0.5">Normalized 0–100 risk score</div>
               </div>
-              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: 'var(--accent-amber-dim)', color: 'var(--accent-amber)', border: '1px solid rgba(245,158,11,0.3)', fontWeight: 600 }}>3 Alerts</span>
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-accent-amber-dim text-accent-amber border border-accent-amber/30 font-semibold">3 Alerts</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="flex flex-col gap-2.5">
               {RISK_ITEMS.map(item => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 90, flexShrink: 0 }}>{item.label}</span>
-                  <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--bg-input)', overflow: 'hidden' }}>
-                    <div style={{ width: `${item.score}%`, height: '100%', background: item.color, borderRadius: 3, transition: 'width 0.8s ease' }} />
+                <div key={item.label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted w-[85px] flex-shrink-0">{item.label}</span>
+                  <div className="flex-1 h-1.5 rounded-sm bg-bg-input overflow-hidden">
+                    <div className="h-full rounded-sm transition-[width] duration-700" style={{ width: `${item.score}%`, background: item.color }} />
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: item.color, width: 26, textAlign: 'right', flexShrink: 0 }}>{item.score}</span>
+                  <span className="text-[10px] font-semibold w-6 text-right flex-shrink-0" style={{ color: item.color }}>{item.score}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Regulatory & Alerts Feed */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="flex justify-between items-center mb-3.5">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Regulatory & Alerts Feed</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Live monitoring events</div>
+                <div className="text-[12px] font-semibold text-text-primary">Regulatory & Alerts Feed</div>
+                <div className="text-[10px] text-text-muted mt-0.5">Live monitoring events</div>
               </div>
-              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', border: '1px solid rgba(59,130,246,0.3)', fontWeight: 500 }}>Live</span>
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-accent-blue-dim text-accent-blue border border-accent-blue/30 font-medium">Live</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="flex flex-col gap-2.5">
               {ALERTS.map((alert, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: alert.color, marginTop: 4, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{alert.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{alert.desc}</div>
+                <div key={i} className="flex gap-2 items-start">
+                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: alert.color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-medium text-text-primary">{alert.title}</div>
+                    <div className="text-[10px] text-text-muted mt-0.5">{alert.desc}</div>
                   </div>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{alert.time}</span>
+                  <span className="text-[9px] text-text-muted flex-shrink-0">{alert.time}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Supplementary KPIs */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Supplementary KPIs</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>Transaction decomposition</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="text-[12px] font-semibold text-text-primary mb-1">Supplementary KPIs</div>
+            <div className="text-[10px] text-text-muted mb-3.5">Transaction decomposition</div>
+            <div className="grid grid-cols-2 gap-2.5">
               {[
-                { label: 'Credit (CR)',       value: formatNPR(data?.summary?.credit_amount || 0),         color: 'var(--accent-blue)',   sub: `${(data?.summary?.credit_count||0).toLocaleString()} txns` },
-                { label: 'Debit (DR)',         value: formatNPR(data?.summary?.debit_amount || 0),          color: 'var(--accent-red)',    sub: `${(data?.summary?.debit_count||0).toLocaleString()} txns` },
-                { label: 'Net Flow',           value: formatNPR(Math.abs(data?.summary?.net_flow || 0)),    color: (data?.summary?.net_flow||0)>=0?'var(--accent-green)':'var(--accent-red)', sub: (data?.summary?.net_flow||0)>=0?'Positive':'Negative' },
-                { label: 'Credit Ratio',       value: `${(data?.summary?.credit_ratio||0).toFixed(1)}%`,   color: 'var(--accent-teal)',   sub: 'CR / Total' },
-                { label: 'Unique Accounts',    value: (data?.summary?.unique_accounts||0).toLocaleString(), color: 'var(--accent-purple)', sub: 'Active accts' },
-                { label: 'Unique Customers',   value: (data?.summary?.unique_customers||0).toLocaleString(), color: 'var(--accent-amber)', sub: 'Total CIF' },
-                { label: 'Avg Transaction',    value: formatNPR(data?.summary?.avg_transaction_size||0),    color: 'var(--text-primary)',  sub: 'Per txn' },
-                { label: 'Top Channel',        value: topChannel?.channel || 'Branch',                     color: 'var(--accent-teal)',   sub: 'By volume' },
+                { label: 'Credit (CR)',       value: formatNPR(data?.summary?.credit_amount || 0),         color: 'text-accent-blue',   sub: `${(data?.summary?.credit_count||0).toLocaleString()} txns` },
+                { label: 'Debit (DR)',         value: formatNPR(data?.summary?.debit_amount || 0),          color: 'text-accent-red',    sub: `${(data?.summary?.debit_count||0).toLocaleString()} txns` },
+                { label: 'Net Flow',           value: formatNPR(Math.abs(data?.summary?.net_flow || 0)),    color: (data?.summary?.net_flow||0)>=0?'text-accent-green':'text-accent-red', sub: (data?.summary?.net_flow||0)>=0?'Positive':'Negative' },
+                { label: 'Credit Ratio',       value: `${(data?.summary?.credit_ratio||0).toFixed(1)}%`,   color: 'text-accent-teal',   sub: 'CR / Total' },
+                { label: 'Unique Accounts',    value: (data?.summary?.unique_accounts||0).toLocaleString(), color: 'text-accent-purple', sub: 'Active accts' },
+                { label: 'Unique Customers',   value: (data?.summary?.unique_customers||0).toLocaleString(), color: 'text-accent-amber', sub: 'Total CIF' },
+                { label: 'Avg Transaction',    value: formatNPR(data?.summary?.avg_transaction_size||0),    color: 'text-text-primary',  sub: 'Per txn' },
+                { label: 'Top Channel',        value: topChannel?.channel || 'Branch',                     color: 'text-accent-teal',   sub: 'By volume' },
               ].map(item => (
-                <div key={item.label} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: item.color, textTransform: 'capitalize' }}>{item.value}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.sub}</div>
+                <div key={item.label} className="py-1.5 border-b border-border">
+                  <div className="text-[9px] text-text-muted mb-0.5">{item.label}</div>
+                  <div className={`text-[11px] font-semibold capitalize ${item.color}`}>{item.value}</div>
+                  <div className="text-[9px] text-text-muted">{item.sub}</div>
                 </div>
               ))}
             </div>

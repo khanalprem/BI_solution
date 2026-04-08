@@ -8,7 +8,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { useBranchPerformance, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { formatNPR, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis } from 'recharts';
 
@@ -272,7 +272,7 @@ export default function BranchDashboard() {
           maxDate={filterStats?.date_range?.max || undefined}
         />
         
-        <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-col gap-3.5 p-5">
           {/* Advanced Filters */}
           <AdvancedFilters
             filters={filters}
@@ -330,21 +330,16 @@ export default function BranchDashboard() {
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={allBranches.slice(0, 10)} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
                     <YAxis 
                       type="category" 
                       dataKey="branch_code" 
                       stroke="var(--text-muted)" 
-                      style={{ fontSize: '10px' }}
-                      width={80}
+                      tick={{ fontSize: 9 }}
+                      width={72}
                     />
                     <Tooltip 
-                      contentStyle={{ 
-                        background: 'var(--bg-card)', 
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: number) => [formatNPR(value), 'Amount']}
                     />
                     <Bar dataKey="total_amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
@@ -368,14 +363,14 @@ export default function BranchDashboard() {
                       dataKey="transaction_count" 
                       name="Transactions" 
                       stroke="var(--text-muted)" 
-                      style={{ fontSize: '11px' }}
+                      tick={{ fontSize: 9 }}
                     />
                     <YAxis 
                       type="number" 
                       dataKey="total_amount" 
                       name="Amount" 
                       stroke="var(--text-muted)" 
-                      style={{ fontSize: '11px' }}
+                      tick={{ fontSize: 9 }}
                       tickFormatter={(value) => formatNPR(value)}
                     />
                     <ZAxis 
@@ -386,12 +381,7 @@ export default function BranchDashboard() {
                     />
                     <Tooltip 
                       cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={{ 
-                        background: 'var(--bg-card)', 
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: number, name: string) => {
                         if (name === 'Amount') return [formatNPR(value), name];
                         return [value.toLocaleString(), name];

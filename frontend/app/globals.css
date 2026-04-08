@@ -29,6 +29,11 @@
   --radius: 12px;
   --radius-sm: 8px;
   --sidebar-w: 220px;
+  --chart-grid: rgba(255,255,255,0.08);
+  --chart-axis: #7f87a3;
+  --chart-tooltip-bg: rgba(26,30,46,0.95);
+  --chart-tooltip-border: rgba(255,255,255,0.14);
+  --chart-glow: 0 18px 40px rgba(0,0,0,0.30);
 }
 
 [data-theme="light"] {
@@ -48,6 +53,11 @@
   --accent-amber-dim: rgba(245,158,11,0.08);
   --accent-purple-dim: rgba(139,92,246,0.08);
   --accent-teal-dim: rgba(6,182,212,0.08);
+  --chart-grid: rgba(15,17,32,0.10);
+  --chart-axis: #657093;
+  --chart-tooltip-bg: rgba(255,255,255,0.96);
+  --chart-tooltip-border: rgba(15,17,32,0.12);
+  --chart-glow: 0 14px 30px rgba(12,18,38,0.12);
 }
 
 * {
@@ -60,7 +70,7 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   min-height: 100vh;
 }
@@ -102,3 +112,92 @@ body {
 .animate-fade-in:nth-child(4) { animation-delay: 0.11s; }
 .animate-fade-in:nth-child(5) { animation-delay: 0.14s; }
 .animate-fade-in:nth-child(6) { animation-delay: 0.17s; }
+
+/* Recharts premium polish for all dashboard charts */
+.chart-surface .recharts-responsive-container {
+  border-radius: 10px;
+}
+
+.chart-surface .recharts-cartesian-grid line {
+  stroke: var(--border) !important;
+  stroke-dasharray: 3 5;
+}
+
+.chart-surface .recharts-cartesian-axis-tick-value,
+.chart-surface .recharts-text.recharts-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.1px;
+}
+
+.chart-surface .recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+  font-size: 11px;
+}
+
+.chart-surface .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.3) !important;
+  padding: 8px 10px !important;
+}
+
+.chart-surface .recharts-tooltip-label {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+
+.chart-surface .recharts-default-tooltip .recharts-tooltip-item {
+  font-size: 11px !important;
+}
+
+.chart-surface .recharts-surface .recharts-dot {
+  stroke-width: 1.5;
+}
+
+/* Universal chart styling (applies to all dashboard charts, with or without ChartCard) */
+main .recharts-wrapper .recharts-cartesian-grid line {
+  stroke: var(--chart-grid) !important;
+  stroke-dasharray: 3 5;
+}
+
+main .recharts-wrapper .recharts-cartesian-axis-line,
+main .recharts-wrapper .recharts-cartesian-axis-tick-line {
+  stroke: transparent !important;
+}
+
+main .recharts-wrapper .recharts-cartesian-axis-tick-value {
+  fill: var(--chart-axis) !important;
+  font-size: 10px;
+  letter-spacing: 0.1px;
+}
+
+main .recharts-wrapper .recharts-curve.recharts-line-curve,
+main .recharts-wrapper .recharts-area-area {
+  filter: drop-shadow(0 4px 10px rgba(59,130,246,0.18));
+}
+
+main .recharts-wrapper .recharts-bar-rectangle path,
+main .recharts-wrapper .recharts-rectangle.recharts-tooltip-cursor {
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18));
+}
+
+main .recharts-wrapper .recharts-default-tooltip {
+  background: var(--chart-tooltip-bg) !important;
+  border: 1px solid var(--chart-tooltip-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--chart-glow) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 8px 10px !important;
+}
+
+main .recharts-wrapper .recharts-tooltip-label {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+
+main .recharts-wrapper .recharts-tooltip-item {
+  font-size: 11px !important;
+}

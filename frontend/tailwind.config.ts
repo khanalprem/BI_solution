@@ -45,6 +45,10 @@ const config: Config = {
         sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
+      fontSize: {
+        "2xs": ["9px", { lineHeight: "12px" }],
+        "3xs": ["8px", { lineHeight: "11px" }],
+      },
       borderRadius: {
         DEFAULT: "12px",
         sm: "8px",

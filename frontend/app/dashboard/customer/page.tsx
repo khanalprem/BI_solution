@@ -403,10 +403,10 @@ export default function CustomerDashboard() {
                     <XAxis 
                       dataKey="segment" 
                       stroke="var(--text-muted)" 
-                      style={{ fontSize: '10px' }}
+                      tick={{ fontSize: 9 }}
                     />
-                    <YAxis yAxisId="amount" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                    <YAxis yAxisId="customers" orientation="right" stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
+                    <YAxis yAxisId="amount" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                    <YAxis yAxisId="customers" orientation="right" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
                     <Tooltip
                       contentStyle={{
                         background: 'var(--bg-card)',
@@ -439,9 +439,9 @@ export default function CustomerDashboard() {
                     <XAxis 
                       dataKey="tier" 
                       stroke="var(--text-muted)" 
-                      style={{ fontSize: '10px' }}
+                      tick={{ fontSize: 9 }}
                     />
-                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
                     <Tooltip 
                       contentStyle={{ 
                         background: 'var(--bg-card)', 

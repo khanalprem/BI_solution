@@ -187,12 +187,15 @@ export function toIsoDate(date?: Date | null): string {
 
 // Recharts tooltip style constant for consistent chart theming
 export const CHART_TOOLTIP_STYLE: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
+  background: 'var(--chart-tooltip-bg)',
+  border: '1px solid var(--chart-tooltip-border)',
+  borderRadius: '10px',
   fontSize: '12px',
   color: 'var(--text-primary)',
-  boxShadow: '0 14px 34px rgba(0,0,0,0.24)',
+  boxShadow: 'var(--chart-glow)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  padding: '8px 10px',
 };
 
 // Nepal provinces

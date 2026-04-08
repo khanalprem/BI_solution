@@ -327,8 +327,8 @@ export default function CustomerDetailPage() {
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={trendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: '10px' }} tickFormatter={(value) => String(value).slice(5)} />
-                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => String(value).slice(5)} />
+                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
                     <Tooltip
                       contentStyle={{
                         background: 'var(--bg-card)',
@@ -351,8 +351,8 @@ export default function CustomerDetailPage() {
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={channelData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: '10px' }} tickFormatter={(value) => formatChannelLabel(String(value))} />
-                    <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(value) => formatNPR(value)} />
+                    <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
+                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
                     <Tooltip
                       contentStyle={{
                         background: 'var(--bg-card)',

@@ -73,19 +73,19 @@ export function TopBar({
   };
   
   return (
-    <header className="sticky top-0 z-[90] border-b border-border bg-bg-surface/95 px-6 py-3 backdrop-blur">
+    <header className="sticky top-0 z-[90] border-b border-border bg-bg-surface/95 px-5 py-2.5 backdrop-blur">
       <div className="flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-0">
-        <span className="text-[15px] font-semibold">{title}</span>
+        <span className="text-[13px] font-semibold">{title}</span>
         {subtitle && (
-          <span className="text-text-muted font-normal text-[13px] ml-2">
+          <span className="text-text-muted font-normal text-[11px] ml-2">
             › {subtitle}
           </span>
         )}
       </div>
       
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center rounded-xl border border-border bg-bg-input p-1">
+        <div className="flex flex-wrap items-center rounded-lg border border-border bg-bg-input p-0.5">
           {BASE_PERIOD_OPTIONS.map((p) => (
             <button
               key={p}
@@ -93,7 +93,7 @@ export function TopBar({
               onClick={() => handlePeriodChange(p)}
               aria-pressed={currentPeriod === p}
               className={`
-                rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all
+                rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all
                 ${currentPeriod === p
                     ? 'bg-accent-blue text-white shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
@@ -108,7 +108,7 @@ export function TopBar({
             onClick={() => handlePeriodChange('CUSTOM')}
             aria-pressed={currentPeriod === 'CUSTOM'}
             className={`
-              rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all
+              rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all
               ${currentPeriod === 'CUSTOM'
                   ? 'bg-accent-blue text-white shadow-sm'
                   : 'text-text-secondary hover:text-text-primary'

@@ -134,8 +134,8 @@ export default function DigitalDashboard() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={allChannels} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: '11px' }} width={80} />
+                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
+                  <YAxis type="category" dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                   <Bar dataKey="total_amount" radius={[0, 4, 4, 0]}>
                     {allChannels.map((entry) => (
@@ -153,8 +153,8 @@ export default function DigitalDashboard() {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={allChannels}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="channel" stroke="var(--text-muted)" style={{ fontSize: '11px' }} />
-              <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+              <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
               <Legend wrapperStyle={{ fontSize: '11px' }} />
               <Bar dataKey="credit_amount" name="Credit (CR)" fill="#10b981" radius={[4, 4, 0, 0]} />

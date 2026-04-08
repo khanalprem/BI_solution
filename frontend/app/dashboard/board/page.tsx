@@ -151,8 +151,8 @@ export default function BoardDashboard() {
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trend.slice(-60)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: '10px' }} tickFormatter={(v) => v.slice(5)} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => v.slice(5)} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
                 <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
               </LineChart>
@@ -163,8 +163,8 @@ export default function BoardDashboard() {
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topProvinces}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="province" stroke="var(--text-muted)" style={{ fontSize: '10px' }} />
-                <YAxis stroke="var(--text-muted)" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNPR(v)} />
+                <XAxis dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
+                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Volume']} />
                 <Bar dataKey="total_amount" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
