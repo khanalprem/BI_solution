@@ -7,11 +7,9 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { Pill } from '@/components/ui/Pill';
 import { useRiskSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts';
+import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -169,32 +167,29 @@ export default function RiskDashboard() {
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartCard title="GL Code Risk Exposure" subtitle="Top GL sub-heads by volume">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byGl.slice(0, 8)} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                  {byGl.slice(0, 8).map((entry, idx) => (
-                    <Cell key={idx} fill={idx === 0 ? '#ef4444' : idx === 1 ? '#f59e0b' : '#3b82f6'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={byGl.slice(0, 8)}
+              xAxisKey="gl_code"
+              series={[{ dataKey: 'amount', name: 'Amount' }]}
+              layout="horizontal"
+              itemColors={byGl.slice(0, 8).map((_, i) => i === 0 ? '#ef4444' : i === 1 ? '#f59e0b' : '#3b82f6')}
+              formatValue={formatNPR}
+              yAxisWidth={80}
+              height={260}
+            />
           </ChartCard>
 
           <ChartCard title="Province Risk Distribution" subtitle="Transaction volume by province">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byProvince}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
-                <Bar dataKey="amount" name="Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="debit_amount" name="Debit" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={byProvince}
+              xAxisKey="province"
+              series={[
+                { dataKey: 'amount',       name: 'Total', color: '#3b82f6' },
+                { dataKey: 'debit_amount', name: 'Debit', color: '#ef4444' },
+              ]}
+              formatValue={formatNPR}
+              height={260}
+            />
           </ChartCard>
         </div>
 

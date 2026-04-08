@@ -201,3 +201,228 @@ main .recharts-wrapper .recharts-tooltip-label {
 main .recharts-wrapper .recharts-tooltip-item {
   font-size: 11px !important;
 }
+
+/* ===== Premium Chart Tooltip Styles ===== */
+.premium-tooltip {
+  background: var(--chart-tooltip-bg);
+  border: 1px solid var(--chart-tooltip-border);
+  border-radius: 10px;
+  box-shadow: var(--chart-glow);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.premium-tooltip-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.premium-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.premium-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.premium-tooltip-name {
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+.premium-tooltip-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+
+/* ===== Premium Chart Surface Enhancements ===== */
+.premium-chart-surface {
+  position: relative;
+}
+
+.premium-chart-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(59, 130, 246, 0.02) 100%);
+  pointer-events: none;
+  border-radius: 10px;
+}
+
+/* ===== Enhanced Grid Lines ===== */
+.premium-grid-vertical line,
+.premium-grid-horizontal line {
+  stroke: var(--chart-grid);
+  stroke-opacity: 0.6;
+}
+
+/* ===== Premium Axis Labels ===== */
+.premium-axis-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+
+/* ===== Chart Glow Effects ===== */
+.chart-glow-blue {
+  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.25));
+}
+
+.chart-glow-green {
+  filter: drop-shadow(0 4px 12px rgba(16, 185, 129, 0.25));
+}
+
+.chart-glow-purple {
+  filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.25));
+}
+
+.chart-glow-amber {
+  filter: drop-shadow(0 4px 12px rgba(245, 158, 11, 0.25));
+}
+
+/* ===== Animated Bar Hover ===== */
+.recharts-bar-rectangle:hover {
+  filter: brightness(1.1);
+  transition: filter 0.2s ease;
+}
+
+/* ===== Gradient Legend ===== */
+.chart-gradient-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.chart-gradient-legend-start {
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, currentColor 0%, transparent 100%);
+  opacity: 0.3;
+}
+
+.chart-gradient-legend-end {
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent 0%, currentColor 100%);
+}
+
+/* ===== Card hover shimmer sweep ===== */
+@keyframes card-shimmer {
+  0%   { transform: translateX(-120%) skewX(-15deg); }
+  100% { transform: translateX(220%)  skewX(-15deg); }
+}
+
+/* ===== KPI value pop-in (triggered via key remount) ===== */
+@keyframes kpi-value-pop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.97); }
+  60%  { opacity: 1; transform: translateY(-1px) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+
+.animate-kpi-value {
+  animation: kpi-value-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ===== KPI spark bar fill animation ===== */
+@keyframes spark-fill {
+  from { width: 0; }
+}
+
+.animate-spark-fill {
+  animation: spark-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.15s;
+}
+
+/* ===== Data Point Pulse Animation ===== */
+@keyframes dataPointPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.data-point-pulse {
+  animation: dataPointPulse 2s ease-in-out infinite;
+}
+
+/* ===== Chart Loading Skeleton ===== */
+.chart-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-input) 25%,
+    var(--bg-card-hover) 50%,
+    var(--bg-input) 75%
+  );
+  background-size: 200% 100%;
+  animation: chart-skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes chart-skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ===== Dark Theme Specific Enhancements ===== */
+[data-theme="dark"] .premium-tooltip {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .chart-glow-blue,
+[data-theme="dark"] .chart-glow-green,
+[data-theme="dark"] .chart-glow-purple,
+[data-theme="dark"] .chart-glow-amber {
+  filter: drop-shadow(0 6px 16px currentColor);
+}
+
+/* ===== Light Theme Specific Enhancements ===== */
+[data-theme="light"] .premium-tooltip {
+  box-shadow: 0 14px 30px rgba(12, 18, 38, 0.12);
+}
+
+[data-theme="light"] .chart-glow-blue,
+[data-theme="light"] .chart-glow-green,
+[data-theme="light"] .chart-glow-purple,
+[data-theme="light"] .chart-glow-amber {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.1));
+}
+
+[data-theme="light"] .premium-tooltip-dot {
+  box-shadow: 0 0 4px currentColor;
+}

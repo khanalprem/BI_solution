@@ -6,12 +6,9 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { useDigitalChannels, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, Cell, PieChart, Pie,
-} from 'recharts';
+import { PremiumBarChart, PremiumDonutChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -109,58 +106,45 @@ export default function DigitalDashboard() {
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <ChartCard title="Digital vs Branch Split" subtitle="Volume share">
-            <div className="relative h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={72} strokeWidth={0}>
-                    {pieData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
-                  </Pie>
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[13px] font-semibold">{formatPercent(digitalRatio)}</div>
-                <div className="text-[10px] text-text-muted">Digital</div>
-              </div>
-            </div>
-            <div className="mt-2 flex justify-center gap-6 text-[11px]">
-              <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" />Digital</div>
-              <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-500" />Branch</div>
-            </div>
+            <PremiumDonutChart
+              data={pieData}
+              formatValue={formatNPR}
+              height={220}
+              innerRadius="48%"
+              outerRadius="68%"
+              centerValue={formatPercent(digitalRatio)}
+              centerLabel="Digital"
+            />
           </ChartCard>
 
           <div className="lg:col-span-2">
             <ChartCard title="Channel Volume Breakdown" subtitle="Transaction amount by channel">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={allChannels} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                  <Bar dataKey="total_amount" radius={[0, 4, 4, 0]}>
-                    {allChannels.map((entry) => (
-                      <Cell key={entry.channel} fill={getChannelColor(entry.channel)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <PremiumBarChart
+                data={allChannels}
+                xAxisKey="channel"
+                series={[{ dataKey: 'total_amount', name: 'Amount' }]}
+                layout="horizontal"
+                itemColors={allChannels.map((c) => getChannelColor(c.channel))}
+                formatValue={formatNPR}
+                yAxisWidth={80}
+                height={220}
+              />
             </ChartCard>
           </div>
         </div>
 
         {/* Channel CR/DR breakdown */}
         <ChartCard title="Channel Credit vs Debit" subtitle="Inflow and outflow by channel">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={allChannels}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-              <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Bar dataKey="credit_amount" name="Credit (CR)" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="debit_amount" name="Debit (DR)" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <PremiumBarChart
+            data={allChannels}
+            xAxisKey="channel"
+            series={[
+              { dataKey: 'credit_amount', name: 'Credit (CR)', color: '#10b981' },
+              { dataKey: 'debit_amount',  name: 'Debit (DR)',  color: '#ef4444' },
+            ]}
+            formatValue={formatNPR}
+            height={260}
+          />
         </ChartCard>
 
         {/* Channel Detail Cards */}

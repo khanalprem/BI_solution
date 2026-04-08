@@ -11,7 +11,7 @@ import { Pill } from '@/components/ui/Pill';
 import { useDashboardData, useFilterStatistics, useTopCustomers } from '@/lib/hooks/useDashboardData';
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from 'recharts';
+import { PremiumBarChart, PremiumComposedChart } from '@/components/ui/PremiumCharts';
 
 interface CustomerData {
   cif_id: string;
@@ -397,32 +397,16 @@ export default function CustomerDashboard() {
               {segmentData.length === 0 ? (
                 <ChartEmptyState title="No segment data" />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <ComposedChart data={segmentData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis 
-                      dataKey="segment" 
-                      stroke="var(--text-muted)" 
-                      tick={{ fontSize: 9 }}
-                    />
-                    <YAxis yAxisId="amount" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                    <YAxis yAxisId="customers" orientation="right" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
-                      formatter={(value: number, name: string) => [
-                        name === 'Portfolio Value' ? formatNPR(value) : value.toLocaleString(),
-                        name,
-                      ]}
-                    />
-                    <Bar yAxisId="amount" dataKey="amount" name="Portfolio Value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="customers" type="monotone" dataKey="customers" name="Customers" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <PremiumComposedChart
+                  data={segmentData}
+                  xAxisKey="segment"
+                  bars={[{ dataKey: 'amount', name: 'Portfolio Value', color: '#3b82f6', yAxisIndex: 0 }]}
+                  lines={[{ dataKey: 'customers', name: 'Customers', color: '#10b981', yAxisIndex: 1 }]}
+                  formatValue={formatNPR}
+                  rightFormatValue={(v) => v.toLocaleString()}
+                  showDots={true}
+                  height={260}
+                />
               )}
             </ChartCard>
             
@@ -433,27 +417,13 @@ export default function CustomerDashboard() {
               {riskTierData.length === 0 ? (
                 <ChartEmptyState title="No risk tier data" />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={riskTierData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis 
-                      dataKey="tier" 
-                      stroke="var(--text-muted)" 
-                      tick={{ fontSize: 9 }}
-                    />
-                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                    <Tooltip 
-                      contentStyle={{ 
-                        background: 'var(--bg-card)', 
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
-                      formatter={(value: number) => [formatNPR(value), 'Portfolio Value']}
-                    />
-                    <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <PremiumBarChart
+                  data={riskTierData}
+                  xAxisKey="tier"
+                  series={[{ dataKey: 'amount', name: 'Portfolio Value', color: '#8b5cf6' }]}
+                  formatValue={formatNPR}
+                  height={260}
+                />
               )}
             </ChartCard>
           </div>

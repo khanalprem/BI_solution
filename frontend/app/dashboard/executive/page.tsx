@@ -4,12 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal , CHART_TOOLTIP_STYLE} from '@/lib/formatters';
+import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
-import {
-  AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
+import { SparkLine, PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -67,16 +64,15 @@ function SparkCard({
   label: string; value: string; sub: string; color: string; dimColor: string;
   icon: React.ReactNode; sparkData: number[]; highlighted?: boolean;
 }) {
-  const chartData = sparkData.map((v, i) => ({ i, v }));
   return (
-    <div 
+    <div
       className={`bg-bg-card rounded-xl p-3.5 flex flex-col gap-1 border ${highlighted ? 'border-[rgba(59,130,246,0.3)]' : 'border-border'}`}
       style={highlighted ? { background: `linear-gradient(135deg, ${dimColor} 0%, var(--bg-card) 60%)` } : {}}
     >
       <div className="flex justify-between items-center">
         <span className="text-[10px] text-text-muted font-medium uppercase tracking-[0.4px]">{label}</span>
-        <div 
-          className="w-6 h-6 rounded-md flex items-center justify-center" 
+        <div
+          className="w-6 h-6 rounded-md flex items-center justify-center"
           style={{ background: dimColor }}
         >
           {icon}
@@ -84,17 +80,7 @@ function SparkCard({
       </div>
       <div className="text-[20px] font-bold text-text-primary leading-tight">{value}</div>
       <div className="h-9 -mx-0.5 my-0.5">
-        <ResponsiveContainer width="100%" height={36}>
-          <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-            <defs>
-              <linearGradient id={`sg-${label.replace(/\s/g,'')}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#sg-${label.replace(/\s/g,'')})`} dot={false} />
-          </AreaChart>
-        </ResponsiveContainer>
+        <SparkLine data={sparkData} color={color} height={36} />
       </div>
       <div className="text-[10px] text-text-muted">{sub}</div>
     </div>
@@ -162,8 +148,6 @@ export default function ExecutiveDashboard() {
   const topBranch = data?.by_branch?.[0] as BranchMetrics | undefined;
   const topProvince = data?.by_province?.[0] as ProvinceMetrics | undefined;
   const topChannel = (data?.by_channel || [] as ChannelMetrics[]).find((c: ChannelMetrics) => c.channel);
-
-  const tooltipStyle = CHART_TOOLTIP_STYLE;
 
   if (!mounted) return null;
 
@@ -275,17 +259,19 @@ export default function ExecutiveDashboard() {
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={data?.trend || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v: string) => v?.slice(5) || v} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v: number) => formatNPR(v)} />
-                <YAxis yAxisId="count" orientation="right" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [n === 'amount' ? formatNPR(v) : v.toLocaleString(), n === 'amount' ? 'Amount' : 'Transactions']} />
-                <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Line yAxisId="count" type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <PremiumLineChart
+              data={(data?.trend || []) as unknown as Record<string, unknown>[]}
+              xAxisKey="date"
+              series={[
+                { dataKey: 'amount', name: 'Amount',       color: '#3b82f6' },
+                { dataKey: 'count',  name: 'Transactions', color: '#10b981' },
+              ]}
+              rightAxisKeys={['count']}
+              rightFormatValue={(v) => v.toLocaleString()}
+              formatValue={formatNPR}
+              formatXAxis={(v) => v?.slice(5) || v}
+              height={200}
+            />
           </div>
 
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
@@ -295,15 +281,14 @@ export default function ExecutiveDashboard() {
                 <div className="text-[10px] text-text-muted mt-0.5">Breakdown by tran source</div>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={(data?.by_channel || [] as ChannelMetrics[]).filter((c: ChannelMetrics) => c.channel).slice(0, 8)}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={v => formatNPR(v)} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Amount']} labelFormatter={(value) => formatChannelLabel(String(value))} />
-                <Bar dataKey="total_amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={((data?.by_channel || []) as ChannelMetrics[]).filter((c) => c.channel).slice(0, 8) as unknown as Record<string, unknown>[]}
+              xAxisKey="channel"
+              series={[{ dataKey: 'total_amount', name: 'Amount', color: '#8b5cf6' }]}
+              formatValue={formatNPR}
+              formatXAxis={formatChannelLabel}
+              height={200}
+            />
           </div>
         </div>
 
@@ -432,15 +417,16 @@ export default function ExecutiveDashboard() {
         <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="text-[12px] font-semibold text-text-primary mb-1">Province Performance</div>
           <div className="text-[10px] text-text-muted mb-3">Transaction breakdown by province</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={data?.by_province || []} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={v => formatNPR(v)} />
-              <YAxis type="category" dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} tickFormatter={(value) => formatProvinceLabel(String(value))} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatNPR(v), 'Total Amount']} />
-              <Bar dataKey="total_amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <PremiumBarChart
+            data={(data?.by_province || []) as unknown as Record<string, unknown>[]}
+            xAxisKey="province"
+            series={[{ dataKey: 'total_amount', name: 'Total Amount', color: '#06b6d4' }]}
+            layout="horizontal"
+            formatValue={formatNPR}
+            formatXAxis={(v) => formatProvinceLabel(v)}
+            yAxisWidth={80}
+            height={220}
+          />
         </div>
 
         {/* ── Branch League Table ── */}

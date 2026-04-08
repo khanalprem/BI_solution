@@ -12,7 +12,7 @@ import { Pill } from '@/components/ui/Pill';
 import { useCustomerProfile, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { CustomerAccountDetail, CustomerRecentTransaction, DashboardFilters } from '@/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -324,23 +324,14 @@ export default function CustomerDetailPage() {
               {trendData.length === 0 ? (
                 <ChartEmptyState title="No customer trend data" />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => String(value).slice(5)} />
-                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}
-                      formatter={(value: number) => [formatNPR(value), 'Amount']}
-                    />
-                    <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <PremiumBarChart
+                  data={trendData as unknown as Record<string, unknown>[]}
+                  xAxisKey="date"
+                  series={[{ dataKey: 'amount', name: 'Amount', color: '#3b82f6' }]}
+                  formatValue={formatNPR}
+                  formatXAxis={(v) => v.slice(5)}
+                  height={260}
+                />
               )}
             </ChartCard>
 
@@ -348,24 +339,14 @@ export default function CustomerDetailPage() {
               {channelData.length === 0 ? (
                 <ChartEmptyState title="No channel data" />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={channelData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="channel" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatChannelLabel(String(value))} />
-                    <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}
-                      formatter={(value: number) => [formatNPR(value), 'Amount']}
-                      labelFormatter={(value) => formatChannelLabel(String(value))}
-                    />
-                    <Bar dataKey="total_amount" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <PremiumBarChart
+                  data={channelData as unknown as Record<string, unknown>[]}
+                  xAxisKey="channel"
+                  series={[{ dataKey: 'total_amount', name: 'Amount', color: '#10b981' }]}
+                  formatValue={formatNPR}
+                  formatXAxis={formatChannelLabel}
+                  height={260}
+                />
               )}
             </ChartCard>
           </div>

@@ -8,20 +8,9 @@ Rails.application.routes.draw do
   # API routes
   namespace :api do
     namespace :v1 do
-      # Dashboard endpoints
-      get 'dashboards/executive', to: 'dashboards#executive'
-      get 'dashboards/branch_performance', to: 'dashboards#branch_performance'
-      get 'dashboards/province_summary', to: 'dashboards#province_summary'
-      get 'dashboards/channel_breakdown', to: 'dashboards#channel_breakdown'
-      get 'dashboards/daily_trend', to: 'dashboards#daily_trend'
-      get 'dashboards/customers_top', to: 'dashboards#customers_top'
-      get 'dashboards/customer_profile', to: 'dashboards#customer_profile'
-      get 'dashboards/financial_summary', to: 'dashboards#financial_summary'
-      get 'dashboards/digital_channels', to: 'dashboards#digital_channels'
-      get 'dashboards/risk_summary', to: 'dashboards#risk_summary'
-      get 'dashboards/kpi_summary', to: 'dashboards#kpi_summary'
-      get 'dashboards/employer_summary', to: 'dashboards#employer_summary'
+      # Legacy localized dashboard endpoints removed in favor of generic production/explorer
       
+
       # Filter endpoints
       get 'filters/values', to: 'filters#values'
       get 'filters/branches', to: 'filters#branches'

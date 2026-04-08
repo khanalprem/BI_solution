@@ -9,9 +9,9 @@ import { ChartCard } from '@/components/ui/ChartCard';
 import { DataTable, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '@/components/ui/DataTable';
 import { Pill } from '@/components/ui/Pill';
 import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -148,27 +148,24 @@ export default function BoardDashboard() {
         {/* Trend and Province */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartCard title="Transaction Volume Trend" subtitle="Daily transaction volume">
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trend.slice(-60)}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => v.slice(5)} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <PremiumLineChart
+              data={trend.slice(-60)}
+              xAxisKey="date"
+              series={[{ dataKey: 'amount', name: 'Amount', color: '#3b82f6' }]}
+              formatValue={formatNPR}
+              formatXAxis={(v) => v.slice(5)}
+              height={220}
+            />
           </ChartCard>
 
           <ChartCard title="Province Performance" subtitle="Volume by province">
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topProvinces}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="province" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Volume']} />
-                <Bar dataKey="total_amount" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={topProvinces}
+              xAxisKey="province"
+              series={[{ dataKey: 'total_amount', name: 'Volume', color: '#10b981' }]}
+              formatValue={formatNPR}
+              height={220}
+            />
           </ChartCard>
         </div>
 

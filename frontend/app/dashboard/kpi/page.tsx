@@ -6,12 +6,9 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { useKpiSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line,
-} from 'recharts';
+import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -122,17 +119,14 @@ export default function KPIDashboard() {
         {/* Quarterly Trend */}
         {byQuarter.length > 0 && (
           <ChartCard title="Quarterly Performance" subtitle="Volume and transaction count by quarter">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byQuarter}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="period" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-                <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), name === 'amount' ? 'Volume' : 'Transactions']} />
-                <Bar dataKey="amount" name="amount" radius={[4, 4, 0, 0]}>
-                  {byQuarter.map((_, idx) => <Cell key={idx} fill={QUARTER_COLORS[idx % QUARTER_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={byQuarter}
+              xAxisKey="period"
+              series={[{ dataKey: 'amount', name: 'Volume' }]}
+              itemColors={QUARTER_COLORS}
+              formatValue={formatNPR}
+              height={260}
+            />
           </ChartCard>
         )}
 
@@ -140,29 +134,29 @@ export default function KPIDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {byProduct.length > 0 && (
             <ChartCard title="Volume by Product" subtitle="Transaction volume per product type">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={byProduct.slice(0, 10)} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="product" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={100} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                  <Bar dataKey="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <PremiumBarChart
+                data={byProduct.slice(0, 10)}
+                xAxisKey="product"
+                series={[{ dataKey: 'amount', name: 'Amount', color: '#3b82f6' }]}
+                layout="horizontal"
+                formatValue={formatNPR}
+                yAxisWidth={100}
+                height={260}
+              />
             </ChartCard>
           )}
 
           {byService.length > 0 && (
             <ChartCard title="Volume by Service" subtitle="Transaction volume per service type">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={byService.slice(0, 10)} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="service" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={100} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                  <Bar dataKey="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <PremiumBarChart
+                data={byService.slice(0, 10)}
+                xAxisKey="service"
+                series={[{ dataKey: 'amount', name: 'Amount', color: '#10b981' }]}
+                layout="horizontal"
+                formatValue={formatNPR}
+                yAxisWidth={100}
+                height={260}
+              />
             </ChartCard>
           )}
         </div>

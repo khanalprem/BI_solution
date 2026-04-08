@@ -6,12 +6,9 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartLegendItem } from '@/components/ui/ChartCard';
 import { useFinancialSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, ReferenceLine,
-} from 'recharts';
+import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -117,59 +114,58 @@ export default function FinancialDashboard() {
             </>
           }
         >
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-              <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
-              <ReferenceLine y={0} stroke="var(--border-strong)" />
-              <Line type="monotone" dataKey="credit" stroke="#10b981" strokeWidth={2} dot={false} name="Credit" />
-              <Line type="monotone" dataKey="debit" stroke="#ef4444" strokeWidth={2} dot={false} name="Debit" />
-              <Line type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="5 3" name="Net" />
-            </LineChart>
-          </ResponsiveContainer>
+          <PremiumLineChart
+            data={monthlyTrend}
+            xAxisKey="month"
+            series={[
+              { dataKey: 'credit', name: 'Credit (CR)', color: '#10b981' },
+              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#ef4444' },
+              { dataKey: 'net',    name: 'Net Flow',    color: '#3b82f6', dashed: true },
+            ]}
+            formatValue={formatNPR}
+            referenceLine={0}
+            height={280}
+          />
         </ChartCard>
 
         {/* Monthly bar chart */}
         <ChartCard title="Monthly Volume Bar Chart" subtitle="Credit and debit volumes by month">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 9 }} />
-              <YAxis stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-              <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), '']} />
-              <Legend wrapperStyle={{ fontSize: '10px' }} />
-              <Bar dataKey="credit" name="Credit (CR)" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="debit" name="Debit (DR)" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <PremiumBarChart
+            data={monthlyTrend}
+            xAxisKey="month"
+            series={[
+              { dataKey: 'credit', name: 'Credit (CR)', color: '#10b981' },
+              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#ef4444' },
+            ]}
+            formatValue={formatNPR}
+            height={260}
+          />
         </ChartCard>
 
         {/* GL Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartCard title="Top GL Codes — Credit (CR)" subtitle="Largest inflow GL sub-heads">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={glCr} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={70} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                <Bar dataKey="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={glCr}
+              xAxisKey="gl_code"
+              series={[{ dataKey: 'amount', name: 'Amount', color: '#10b981' }]}
+              layout="horizontal"
+              formatValue={formatNPR}
+              yAxisWidth={70}
+              height={260}
+            />
           </ChartCard>
 
           <ChartCard title="Top GL Codes — Debit (DR)" subtitle="Largest outflow GL sub-heads">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={glDr} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                <YAxis type="category" dataKey="gl_code" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={70} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => [formatNPR(v), 'Amount']} />
-                <Bar dataKey="amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <PremiumBarChart
+              data={glDr}
+              xAxisKey="gl_code"
+              series={[{ dataKey: 'amount', name: 'Amount', color: '#ef4444' }]}
+              layout="horizontal"
+              formatValue={formatNPR}
+              yAxisWidth={70}
+              height={260}
+            />
           </ChartCard>
         </div>
 

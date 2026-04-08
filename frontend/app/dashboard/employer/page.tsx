@@ -6,11 +6,9 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { useEmployerSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts';
+import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -105,29 +103,29 @@ export default function EmployerDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {topUsers.length > 0 && (
             <ChartCard title="Top Entry Users by Volume" subtitle="Users ranked by total transaction amount">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={topUsers} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="user" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={90} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), name === 'amount' ? 'Volume' : 'Transactions']} />
-                  <Bar dataKey="amount" name="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <PremiumBarChart
+                data={topUsers}
+                xAxisKey="user"
+                series={[{ dataKey: 'amount', name: 'Volume', color: '#3b82f6' }]}
+                layout="horizontal"
+                formatValue={formatNPR}
+                yAxisWidth={90}
+                height={280}
+              />
             </ChartCard>
           )}
 
           {byBranch.length > 0 && (
             <ChartCard title="Branch Operations" subtitle="Users and volume by branch">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={byBranch.slice(0, 10)} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(v) => formatNPR(v)} />
-                  <YAxis type="category" dataKey="branch" stroke="var(--text-muted)" tick={{ fontSize: 9 }} width={80} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number, name: string) => [name === 'amount' ? formatNPR(v) : v.toLocaleString(), '']} />
-                  <Bar dataKey="amount" name="amount" fill="#10b981" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <PremiumBarChart
+                data={byBranch.slice(0, 10)}
+                xAxisKey="branch"
+                series={[{ dataKey: 'amount', name: 'Volume', color: '#10b981' }]}
+                layout="horizontal"
+                formatValue={formatNPR}
+                yAxisWidth={80}
+                height={280}
+              />
             </ChartCard>
           )}
         </div>

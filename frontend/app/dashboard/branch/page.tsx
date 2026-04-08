@@ -8,9 +8,9 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { useBranchPerformance, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, getDateRange, parseISODateToLocal, CHART_TOOLTIP_STYLE } from '@/lib/formatters';
+import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis } from 'recharts';
+import { PremiumBarChart, PremiumScatterChart } from '@/components/ui/PremiumCharts';
 
 interface BranchData {
   branch_code: string;
@@ -327,24 +327,15 @@ export default function BranchDashboard() {
               {allBranches.length === 0 ? (
                 <ChartEmptyState title="No branch performance data" />
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={allBranches.slice(0, 10)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 9 }} tickFormatter={(value) => formatNPR(value)} />
-                    <YAxis 
-                      type="category" 
-                      dataKey="branch_code" 
-                      stroke="var(--text-muted)" 
-                      tick={{ fontSize: 9 }}
-                      width={72}
-                    />
-                    <Tooltip 
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: number) => [formatNPR(value), 'Amount']}
-                    />
-                    <Bar dataKey="total_amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <PremiumBarChart
+                  data={allBranches.slice(0, 10)}
+                  xAxisKey="branch_code"
+                  series={[{ dataKey: 'total_amount', name: 'Amount', color: '#3b82f6' }]}
+                  layout="horizontal"
+                  formatValue={formatNPR}
+                  yAxisWidth={72}
+                  height={280}
+                />
               )}
             </ChartCard>
             
@@ -355,42 +346,19 @@ export default function BranchDashboard() {
               {allBranches.length === 0 ? (
                 <ChartEmptyState title="No branch scatter data" />
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <ScatterChart>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis 
-                      type="number" 
-                      dataKey="transaction_count" 
-                      name="Transactions" 
-                      stroke="var(--text-muted)" 
-                      tick={{ fontSize: 9 }}
-                    />
-                    <YAxis 
-                      type="number" 
-                      dataKey="total_amount" 
-                      name="Amount" 
-                      stroke="var(--text-muted)" 
-                      tick={{ fontSize: 9 }}
-                      tickFormatter={(value) => formatNPR(value)}
-                    />
-                    <ZAxis 
-                      type="number" 
-                      dataKey="unique_accounts" 
-                      name="Accounts" 
-                      range={[50, 400]} 
-                    />
-                    <Tooltip 
-                      cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: number, name: string) => {
-                        if (name === 'Amount') return [formatNPR(value), name];
-                        return [value.toLocaleString(), name];
-                      }}
-                      labelFormatter={(_, payload) => payload?.[0]?.payload?.branch_code || 'Branch'}
-                    />
-                    <Scatter data={allBranches} fill="#10b981" />
-                  </ScatterChart>
-                </ResponsiveContainer>
+                <PremiumScatterChart
+                  data={allBranches}
+                  xKey="transaction_count"
+                  yKey="total_amount"
+                  sizeKey="unique_accounts"
+                  nameKey="branch_code"
+                  color="#10b981"
+                  formatX={(v) => v.toLocaleString()}
+                  formatY={formatNPR}
+                  xLabel="Transactions"
+                  yLabel="Amount"
+                  height={280}
+                />
               )}
             </ChartCard>
           </div>
