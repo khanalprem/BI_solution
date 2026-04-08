@@ -88,6 +88,41 @@ module Api
         render json: data
       end
 
+      def financial_summary
+        data = cached('financial_summary') do
+          build_service.financial_summary
+        end
+        render json: data
+      end
+
+      def digital_channels
+        data = cached('digital_channels') do
+          build_service.digital_channels
+        end
+        render json: data
+      end
+
+      def risk_summary
+        data = cached('risk_summary') do
+          build_service.risk_summary
+        end
+        render json: data
+      end
+
+      def kpi_summary
+        data = cached('kpi_summary') do
+          build_service.kpi_summary
+        end
+        render json: data
+      end
+
+      def employer_summary
+        data = cached('employer_summary') do
+          build_service.employer_summary
+        end
+        render json: data
+      end
+
       private
 
       def resolved_dates

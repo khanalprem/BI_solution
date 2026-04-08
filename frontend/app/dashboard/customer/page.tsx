@@ -31,18 +31,6 @@ interface SegmentData {
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
-const SEGMENT_DATA: SegmentData[] = [
-  { segment: 'Mass Retail', customers: 45230, amount: 12450000000, avg: 275000 },
-  { segment: 'Affluent', customers: 8920, amount: 18750000000, avg: 2102000 },
-  { segment: 'SME', customers: 3450, amount: 24500000000, avg: 7100000 },
-  { segment: 'Private Banking', customers: 620, amount: 8900000000, avg: 14350000 },
-];
-
-const RISK_TIER_DATA = [
-  { tier: 'Tier 1 (Low)', count: 42500, amount: 28500000000 },
-  { tier: 'Tier 2 (Medium)', count: 12800, amount: 24100000000 },
-  { tier: 'Tier 3 (High)', count: 2920, amount: 12000000000 },
-];
 
 export default function CustomerDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
@@ -100,6 +88,34 @@ export default function CustomerDashboard() {
       risk: customer.risk,
     }))
   ), [topCustomers]);
+
+  // Derive segment data from live top customers
+  const segmentData = useMemo<SegmentData[]>(() => {
+    const map = new Map<string, { customers: number; amount: number }>();
+    customerRows.forEach((c) => {
+      const existing = map.get(c.segment) || { customers: 0, amount: 0 };
+      map.set(c.segment, { customers: existing.customers + 1, amount: existing.amount + c.amount });
+    });
+    return Array.from(map.entries()).map(([segment, vals]) => ({
+      segment,
+      customers: vals.customers,
+      amount: vals.amount,
+      avg: vals.customers > 0 ? vals.amount / vals.customers : 0,
+    }));
+  }, [customerRows]);
+
+  // Derive risk tier data from live top customers
+  const riskTierData = useMemo(() => {
+    const tiers = [1, 2, 3].map((tier) => {
+      const filtered = customerRows.filter((c) => c.risk === tier);
+      return {
+        tier: tier === 1 ? 'Tier 1 (Low)' : tier === 2 ? 'Tier 2 (Medium)' : 'Tier 3 (High)',
+        count: filtered.length,
+        amount: filtered.reduce((s, c) => s + c.amount, 0),
+      };
+    });
+    return tiers;
+  }, [customerRows]);
   
   // Customer table columns with ALL filters
   const customerColumns = useMemo<ColumnDef<CustomerData>[]>(
@@ -240,7 +256,7 @@ export default function CustomerDashboard() {
         id: 'percentage',
         header: '% of Total',
         cell: ({ row }) => {
-          const total = SEGMENT_DATA.reduce((sum, s) => sum + s.amount, 0);
+          const total = segmentData.reduce((sum, s) => sum + s.amount, 0);
           const percentage = ((row.original.amount / total) * 100).toFixed(1);
           return `${percentage}%`;
         },
@@ -327,7 +343,7 @@ export default function CustomerDashboard() {
             />
             <KPICard
               label="High Risk Customers"
-              value={RISK_TIER_DATA[2]?.count.toLocaleString()}
+              value={riskTierData[2]?.count.toLocaleString()}
               subtitle="Tier 3"
               iconBg="var(--accent-red-dim)"
             />
@@ -340,7 +356,7 @@ export default function CustomerDashboard() {
               subtitle="By customer count and amount"
             >
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={SEGMENT_DATA}>
+                <BarChart data={segmentData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis 
                     dataKey="segment" 
@@ -367,7 +383,7 @@ export default function CustomerDashboard() {
               subtitle="KYC risk breakdown"
             >
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={RISK_TIER_DATA}>
+                <BarChart data={riskTierData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis 
                     dataKey="tier" 
@@ -393,7 +409,7 @@ export default function CustomerDashboard() {
           <AdvancedDataTable
             title="Segment Performance"
             subtitle="Detailed segment metrics with filters"
-            data={SEGMENT_DATA}
+            data={segmentData}
             columns={segmentColumns}
             pageSize={10}
             enableFiltering={true}

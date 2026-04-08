@@ -1,105 +1,135 @@
 ---
 name: rails-nextjs-postgres-stack
-description: Full-stack implementation guide for this BankBI codebase (Rails API + Next.js app + PostgreSQL tran_summary data model).
+description: Full-stack implementation guide for BankBI (Rails 7 API + Next.js 14 + PostgreSQL nifi production database). Use for end-to-end changes across backend, frontend, and database.
 ---
 
 # Rails + Next.js + PostgreSQL (BankBI)
 
-Use this skill when making end-to-end changes across backend API, frontend dashboards, and database-backed analytics.
+Use this skill when making changes that span backend API, frontend, and database.
 
-## Actual Project Layout
+## Stack
 
-Backend:
-- `backend/app/controllers/api/v1/` — Dashboard + filter endpoints
-- `backend/app/services/` — `DynamicDashboardService`, `SegmentClassifier`
-- `backend/app/models/` — `TranSummary`, `Eab`, `Branch`, `Customer`
-- `backend/config/routes.rb`
+| Layer | Tech | Port |
+|-------|------|------|
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, Recharts | 3000 |
+| Backend | Rails 7 API-only, Ruby | 3001 |
+| Database | PostgreSQL — `nifi` db at 10.1.1.161:5432 | 5432 |
+| Cache | Redis (localhost:6379) | 6379 |
 
-Frontend:
-- `frontend/app/dashboard/layout.tsx` — Shared layout (Sidebar + main wrapper)
-- `frontend/app/dashboard/*/page.tsx` — Dashboard pages (14 routes)
-- `frontend/components/` — UI primitives + layout
-- `frontend/lib/` — API client, hooks, formatters
-- `frontend/types/index.ts` — All TypeScript interfaces
+---
 
-Data:
-- `data/sql/` — PostgreSQL stored procedures
-- `data/samples/` — CSV sample data
-- `data/README.md` — Schema documentation
+## Project Layout
 
-## Runtime Defaults
-
-- Frontend URL: `http://localhost:3000`
-- API base URL: `http://localhost:3001/api/v1`
-- Frontend env key: `NEXT_PUBLIC_API_URL`
-
-## Data Model
-
-Primary analytics source is existing table `tran_summary` (id-less fact table).
-Do not create replacement fact tables unless there is a migration plan.
-
-Core columns used in filters/aggregations:
-- `tran_date`, `tran_amt`, `tran_count`
-- `gam_province`, `gam_branch`, `gam_cluster`, `gam_solid`
-- `tran_type`, `part_tran_type`, `tran_source`
-- `product`, `service`, `merchant`
-- `acct_num`, `cif_id`
-
-## End-to-End Change Workflow
-
-1. Backend: add/adjust endpoint and aggregation logic.
-2. Backend: preserve filter alias support in `BaseController#filter_params`.
-3. Frontend: add/update typed hook in `frontend/lib/hooks/useDashboardData.ts`.
-4. Frontend: update `frontend/types/index.ts` to match API response.
-5. Frontend page: wire real data into KPI/chart/table components.
-6. Validate with lint/build and syntax checks.
-
-## Key Architecture Patterns
-
-### Selective Aggregation
-`DynamicDashboardService#execute(only:)` accepts an array of section keys.
-Each controller action should only request the sections it needs:
-```ruby
-service.execute(only: %i[summary by_branch by_province])
 ```
-Do NOT call `execute` without `only:` unless you need all five sections.
+BI_solution/
+├── backend/
+│   ├── app/controllers/api/v1/
+│   │   ├── base_controller.rb       # shared filter_params, parse_date, error handling
+│   │   ├── dashboards_controller.rb # executive, branch_performance, customer_profile, etc.
+│   │   └── filters_controller.rb    # /values, /branches, /statistics
+│   ├── app/services/
+│   │   ├── dynamic_dashboard_service.rb  # all aggregation logic
+│   │   └── segment_classifier.rb         # customer segmentation
+│   ├── app/models/
+│   │   ├── tran_summary.rb   # primary_key nil, apply_filters scope
+│   │   ├── eab.rb            # production columns: eod_date, end_eod_date, tran_date_bal
+│   │   ├── branch.rb
+│   │   └── customer.rb
+│   ├── config/routes.rb
+│   └── .env                  # DB_HOST=10.1.1.161, DB_NAME=nifi
+├── frontend/
+│   ├── app/dashboard/
+│   │   ├── layout.tsx                   # Sidebar + main wrapper
+│   │   ├── executive/page.tsx           # Executive dashboard
+│   │   ├── branch/page.tsx              # Branch & regional
+│   │   ├── branch/[branchCode]/page.tsx # Branch detail
+│   │   ├── customer/page.tsx            # Customer list
+│   │   ├── customer/[cifId]/page.tsx    # Customer profile
+│   │   ├── financial/page.tsx
+│   │   ├── kpi/page.tsx
+│   │   ├── risk/page.tsx
+│   │   ├── digital/page.tsx
+│   │   ├── employer/page.tsx
+│   │   ├── board/page.tsx
+│   │   ├── scheduled/page.tsx
+│   │   ├── config/page.tsx
+│   │   └── pivot/page.tsx
+│   ├── components/
+│   │   ├── layout/Sidebar.tsx
+│   │   ├── layout/TopBar.tsx
+│   │   └── ui/AdvancedFilters.tsx       # dynamic DB-backed filters
+│   ├── lib/
+│   │   ├── api.ts                       # axios client → localhost:3001/api/v1
+│   │   ├── hooks/useDashboardData.ts    # all React Query hooks
+│   │   └── formatters.ts               # formatNPR, getDateRange, parseISODateToLocal
+│   └── types/index.ts                  # DashboardFilters, DashboardSummary, etc.
+└── bankbi/                             # HTML reference design (read-only reference)
+    └── pages/*.html
+```
 
-### Shared Dashboard Layout
-`frontend/app/dashboard/layout.tsx` provides Sidebar + main container.
-Individual pages should NOT import `Sidebar` directly.
-Each page renders its own `<TopBar>` with page-specific props.
+---
 
-### Filter Values via React Query
-Use `useFilterValues()` from `useDashboardData.ts` for filter dimension values.
-Do NOT fetch filter values with raw `useEffect` + axios calls.
+## API Endpoints (current)
 
-### Segment Classification
-Use `SegmentClassifier.segment_for(amount)` and `SegmentClassifier.risk_tier_for(avg)`
-instead of inline case statements. Single source of truth.
+```
+GET /api/v1/dashboards/executive          → summary + by_branch + by_province + by_channel + trend
+GET /api/v1/dashboards/branch_performance → branches + provinces + totals
+GET /api/v1/dashboards/province_summary   → by_province[]
+GET /api/v1/dashboards/channel_breakdown  → by_channel[]
+GET /api/v1/dashboards/daily_trend        → trend[]
+GET /api/v1/dashboards/customers_top      → top customers[]
+GET /api/v1/dashboards/customer_profile   → full customer profile
 
-### Cache Strategy
-- Dashboard endpoints: 15 minutes
-- Filter dimension values: 1 hour
+GET /api/v1/filters/values      → provinces, branches, clusters, tran_types, tran_sources, products, services, merchants, gl_sub_head_codes, entry_users, vfd_users
+GET /api/v1/filters/branches    → branches (optionally filtered by province)
+GET /api/v1/filters/statistics  → date_range{min,max}, amount_range, counts
+```
+
+**Common query params:** `start_date`, `end_date`, `province`, `branch_code`, `cluster`, `tran_type`, `part_tran_type`, `tran_source`, `product`, `service`, `merchant`, `gl_sub_head_code`, `entry_user`, `vfd_user`, `min_amount`, `max_amount`, `acct_num`, `cif_id`
+
+## DashboardSummary Response Shape
+
+```typescript
+{
+  total_amount: number
+  total_count: number
+  unique_accounts: number
+  unique_customers: number
+  avg_transaction_size: number
+  credit_amount: number      // SUM where part_tran_type='CR'
+  debit_amount: number       // SUM where part_tran_type='DR'
+  net_flow: number           // credit - debit
+  credit_count: number
+  debit_count: number
+  credit_ratio: number       // credit/total * 100
+}
+```
+
+---
+
+## Data Facts
+
+- **Primary table:** `tran_summary` (partitioned, 164K rows)
+- **Date range:** 2021-02-18 → 2024-07-01
+- **Transaction types:** only `J` (journal)
+- **Part types:** `CR` (credit/inflow) and `DR` (debit/outflow)
+- **Provinces:** "province 1" … "province 7" (numeric labels from production)
+- **Channels:** `tran_source` — "mobile", "internet", NULL (branch)
+
+---
+
+## Adding a New Endpoint
+
+1. Add route in `config/routes.rb`
+2. Add method in `dashboards_controller.rb` or `filters_controller.rb`
+3. Use `DynamicDashboardService` or direct `TranSummary` queries
+4. Add TypeScript type in `frontend/types/index.ts`
+5. Add React Query hook in `frontend/lib/hooks/useDashboardData.ts`
+6. Use hook in page component
+
+## Caching
+
+- Dashboard responses: `Rails.cache.fetch(key, expires_in: 15.minutes)`
+- Filter values: 1 hour
 - Filter statistics: 30 minutes
-- Cache keys include resolved (not raw) dates to prevent stale data
-
-## Date and Period Handling
-
-- Dashboard period presets (`MTD`, `QTD`, etc.) anchor to latest dataset date from `/filters/statistics`.
-- Use `toLocalDate()` and `toIsoDate()` from `frontend/lib/formatters.ts` for date parsing.
-- Do NOT use `new Date("YYYY-MM-DD")` directly (timezone shift risk).
-
-## Performance Rules
-
-- Use `only:` parameter in `DynamicDashboardService#execute` to avoid running unnecessary queries.
-- Cache read-heavy endpoints with appropriate TTLs.
-- Keep DB aggregation in SQL (`GROUP BY`, `SUM`, `DISTINCT`) instead of Ruby post-processing.
-- Use composite indexes (see migration `20260406000001_add_composite_indexes_to_tran_summary`).
-
-## Release Checklist
-
-- `frontend`: `npm run lint` and `npm run build` pass.
-- `backend`: changed Ruby files pass syntax check.
-- No stray progress/debug markdown files are introduced.
-- API and frontend type contracts remain aligned.
-- No `import { Sidebar }` in individual dashboard pages.
+- Clear cache: `bundle exec rails runner "Rails.cache.clear"`

@@ -6,10 +6,15 @@ import type {
   ChannelMetrics,
   CustomerProfileData,
   DashboardFilters,
+  DigitalChannelsData,
+  EmployerSummaryData,
   ExecutiveDashboardData,
   FilterStatisticsResponse,
   FilterValuesResponse,
+  FinancialSummaryData,
+  KpiSummaryData,
   ProvinceMetrics,
+  RiskSummaryData,
   TopCustomer,
   TrendData,
 } from '@/types';
@@ -173,5 +178,70 @@ export function useCustomerProfile(filters: DashboardFilters, cifId: string) {
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(cifId),
+  });
+}
+
+export function useFinancialSummary(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+
+  return useQuery<FinancialSummaryData>({
+    queryKey: ['financial-summary', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<FinancialSummaryData>('/dashboards/financial_summary', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useDigitalChannels(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+
+  return useQuery<DigitalChannelsData>({
+    queryKey: ['digital-channels', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<DigitalChannelsData>('/dashboards/digital_channels', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRiskSummary(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+
+  return useQuery<RiskSummaryData>({
+    queryKey: ['risk-summary', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<RiskSummaryData>('/dashboards/risk_summary', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useKpiSummary(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+
+  return useQuery<KpiSummaryData>({
+    queryKey: ['kpi-summary', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<KpiSummaryData>('/dashboards/kpi_summary', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useEmployerSummary(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+
+  return useQuery<EmployerSummaryData>({
+    queryKey: ['employer-summary', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<EmployerSummaryData>('/dashboards/employer_summary', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }

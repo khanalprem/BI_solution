@@ -28,6 +28,12 @@ export interface DashboardSummary {
   unique_accounts: number;
   unique_customers: number;
   avg_transaction_size: number;
+  credit_amount: number;
+  debit_amount: number;
+  net_flow: number;
+  credit_count: number;
+  debit_count: number;
+  credit_ratio: number;
 }
 
 export interface BranchMetrics {
@@ -127,6 +133,45 @@ export interface FilterValuesResponse {
   gl_sub_head_codes: string[];
   entry_users: string[];
   vfd_users: string[];
+}
+
+export interface FinancialSummaryData {
+  credit_amount: number; debit_amount: number; net_flow: number; total_amount: number;
+  credit_count: number; debit_count: number; credit_ratio: number;
+  avg_credit: number; avg_debit: number;
+  monthly_trend: { month: string; credit: number; debit: number; net: number }[];
+  by_gl: { gl_code: string; type: string; amount: number; count: number }[];
+}
+
+export interface DigitalChannelsData {
+  channels: { channel: string; total_amount: number; transaction_count: number; unique_accounts: number; credit_amount: number; debit_amount: number }[];
+  trend: { date: string; channel: string; amount: number; count: number }[];
+  digital_amount: number; branch_amount: number; digital_ratio: number; total_digital_accounts: number;
+}
+
+export interface RiskSummaryData {
+  total_amount: number; credit_amount: number; debit_amount: number; net_flow: number;
+  high_value_count: number; high_value_threshold: number; top3_branch_share: number;
+  monthly_volatility: number; avg_monthly_volume: number;
+  by_gl: { gl_code: string; amount: number; count: number; accounts: number }[];
+  by_province: { province: string; amount: number; accounts: number; debit_amount: number }[];
+}
+
+export interface KpiSummaryData {
+  total_amount: number; total_count: number; credit_amount: number; debit_amount: number;
+  net_flow: number; avg_transaction: number; credit_ratio: number;
+  unique_accounts: number; unique_customers: number; unique_branches: number; unique_provinces: number;
+  txn_per_account: number; vol_per_account: number;
+  by_quarter: { period: string; amount: number; count: number; accounts: number }[];
+  by_product: { product: string; amount: number; count: number }[];
+  by_service: { service: string; amount: number; count: number }[];
+}
+
+export interface EmployerSummaryData {
+  total_entry_users: number; total_vfd_users: number; total_branches: number;
+  total_amount: number; total_count: number;
+  by_user: { user: string; amount: number; count: number; accounts: number; credit: number }[];
+  by_branch: { branch: string; province: string; users: number; amount: number; count: number }[];
 }
 
 export interface FilterStatisticsResponse {

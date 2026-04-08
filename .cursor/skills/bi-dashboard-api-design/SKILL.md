@@ -1,113 +1,188 @@
 ---
 name: bi-dashboard-api-design
-description: API design standards for this BankBI repo (Rails + Next.js) including endpoint contracts, filter mapping, caching, and response shaping. Use when adding or changing dashboard endpoints.
+description: API design standards for BankBI (Rails + Next.js). Endpoint contracts, filter mapping, caching rules, and response shapes. Use when adding or changing dashboard or filter endpoints.
 ---
 
-# BI Dashboard API Design
+# BankBI API Design
 
-Use this skill when you touch `backend/app/controllers/api/v1/*`, dashboard services, or frontend data hooks.
+Use this skill when touching `backend/app/controllers/api/v1/*`, services, or frontend hooks.
 
-## Current API Contract (Source of Truth)
+## Base Path: `/api/v1`
 
-Base path: `/api/v1`
+### Dashboard Endpoints
 
-Dashboard endpoints:
-- `GET /dashboards/executive`
-- `GET /dashboards/branch_performance`
-- `GET /dashboards/province_summary`
-- `GET /dashboards/channel_breakdown`
-- `GET /dashboards/daily_trend`
-- `GET /dashboards/customers_top`
-- `GET /dashboards/customer_profile`
+| Method | Path | Controller Action | Cache TTL |
+|--------|------|-------------------|-----------|
+| GET | `/dashboards/executive` | `DashboardsController#executive` | 15 min |
+| GET | `/dashboards/branch_performance` | `#branch_performance` | 15 min |
+| GET | `/dashboards/province_summary` | `#province_summary` | 15 min |
+| GET | `/dashboards/channel_breakdown` | `#channel_breakdown` | 15 min |
+| GET | `/dashboards/daily_trend` | `#daily_trend` | 15 min |
+| GET | `/dashboards/customers_top` | `#customers_top` | 15 min |
+| GET | `/dashboards/customer_profile` | `#customer_profile` | 15 min |
 
-Filter endpoints:
-- `GET /filters/values`
-- `GET /filters/branches`
-- `GET /filters/statistics`
+### Filter Endpoints
 
-## Query Parameter Rules
+| Method | Path | Controller Action | Cache TTL |
+|--------|------|-------------------|-----------|
+| GET | `/filters/values` | `FiltersController#values` | 1 hour |
+| GET | `/filters/branches` | `#branches` | 1 hour |
+| GET | `/filters/statistics` | `#statistics` | 30 min |
 
-Primary date params:
-- `start_date`, `end_date` (preferred)
+---
 
-Backward-compatible aliases accepted by backend:
-- `startDate`, `endDate`
+## Query Parameters (all endpoints accept)
 
-Filter params accepted by backend (`BaseController#filter_params`):
-- `branch_code`/`branchCode`/`branch`
-- `province`
-- `district`, `municipality`
-- `cluster`, `solid`
-- `tran_type`/`tranType`
-- `part_tran_type`/`partTranType`
-- `tran_source`/`tranSource`/`channel`
-- `product`, `service`, `merchant`
-- `gl_sub_head_code`/`glSubHeadCode`
-- `entry_user`/`entryUser`
-- `vfd_user`/`vfdUser`
-- `min_amount`/`minAmount`
-- `max_amount`/`maxAmount`
-- `acct_num`/`acctNum`
-- `cif_id`/`cifId`
+```
+start_date       YYYY-MM-DD
+end_date         YYYY-MM-DD
+province         string — matches tran_summary.gam_province (e.g. "province 3")
+branch_code      string — matches tran_summary.gam_branch   (e.g. "branch 35")
+cluster          string — matches tran_summary.gam_cluster
+tran_type        string — e.g. "J"
+part_tran_type   string — "CR" or "DR"
+tran_source      string — "mobile", "internet", etc.
+product          string
+service          string
+merchant         string
+gl_sub_head_code string
+entry_user       string
+vfd_user         string
+min_amount       number
+max_amount       number
+acct_num         string
+cif_id           string
+```
 
-Frontend should keep sending camelCase from UI state and convert to snake_case in `frontend/lib/hooks/useDashboardData.ts`.
+---
 
-## Response Shape Rules
+## Response Shapes
 
-Keep JSON stable and explicit for charts/tables:
-- Numeric values must be numbers (not formatted strings)
-- Province breakdown returns: `total_amount`, `transaction_count`, `branch_count`, `unique_accounts`, `avg_per_branch`
-- Channel breakdown returns: `total_amount`, `transaction_count` (no duplicate `amount`/`count` aliases)
-- Branch performance payload must contain: `branches`, `provinces`, `total_amount`, `total_count`, `unique_accounts`, `unique_customers`
+### `/dashboards/executive`
+```json
+{
+  "summary": {
+    "total_amount": 1121183703824.0,
+    "total_count": 20400008,
+    "unique_accounts": 50000,
+    "unique_customers": 50000,
+    "avg_transaction_size": 6836485.99,
+    "credit_amount": 141805643814.0,
+    "debit_amount": 140739127540.0,
+    "net_flow": 1066516274.0,
+    "credit_count": 20725,
+    "debit_count": 20703,
+    "credit_ratio": 50.19
+  },
+  "by_branch": [
+    { "branch_code": "branch 35", "province": "province 3",
+      "total_amount": 12862261100.0, "transaction_count": 232504,
+      "unique_accounts": 570, "avg_transaction": 55320.60 }
+  ],
+  "by_province": [
+    { "province": "province 7", "total_amount": 180740900232.0,
+      "transaction_count": 3294658, "branch_count": 16,
+      "unique_accounts": 8076, "avg_per_branch": 11296306264.5 }
+  ],
+  "by_channel": [
+    { "channel": "mobile", "total_amount": 768556046.0, "transaction_count": 14000 }
+  ],
+  "trend": [
+    { "date": "2023-01-01", "amount": 5234100.0, "count": 842 }
+  ]
+}
+```
 
-Do not rename keys without updating:
-- `frontend/types/index.ts`
-- `frontend/lib/hooks/useDashboardData.ts`
-- affected dashboard pages
+### `/filters/statistics`
+```json
+{
+  "date_range": { "min": "2021-02-18", "max": "2024-07-01" },
+  "amount_range": { "min": 10.0, "max": 9999999.0 },
+  "counts": {
+    "total_transactions": 164000,
+    "unique_accounts": 50000,
+    "unique_customers": 50000,
+    "provinces": 7,
+    "branches": 60
+  }
+}
+```
 
-## Controller Pattern
+### `/filters/values`
+```json
+{
+  "provinces": ["province 1", "province 2", "province 3", "province 4", "province 5", "province 6", "province 7"],
+  "branches": ["branch 1", "branch 2", ...],
+  "clusters": ["cluster 1", ...],
+  "tran_types": ["J"],
+  "part_tran_types": ["CR", "DR"],
+  "tran_sources": ["mobile", "internet"],
+  "products": [...],
+  "services": [...],
+  "merchants": [...],
+  "gl_sub_head_codes": [...],
+  "entry_users": [...],
+  "vfd_users": [...]
+}
+```
 
-For each endpoint:
-1. Resolve dates using `resolved_dates` helper (not inline per-action).
-2. Use `filter_params` from `BaseController`.
-3. Build service via `build_service` helper to avoid repetition.
-4. Call `cached(action_name) { ... }` with block — cache key includes resolved dates.
-5. Use `service.execute(only: [...needed_sections])` to avoid running unnecessary queries.
+---
 
-Current reference files:
-- `backend/app/controllers/api/v1/base_controller.rb`
-- `backend/app/controllers/api/v1/dashboards_controller.rb`
-- `backend/app/services/dynamic_dashboard_service.rb`
-- `backend/app/services/segment_classifier.rb`
+## Controller Patterns
 
-## Cache Key Rules
+```ruby
+# Filter extraction (from BaseController)
+def filter_params
+  {
+    branch:          param_value(:branch_code, :branchCode, :branch),
+    province:        param_value(:province),
+    part_tran_type:  param_value(:part_tran_type, :partTranType),
+    tran_source:     param_value(:tran_source, :tranSource, :channel),
+    # ... etc
+  }.compact
+end
 
-- Cache keys include resolved dates (not raw params) to prevent stale data when default dates shift.
-- Use `cached(action, expires_in: duration)` helper in controller.
-- Dashboard endpoints: 15 minutes
-- Filter values: 1 hour
-- Filter statistics: 30 minutes
+# Date resolution (from DashboardsController)
+def resolved_dates
+  {
+    start_date: parse_date(param_value(:start_date, :startDate)) || 30.days.ago.to_date,
+    end_date:   parse_date(param_value(:end_date,   :endDate))   || Date.today
+  }
+end
 
-## Performance Rules
+# Caching pattern
+def cached(action, expires_in: 15.minutes, &block)
+  key_data = request.query_parameters
+               .merge('_sd' => resolved_dates[:start_date].to_s, '_ed' => resolved_dates[:end_date].to_s)
+               .sort.to_h
+  cache_key = "dashboard_#{action}_#{Digest::MD5.hexdigest(key_data.to_query)}"
+  Rails.cache.fetch(cache_key, expires_in: expires_in, &block)
+end
+```
 
-- Use `only:` parameter to run only needed aggregation sections.
-- Prefer DB aggregation (`group`, `sum`, `count distinct`) over Ruby loops.
-- Use `distinct + order + limit` for filter value lists.
-- Preserve support for `min_amount = 0` / `max_amount = 0` (nil check, not presence check).
+---
 
-## Error Handling
+## Frontend Hook Pattern
 
-- `BaseController` has catch-all `rescue_from StandardError` — returns 500 with logged details.
-- `RecordNotFound` → 404
-- `RecordInvalid` → 422
-- Custom validation errors should use `render json: { error: message }, status: :unprocessable_entity`.
+```typescript
+// In lib/hooks/useDashboardData.ts
+export function useMyNewData(filters: DashboardFilters) {
+  const params = useMemo(() => toApiFilters(filters), [filters]);
+  return useQuery({
+    queryKey: ['my-new-data', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<MyType>('/dashboards/my_endpoint', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+```
 
-## Done Checklist
+## Rules
 
-- Endpoint works with both snake_case and camelCase date/filter params.
-- Frontend hook/types updated if payload changed.
-- Uses `only:` for selective aggregation (not full `execute`).
-- Uses `cached()` helper (not inline `Rails.cache.fetch`).
-- `npm run lint` and `npm run build` pass in `frontend/`.
-- Ruby syntax check passes for changed backend files.
-- No temporary/debug markdown files added.
+- All amounts in raw NPR numbers — formatting is frontend responsibility (`formatNPR`)
+- All dates as `YYYY-MM-DD` strings
+- NULL channels from `tran_source` = branch transactions — filter with `.filter(c => c.channel)` on frontend
+- Cache key must include resolved dates (`_sd`, `_ed`) so rolling defaults produce distinct keys
+- Error responses: `{ error: "message" }` with appropriate HTTP status

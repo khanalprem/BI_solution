@@ -16,6 +16,11 @@ Rails.application.routes.draw do
       get 'dashboards/daily_trend', to: 'dashboards#daily_trend'
       get 'dashboards/customers_top', to: 'dashboards#customers_top'
       get 'dashboards/customer_profile', to: 'dashboards#customer_profile'
+      get 'dashboards/financial_summary', to: 'dashboards#financial_summary'
+      get 'dashboards/digital_channels', to: 'dashboards#digital_channels'
+      get 'dashboards/risk_summary', to: 'dashboards#risk_summary'
+      get 'dashboards/kpi_summary', to: 'dashboards#kpi_summary'
+      get 'dashboards/employer_summary', to: 'dashboards#employer_summary'
       
       # Filter endpoints
       get 'filters/values', to: 'filters#values'
