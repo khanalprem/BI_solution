@@ -7,38 +7,181 @@ import { useDashboardData, useFilterStatistics, useDemographics } from '@/lib/ho
 import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
 import { SparkLine, PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
+import ReactECharts from 'echarts-for-react';
+import type { ProvinceMetrics as PM } from '@/types';
+
+// ── Apache ECharts: Province horizontal bar + transaction count line ──
+function ProvinceBarChart({ data }: { data: PM[] }) {
+  const sorted = [...data].sort((a, b) => a.total_amount - b.total_amount);
+  const labels  = sorted.map(p => formatProvinceLabel(p.province));
+  const amounts = sorted.map(p => +(p.total_amount / 1e7).toFixed(2));   // Cr
+  const counts  = sorted.map(p => p.transaction_count);
+  const maxAmt  = Math.max(...amounts, 1);
+
+  const option = {
+    backgroundColor: 'transparent',
+    grid: { left: 90, right: 60, top: 10, bottom: 30 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a1e2e',
+      borderColor: 'rgba(255,255,255,0.07)',
+      textStyle: { color: '#f0f2f8', fontSize: 11 },
+      formatter: (params: { seriesName: string; value: number }[]) => {
+        return params.map(p =>
+          `<span style="color:${p.seriesName === 'Volume' ? '#3b82f6' : '#10b981'}">${p.seriesName}</span>: ${
+            p.seriesName === 'Volume' ? `Rs. ${p.value}Cr` : p.value.toLocaleString()
+          }`
+        ).join('<br/>');
+      },
+    },
+    legend: {
+      data: ['Volume', 'Transactions'],
+      textStyle: { color: '#8b92a9', fontSize: 10 },
+      top: 0, right: 0,
+    },
+    xAxis: [
+      {
+        type: 'value',
+        name: 'Rs. Cr',
+        nameTextStyle: { color: '#555d75', fontSize: 9 },
+        axisLabel: { color: '#555d75', fontSize: 9, formatter: (v: number) => `${v}Cr` },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        axisLine: { show: false },
+        max: Math.ceil(maxAmt * 1.1),
+      },
+      {
+        type: 'value',
+        name: 'Txns',
+        nameTextStyle: { color: '#555d75', fontSize: 9 },
+        axisLabel: { color: '#555d75', fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
+        splitLine: { show: false },
+        axisLine: { show: false },
+      },
+    ],
+    yAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: { color: '#8b92a9', fontSize: 10 },
+      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.07)' } },
+      axisTick: { show: false },
+    },
+    series: [
+      {
+        name: 'Volume',
+        type: 'bar',
+        xAxisIndex: 0,
+        data: amounts.map((v, i) => ({
+          value: v,
+          itemStyle: {
+            color: {
+              type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+              colorStops: [
+                { offset: 0, color: 'rgba(59,130,246,0.5)' },
+                { offset: 1, color: '#3b82f6' },
+              ],
+            },
+            borderRadius: [0, 4, 4, 0],
+          },
+          label: {
+            show: i === amounts.length - 1,
+            position: 'right',
+            formatter: `Rs. ${v}Cr`,
+            color: '#8b92a9',
+            fontSize: 9,
+          },
+        })),
+        barMaxWidth: 18,
+        emphasis: { itemStyle: { color: '#60a5fa' } },
+      },
+      {
+        name: 'Transactions',
+        type: 'line',
+        xAxisIndex: 1,
+        data: counts,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: '#10b981', width: 2 },
+        itemStyle: { color: '#10b981' },
+        areaStyle: { color: 'rgba(16,185,129,0.08)' },
+      },
+    ],
+  };
+
+  return <ReactECharts option={option} style={{ height: 240 }} notMerge />;
+}
+
+// ── Apache ECharts: Province radar ──
+function ProvinceRadarChart({ data }: { data: PM[] }) {
+  if (!data.length) return null;
+  const maxAmt    = Math.max(...data.map(p => p.total_amount), 1);
+  const maxCount  = Math.max(...data.map(p => p.transaction_count), 1);
+  const maxAccts  = Math.max(...data.map(p => p.unique_accounts), 1);
+  const maxBranch = Math.max(...data.map(p => p.branch_count), 1);
+
+  const indicators = [
+    { name: 'Volume',     max: 100 },
+    { name: 'Txns',       max: 100 },
+    { name: 'Accounts',   max: 100 },
+    { name: 'Branches',   max: 100 },
+    { name: 'Avg/Branch', max: 100 },
+  ];
+
+  const seriesData = data.map(p => ({
+    name: formatProvinceLabel(p.province),
+    value: [
+      +((p.total_amount / maxAmt) * 100).toFixed(1),
+      +((p.transaction_count / maxCount) * 100).toFixed(1),
+      +((p.unique_accounts / maxAccts) * 100).toFixed(1),
+      +((p.branch_count / maxBranch) * 100).toFixed(1),
+      +((p.avg_per_branch / (maxAmt / maxBranch)) * 100).toFixed(1),
+    ],
+  }));
+
+  const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#ec4899'];
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      backgroundColor: '#1a1e2e',
+      borderColor: 'rgba(255,255,255,0.07)',
+      textStyle: { color: '#f0f2f8', fontSize: 11 },
+    },
+    legend: {
+      data: seriesData.map(s => s.name),
+      textStyle: { color: '#8b92a9', fontSize: 9 },
+      bottom: 0,
+      itemWidth: 8, itemHeight: 8,
+    },
+    radar: {
+      indicator: indicators,
+      shape: 'polygon',
+      splitNumber: 4,
+      center: ['50%', '46%'],
+      radius: '62%',
+      axisName: { color: '#8b92a9', fontSize: 10 },
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+      splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'] } },
+      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+    },
+    series: [{
+      type: 'radar',
+      data: seriesData.map((s, i) => ({
+        name: s.name,
+        value: s.value,
+        lineStyle: { color: COLORS[i % COLORS.length], width: 1.5 },
+        itemStyle: { color: COLORS[i % COLORS.length] },
+        areaStyle: { color: `${COLORS[i % COLORS.length]}18` },
+        symbol: 'circle',
+        symbolSize: 4,
+      })),
+    }],
+  };
+
+  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+}
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
-
-const PROVINCE_MAP: Record<string, string> = {
-  'province 1': 'koshi',
-  'province 2': 'madhesh',
-  'province 3': 'bagmati',
-  'province 4': 'gandaki',
-  'province 5': 'lumbini',
-  'province 6': 'karnali',
-  'province 7': 'sudurpashchim',
-};
-
-const PROVINCE_PATHS = [
-  { id: 'sudurpashchim', d: 'M18,44 Q79,38 140,40 L143,232 L18,238 Z', label: ['Sudur', 'Paschim'], lx: 79, ly: [152, 164] },
-  { id: 'karnali',       d: 'M140,40 Q209,33 278,36 L281,236 L143,232 Z', label: ['Karnali'], lx: 209, ly: [158] },
-  { id: 'lumbini',       d: 'M278,36 Q343,44 408,50 L411,244 L281,236 Z', label: ['Lumbini'], lx: 343, ly: [164] },
-  { id: 'gandaki',       d: 'M408,50 Q451,45 494,47 L497,237 L411,244 Z', label: ['Gandaki'], lx: 451, ly: [160] },
-  { id: 'bagmati',       d: 'M494,47 Q536,52 578,54 L581,232 L497,237 Z', label: ['Bagmati'], lx: 536, ly: [155] },
-  { id: 'madhesh',       d: 'M578,54 Q629,57 680,60 L683,246 L581,232 Z', label: ['Madhesh'], lx: 629, ly: [162] },
-  { id: 'koshi',         d: 'M680,60 Q771,62 862,65 L862,250 L683,246 Z', label: ['Koshi'], lx: 769, ly: [170] },
-];
-
-const CITIES = [
-  { cx: 65,  cy: 204, r: 3.5, color: 'var(--accent-green)', name: 'Dhangadhi · Sudurpashchim' },
-  { cx: 195, cy: 118, r: 3,   color: 'var(--accent-green)', name: 'Birendranagar · Karnali' },
-  { cx: 315, cy: 215, r: 3.5, color: 'var(--accent-amber)', name: 'Nepalgunj · Lumbini' },
-  { cx: 442, cy: 128, r: 4,   color: 'var(--accent-amber)', name: 'Pokhara · Gandaki' },
-  { cx: 532, cy: 134, r: 6,   color: 'var(--accent-blue)',  name: 'Kathmandu (HQ) · Bagmati' },
-  { cx: 623, cy: 217, r: 3.5, color: 'var(--accent-red)',   name: 'Janakpur · Madhesh' },
-  { cx: 778, cy: 208, r: 4,   color: 'var(--accent-amber)', name: 'Biratnagar · Koshi' },
-];
 
 const RISK_ITEMS = [
   { label: 'Credit Risk',   score: 62, color: 'var(--accent-amber)' },
@@ -92,7 +235,6 @@ export default function ExecutiveDashboard() {
   const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [mapTooltip, setMapTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
 
   const { data, isLoading, error } = useDashboardData(filters);
   const { data: filterStats } = useFilterStatistics();
@@ -123,28 +265,6 @@ export default function ExecutiveDashboard() {
     if (arr.length >= n) return arr.slice(-n);
     return [...Array(n - arr.length).fill(arr[0] || 0), ...arr];
   };
-
-  // Province amount map for coloring
-  const provinceAmountMap = useMemo(() => {
-    const m: Record<string, number> = {};
-    (data?.by_province || [] as ProvinceMetrics[]).forEach((p: ProvinceMetrics) => {
-      const key = (p.province || '').toLowerCase();
-      m[key] = p.total_amount;
-      const mapped = PROVINCE_MAP[key];
-      if (mapped) m[mapped] = p.total_amount;
-    });
-    return m;
-  }, [data?.by_province]);
-
-  const maxProvinceAmount = useMemo(() => Math.max(1, ...Object.values(provinceAmountMap)), [provinceAmountMap]);
-
-  function getProvinceColor(id: string) {
-    const amt = provinceAmountMap[id] || 0;
-    const ratio = amt / maxProvinceAmount;
-    if (ratio > 0.6) return { fill: 'rgba(59,130,246,0.25)', stroke: '#3b82f6' };
-    if (ratio > 0.3) return { fill: 'rgba(245,158,11,0.18)', stroke: '#f59e0b' };
-    return { fill: 'rgba(16,185,129,0.13)', stroke: '#10b981' };
-  }
 
   const topBranch = data?.by_branch?.[0] as BranchMetrics | undefined;
   const topProvince = data?.by_province?.[0] as ProvinceMetrics | undefined;
@@ -337,97 +457,22 @@ export default function ExecutiveDashboard() {
           ))}
         </div>
 
-        {/* ── Nepal Province Map ── */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-          <div className="flex justify-between items-center mb-3">
-            <div>
-              <div className="text-[12px] font-semibold text-text-primary">Nepal Province Performance Map</div>
-              <div className="text-[10px] text-text-muted mt-0.5">Transaction volume by province · hover for details</div>
-            </div>
+        {/* ── Province Performance — Apache ECharts ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-2.5">
+
+          {/* Horizontal bar + line composed */}
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="text-[12px] font-semibold text-text-primary mb-0.5">Province Performance</div>
+            <div className="text-[10px] text-text-muted mb-3">Transaction volume &amp; count by province</div>
+            <ProvinceBarChart data={data?.by_province || []} />
           </div>
 
-          <div className="relative">
-            <svg viewBox="0 0 880 280" preserveAspectRatio="xMidYMid meet"
-              className="w-full block max-h-[240px]"
-              onMouseLeave={() => setMapTooltip(null)}
-            >
-              {PROVINCE_PATHS.map(prov => {
-                const { fill, stroke } = getProvinceColor(prov.id);
-                const amt = provinceAmountMap[prov.id] || 0;
-                return (
-                  <g key={prov.id}>
-                    <path
-                      d={prov.d}
-                      fill={fill}
-                      stroke={stroke}
-                      strokeWidth="1.2"
-                      className="cursor-pointer transition-colors duration-200"
-                      onMouseEnter={e => {
-                        const rect = (e.target as SVGElement).closest('svg')!.getBoundingClientRect();
-                        setMapTooltip({
-                          x: e.clientX - rect.left,
-                          y: e.clientY - rect.top - 10,
-                          text: `${prov.id.charAt(0).toUpperCase() + prov.id.slice(1)}: ${amt ? formatNPR(amt) : 'No data'}`,
-                        });
-                      }}
-                    />
-                    {prov.label.map((line, li) => (
-                      <text key={li} x={prov.lx} y={prov.ly[li]} textAnchor="middle"
-                        className="text-[9px] fill-text-muted font-medium pointer-events-none">
-                        {line}
-                      </text>
-                    ))}
-                  </g>
-                );
-              })}
-              {CITIES.map(city => (
-                <circle key={city.name} cx={city.cx} cy={city.cy} r={city.r}
-                  fill={city.color} stroke="var(--bg-card)" strokeWidth="2"
-                  className="cursor-pointer"
-                  onMouseEnter={e => {
-                    const rect = (e.target as SVGElement).closest('svg')!.getBoundingClientRect();
-                    setMapTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10, text: city.name });
-                  }}
-                />
-              ))}
-            </svg>
-            {mapTooltip && (
-              <div 
-                className="absolute bg-bg-surface border border-border rounded-md px-2.5 py-1 text-[10px] text-text-primary whitespace-nowrap z-10 pointer-events-none"
-                style={{ left: mapTooltip.x + 8, top: mapTooltip.y }}
-              >{mapTooltip.text}</div>
-            )}
+          {/* Radar */}
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className="text-[12px] font-semibold text-text-primary mb-0.5">Province Radar</div>
+            <div className="text-[10px] text-text-muted mb-3">Multi-metric comparison</div>
+            <ProvinceRadarChart data={data?.by_province || []} />
           </div>
-
-          {/* Map Legend */}
-          <div className="flex gap-4 mt-2 flex-wrap">
-            {[
-              { bg: 'rgba(16,185,129,0.13)', border: '#10b981', label: 'Lower volume' },
-              { bg: 'rgba(245,158,11,0.18)', border: '#f59e0b', label: 'Medium volume' },
-              { bg: 'rgba(59,130,246,0.25)', border: '#3b82f6', label: 'High volume' },
-            ].map(l => (
-              <div key={l.label} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: l.bg, border: `1px solid ${l.border}` }} />
-                <span className="text-[10px] text-text-muted">{l.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Province Performance Bar ── */}
-        <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-          <div className="text-[12px] font-semibold text-text-primary mb-1">Province Performance</div>
-          <div className="text-[10px] text-text-muted mb-3">Transaction breakdown by province</div>
-          <PremiumBarChart
-            data={(data?.by_province || []) as unknown as Record<string, unknown>[]}
-            xAxisKey="province"
-            series={[{ dataKey: 'total_amount', name: 'Total Amount', color: '#06b6d4' }]}
-            layout="horizontal"
-            formatValue={formatNPR}
-            formatXAxis={(v) => formatProvinceLabel(v)}
-            yAxisWidth={80}
-            height={220}
-          />
         </div>
 
         {/* ── Branch League Table ── */}
