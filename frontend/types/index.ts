@@ -313,6 +313,7 @@ export interface ProductionTableDetailResponse {
 export interface ProductionExplorerResponse {
   dimensions: string[];
   measures: string[];
+  empty_periods: string[];
   time_comparisons: string[];
   columns: string[];
   rows: Array<Record<string, string | number | boolean | null>>;
@@ -325,5 +326,7 @@ export interface ProductionExplorerResponse {
     groupby_clause: string;
     orderby_clause: string;
     period_wheres: Record<string, string>;
+    page: number;
+    page_size: number;
   };
 }

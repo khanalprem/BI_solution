@@ -202,29 +202,43 @@ export default function PivotDashboard() {
 
   const dateOptions = useMemo(() => generateDateOptions(filterStats), [filterStats]);
 
-  // ── Pivot: if a date dim is selected alongside non-date dims, pivot ───────
+  // ── Pivot logic ───────────────────────────────────────────────────────────
+  // Case A — date dim selected: pivot on that date column.
+  //   rows without a non-date dim → single summary row per date value.
+  //   rows with non-date dims   → one row per non-date combo, date values = columns.
+  // Case B — no date dim, comparisons active: pivot on the `_period` column injected
+  //   by the backend, so main vs comparison rows appear as separate column groups.
+  // Case C — no date dim, no comparisons: flat table.
+
+  const hasDateDim   = selectedDimensions.some((k) => DATE_DIM_KEYS.has(k));
+  const needsPeriodPivot = !hasDateDim && timeComparisons.length > 0;
 
   const { displayColumns, displayRows, isPivoted } = useMemo(() => {
     if (!explorer || !explorer.rows.length) {
       return { displayColumns: explorer?.columns ?? [], displayRows: explorer?.rows ?? [], isPivoted: false };
     }
 
-    const dateDim   = selectedDimensions.find((k) => DATE_DIM_KEYS.has(k));
-    const rowDims   = selectedDimensions.filter((k) => !DATE_DIM_KEYS.has(k));
-    const shouldPivot = Boolean(dateDim && rowDims.length > 0);
+    const rows = explorer.rows as DataRow[];
 
-    if (!shouldPivot) {
-      return { displayColumns: explorer.columns, displayRows: explorer.rows as DataRow[], isPivoted: false };
+    // Case A: date dim selected
+    if (hasDateDim) {
+      const dateDim = selectedDimensions.find((k) => DATE_DIM_KEYS.has(k))!;
+      const rowDims = selectedDimensions.filter((k) => !DATE_DIM_KEYS.has(k));
+      const { pivotedColumns, pivotedRows } = pivotRows(rows, dateDim, rowDims, effectiveMeasures);
+      return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
     }
 
-    const { pivotedColumns, pivotedRows } = pivotRows(
-      explorer.rows as DataRow[],
-      dateDim!,
-      rowDims,
-      effectiveMeasures,
-    );
-    return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
-  }, [explorer, selectedDimensions, effectiveMeasures, timeComparisons]);
+    // Case B: no date dim but comparisons active — pivot on _period column
+    if (needsPeriodPivot && rows[0]?.['_period'] !== undefined) {
+      const { pivotedColumns, pivotedRows } = pivotRows(rows, '_period', selectedDimensions, effectiveMeasures);
+      return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
+    }
+
+    // Case C: flat
+    const flatCols = explorer.columns.filter((c) => c !== '_period');
+    const flatRows = rows.map((r) => { const { _period, ...rest } = r; return rest; });
+    return { displayColumns: flatCols, displayRows: flatRows, isPivoted: false };
+  }, [explorer, selectedDimensions, effectiveMeasures, timeComparisons, hasDateDim, needsPeriodPivot]);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -341,25 +355,43 @@ export default function PivotDashboard() {
 
   const sqlPreview = useMemo(() => {
     if (!explorer) return 'Select at least one dimension and one measure.';
-    const lines = [
-      `-- Dimensions (GROUP BY): ${selectedDimensions.join(', ')}`,
-      `-- Standard measures:     ${effectiveMeasures.join(', ')}`,
-    ];
-    if (timeComparisons.length > 0) lines.push(`-- Period comparisons:     ${timeComparisons.join(', ')}`);
-    const p = (explorer.sql_preview as any).page ?? page;
-    const ps = (explorer.sql_preview as any).page_size ?? pageSize;
-    lines.push(`-- Pagination:            page=${p}, page_size=${ps}`);
-    lines.push('', explorer.sql_preview.select_inner, explorer.sql_preview.where_clause,
-      explorer.sql_preview.groupby_clause, explorer.sql_preview.orderby_clause);
-    const pw = explorer.sql_preview.period_wheres ?? {};
-    if (Object.keys(pw).length > 0) {
-      lines.push('');
-      Object.entries(pw).forEach(([p, c]) => lines.push(`-- ${p}:`, `   ${c}`));
-    }
-    return lines.join('\n');
-  }, [explorer, selectedDimensions, effectiveMeasures, timeComparisons, page, pageSize]);
 
-  const totalPages = Math.ceil((explorer?.total_rows ?? 0) / pageSize) || 1;
+    const sp = explorer.sql_preview;
+    const pw = sp.period_wheres ?? {};
+
+    // Build period where lines — show '' for inactive periods
+    const periodParams = [
+      'prevdate_where', 'thismonth_where', 'thisyear_where',
+      'prevmonth_where', 'prevyear_where', 'prevmonthmtd_where',
+      'prevyearytd_where', 'prevmonthsamedate_where', 'prevyearsamedate_where',
+    ].map((param) => `  ${param} => '${pw[param] ?? ''}',`).join('\n');
+
+    const call = [
+      'CALL public.get_tran_summary(',
+      `  select_inner => '${sp.select_inner}',`,
+      `  where_clause => '${sp.where_clause}',`,
+      `  groupby_clause => '${sp.groupby_clause}',`,
+      `  orderby_clause => '${sp.orderby_clause}',`,
+      periodParams,
+      `  page => ${sp.page},`,
+      `  page_size => ${sp.page_size}`,
+      ')',
+    ].join('\n');
+
+    return call;
+  }, [explorer]);
+
+  // Use main query total_rows from backend for pagination.
+  // When pivoted, the backend total still reflects raw row count (correct for page nav).
+  // Clamp: if total_rows < rows actually on this page, the SP under-reported — trust actual count.
+  const backendTotal = useMemo(() => {
+    if (!explorer) return 0;
+    const mainPageRows = isPivoted ? explorer.rows.length : explorer.rows.length;
+    const minFromPage  = (page - 1) * pageSize + mainPageRows;
+    return Math.max(explorer.total_rows ?? 0, minFromPage);
+  }, [explorer, page, pageSize, isPivoted]);
+
+  const totalPages = Math.ceil(backendTotal / pageSize) || 1;
 
   return (
     <>
@@ -691,6 +723,20 @@ export default function PivotDashboard() {
           {/* ── Right: SQL preview + results ───────────────────────────────── */}
           <div className="flex flex-col gap-4">
 
+            {/* Period comparison hint — shown when comparisons active but no date dim selected */}
+            {needsPeriodPivot && (
+              <div className="rounded-lg border border-accent-amber/30 bg-accent-amber/8 px-4 py-2.5 flex items-start gap-2.5">
+                <span className="text-accent-amber text-[13px] leading-none mt-0.5">⚠</span>
+                <div>
+                  <p className="text-[11px] font-semibold text-accent-amber">Period comparison columns active</p>
+                  <p className="text-[10.5px] text-text-secondary mt-0.5">
+                    No date dimension selected — columns show <span className="font-mono">main</span> vs comparison period data.
+                    Select <strong>Transaction Date</strong> (or Year Month / Quarter / Year) as a dimension to pivot on actual date values instead.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* SQL / procedure preview */}
             <div className="rounded-xl border border-border bg-bg-card p-4">
               <div className="flex items-center justify-between mb-2">
@@ -711,24 +757,42 @@ export default function PivotDashboard() {
               </pre>
             </div>
 
+            {/* Empty periods notice */}
+            {(explorer?.empty_periods ?? []).length > 0 && (
+              <div className="rounded-lg border border-border bg-bg-input px-4 py-2.5 flex items-start gap-2.5">
+                <span className="text-text-muted text-[13px] leading-none mt-0.5">ⓘ</span>
+                <div>
+                  <p className="text-[11px] font-semibold text-text-primary">No data for some periods</p>
+                  <p className="text-[10.5px] text-text-muted mt-0.5">
+                    The following comparison periods returned no rows — their columns are omitted from the table:{' '}
+                    <span className="font-mono text-text-secondary">{explorer!.empty_periods.join(', ')}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Result table */}
             <RecordTable
               title={`Results — ${dimensionLabels}`}
               subtitle={
                 isLoading
                   ? 'Executing get_tran_summary against production…'
-                  : `${(explorer?.total_rows ?? 0).toLocaleString()} total rows · page ${page} of ${totalPages}${isPivoted ? ' · date values pivoted to columns' : ''}`
+                  : isPivoted
+                    ? `${backendTotal.toLocaleString()} raw rows · page ${page} of ${totalPages} · ${displayRows.length.toLocaleString()} pivoted rows on this page`
+                    : `${backendTotal.toLocaleString()} total rows · page ${page} of ${totalPages}`
               }
               columns={displayColumns}
               rows={displayRows}
             />
 
             {/* Pagination + page size */}
-            {(explorer?.total_rows ?? 0) > 0 && (
+            {backendTotal > 0 && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <p className="text-[11px] text-text-muted">
-                  {`Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, explorer!.total_rows).toLocaleString()} of ${explorer!.total_rows.toLocaleString()} rows`}
+                  {isPivoted
+                    ? `${displayRows.length.toLocaleString()} pivoted rows · page ${page} of ${totalPages} (${backendTotal.toLocaleString()} raw)`
+                    : `Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, backendTotal).toLocaleString()} of ${backendTotal.toLocaleString()} rows`}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-text-muted">Per page:</span>

@@ -371,8 +371,16 @@ class ProductionDataService
     # Resolve reference date for period comparisons from user-selected filter values
     reference_date = resolve_reference_date(filters: filters, end_date: end_date, dimension_keys: dimension_keys)
 
-    # Primary date dimension drives period clause SQL (first date dim found, or fallback to tran_date)
-    period_dimension = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) } || 'tran_date'
+    # Primary date dimension drives period clause SQL.
+    # First check selected GROUP BY dimensions, then fall back to whichever date filter is active,
+    # then default to tran_date. This ensures that setting tran_date as a filter (not a dimension)
+    # still produces correct SQL (e.g. BETWEEN clauses on tran_date, not year_month).
+    period_dimension = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+    period_dimension ||= %w[tran_date year_month year_quarter year].find do |k|
+      sym = k.to_sym
+      filters[sym].present? || filters[:"#{k}_from"].present? || filters[:"#{k}_to"].present?
+    end
+    period_dimension ||= 'tran_date'
 
     # Resolve which period-comparison params to populate.
     # Multiple time_comparison keys (e.g. 'prevdate_amt', 'prevdate_count') sharing
@@ -423,8 +431,19 @@ class ProductionDataService
     SQL
 
     main_rows = conn.exec_query('SELECT * FROM result').to_a
-    total_rows = (main_rows.first&.[]('pivoted_totalrows') || main_rows.length).to_i
-    main_sanitized = main_rows.map { |row| row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN') }
+    # Prefer 'total_rows' (actual unpaginated count set by the SP) over 'pivoted_totalrows'
+    # (which reflects the SP's own pivot output count — often 1 — not the data row count).
+    first = main_rows.first
+    total_rows = (first&.[]('total_rows') || first&.[]('pivoted_totalrows') || main_rows.length).to_i
+    # Sanity: if SP returned more rows than total_rows claims, trust the actual row count
+    total_rows = [total_rows, main_rows.length + (normalized_page - 1) * normalized_page_size].max
+    # Add _period marker so comparison rows are always distinguishable from main rows.
+    # When has_comparisons is true we tag all main rows 'main'; comparison rows get their period label.
+    main_sanitized = main_rows.map do |row|
+      r = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
+      r['_period'] = 'main' if has_comparisons
+      r
+    end
 
     # ── CALL 2: Comparison periods — only if requested ────────────────────────
     # Fetch comparison data for the SAME dimension values as the paginated main rows.
@@ -433,23 +452,31 @@ class ProductionDataService
     if has_comparisons && main_sanitized.any?
       non_date_dims = dimension_keys.reject { |k| %w[tran_date year_month year_quarter year].include?(k) }
 
-      # Build a WHERE clause that restricts to the dimension values from page 1
-      dim_value_clauses = non_date_dims.filter_map do |dim_key|
+      # Only restrict comparison queries by LOW-CARDINALITY dimensions.
+      # High-cardinality dims (acct_num, cif_id, entry_user, vfd_user) would filter out
+      # accounts that had no transactions in the comparison period, returning empty results.
+      low_cardinality_dims = %w[gam_branch gam_province gam_cluster gam_solid tran_source part_tran_type product service merchant gl_sub_head_code]
+      restrictable_dims = non_date_dims.select { |k| low_cardinality_dims.include?(k) }
+
+      dim_value_clauses = restrictable_dims.filter_map do |dim_key|
         values = main_sanitized.map { |r| r[dim_key] }.compact.uniq
         next if values.empty?
         "#{DIMENSIONS.fetch(dim_key).fetch(:sql)} IN (#{values.map { |v| conn.quote(v) }.join(', ')})"
       end
 
       # For each active comparison period, call the procedure with the period's WHERE.
-      # Keep the same dimensions (including date) so we get date-wise breakdown.
-      # Prefix the date value with the period label so pivot creates distinct columns.
+      # Each call is scoped to the dimension values on this page — bounded to page_size rows.
+      date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+      empty_periods = []
+
       requested_periods.each do |period_key|
         period_where = build_period_where(period: period_key, end_date: reference_date, filters: filters, dimension: period_dimension)
         next if period_where.blank?
 
         period_label = PERIOD_COMPARISONS[period_key][:label].downcase.gsub(' ', '_')
 
-        # Add dimension value restriction to the period WHERE
+        # Restrict to the dimension values visible on this page (non-date dims only —
+        # date dim gets a new time range from period_where, that's the point)
         restricted_where = if dim_value_clauses.any?
           period_where.sub('WHERE ', "WHERE #{dim_value_clauses.join(' AND ')} AND ")
         else
@@ -482,11 +509,19 @@ class ProductionDataService
           )
         SQL
 
-        date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
         comp_rows = conn.exec_query('SELECT * FROM result').to_a
+        if comp_rows.empty? || comp_rows.all? { |r| r.except('rn', 'pivoted_totalrows', 'total_rows', 'RN').values.all?(&:nil?) }
+          # Period returned no data — record it so frontend can show "(no data)" instead of
+          # silently missing columns
+          empty_periods << period_label
+          next
+        end
+
         comp_rows.each do |row|
           sanitized = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
-          # Prefix date value with period label: "this_year:2022-03-15"
+          sanitized['_period'] = period_label
+          # Prefix date dim value so pivot creates distinct columns per period
+          # e.g. "previous_date:2022-02-17" vs "main:2022-02-18"
           if date_dim && sanitized[date_dim]
             sanitized[date_dim] = "#{period_label}:#{sanitized[date_dim]}"
           end
@@ -499,14 +534,15 @@ class ProductionDataService
     columns = sanitized_rows.first&.keys || (dimension_keys + measure_keys)
 
     {
-      dimensions: dimension_keys,
-      measures: measure_keys,
+      dimensions:      dimension_keys,
+      measures:        measure_keys,
       time_comparisons: requested_periods,
-      columns: columns,
-      rows: sanitized_rows,
-      total_rows: total_rows,
-      page: normalized_page,
-      page_size: normalized_page_size,
+      empty_periods:   has_comparisons ? (empty_periods || []) : [],
+      columns:         columns,
+      rows:            sanitized_rows,
+      total_rows:      total_rows,
+      page:            normalized_page,
+      page_size:       normalized_page_size,
       sql_preview: {
         select_inner:   select_inner,
         where_clause:   where_clause,
@@ -648,9 +684,21 @@ class ProductionDataService
   end
 
   # Resolve the reference date for period comparisons.
-  # Prefers the user-selected date dimension filter over the global end_date.
+  # Priority: selected date dimension filter → any date filter present → global end_date.
+  # This ensures that setting tran_date = '2022-02-18' as a filter (even without selecting
+  # tran_date as a GROUP BY dimension) correctly anchors period comparisons to 2022, not
+  # to the global date-picker end_date.
   def resolve_reference_date(filters:, end_date:, dimension_keys:)
+    # Prefer the active date dimension (selected for GROUP BY) first
     date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+
+    # If no date dimension is grouped on, fall back to whichever date filter the user has set
+    date_dim ||= %w[tran_date year_month year_quarter year].find do |k|
+      sym = k.to_sym
+      from_sym = :"#{k.tr('_', '_')}_from" # e.g. :tran_date_from
+      to_sym   = :"#{k.tr('_', '_')}_to"
+      filters[sym].present? || filters[from_sym].present? || filters[to_sym].present?
+    end
 
     case date_dim
     when 'tran_date'

@@ -25,15 +25,50 @@ Use this skill when touching `backend/app/controllers/api/v1/*`, services, or fr
 | GET | `/dashboards/risk_summary` | `#risk_summary` | 15 min |
 | GET | `/dashboards/kpi_summary` | `#kpi_summary` | 15 min |
 | GET | `/dashboards/employer_summary` | `#employer_summary` | 15 min |
+| GET | `/dashboards/employee_detail` | `#employee_detail` | 15 min |
+| GET | `/dashboards/demographics` | `#demographics` | 30 min |
 
-### Production Data Endpoints (all 19 tables)
+### Auth Endpoints (public)
 
 | Method | Path | Notes |
 |--------|------|-------|
-| GET | `/production/catalog` | Lists all 19 tables + procedures + dimensions |
-| GET | `/production/table?table_name=X&page=1&page_size=25` | Paginated rows from any table |
-| GET | `/production/lookup?data_type=branch` | Calls `get_static_data` procedure |
-| GET | `/production/explorer` | Calls `get_tran_summary` with dimension/measures |
+| POST | `/auth/signin` | Returns JWT token + user payload |
+| GET | `/auth/me` | Returns current user from token |
+
+### User Management (admin/superadmin only)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/users` | List all users + roles + permissions matrix |
+| POST | `/users` | Create user |
+| PATCH | `/users/:id` | Update user role/details |
+| DELETE | `/users/:id` | Deactivate user (soft delete) |
+
+### Production Data Endpoints (pivot analysis)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/production/catalog` | 19 tables + procedures + dimensions + measures + time comparisons |
+| GET | `/production/table` | Paginated rows from any table (page, page_size) |
+| GET | `/production/lookup` | Calls `get_static_data` procedure |
+| GET | `/production/explorer` | Multi-dimension, measures, time_comparisons, page, page_size |
+
+### Production Explorer — Key Parameters
+
+```
+dimensions       comma-separated: gam_branch,tran_date,acct_num
+measures         comma-separated: total_amount,transaction_count
+time_comparisons comma-separated: thisyear_amt,thisyear_count,prevmonth_amt
+page             integer (default 1)
+page_size        integer (default 10, max 100)
+tran_date        single date or comma-separated dates
+tran_date_from   range start
+tran_date_to     range end
+year_month       YYYY-MM
+year_quarter     YYYY-Qn
+year             YYYY
++ all standard filter params (province, branch_code, etc.)
+```
 
 ### Filter Endpoints
 

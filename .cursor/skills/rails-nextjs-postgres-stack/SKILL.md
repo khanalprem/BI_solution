@@ -106,17 +106,42 @@ BI_solution/
 ## API Endpoints (current)
 
 ```
+# Auth (public)
+POST /api/v1/auth/signin              → { token, user }
+GET  /api/v1/auth/me                  → { user }
+
+# User management (admin/superadmin only)
+GET    /api/v1/users                  → { users[], roles, permissions }
+POST   /api/v1/users                  → create user
+PATCH  /api/v1/users/:id              → update user
+DELETE /api/v1/users/:id              → deactivate user
+
+# Dashboard endpoints
 GET /api/v1/dashboards/executive          → summary + by_branch + by_province + by_channel + trend
 GET /api/v1/dashboards/branch_performance → branches + provinces + totals
 GET /api/v1/dashboards/province_summary   → by_province[]
 GET /api/v1/dashboards/channel_breakdown  → by_channel[]
 GET /api/v1/dashboards/daily_trend        → trend[]
 GET /api/v1/dashboards/customers_top      → top customers[]
-GET /api/v1/dashboards/customer_profile   → full customer profile
+GET /api/v1/dashboards/customer_profile   → full customer profile + personal info + GAM accounts
+GET /api/v1/dashboards/financial_summary  → CR/DR/net + monthly trend + GL breakdown
+GET /api/v1/dashboards/digital_channels   → channel metrics + trend
+GET /api/v1/dashboards/risk_summary       → risk indicators + GL/province exposure
+GET /api/v1/dashboards/kpi_summary        → KPI tree metrics + quarterly/product/service
+GET /api/v1/dashboards/employer_summary   → entry user + branch operations
+GET /api/v1/dashboards/employee_detail    → individual user drill-down
+GET /api/v1/dashboards/demographics       → age group distribution (from customers.date_of_birth)
 
-GET /api/v1/filters/values      → provinces, branches, clusters, tran_types, tran_sources, products, services, merchants, gl_sub_head_codes, entry_users, vfd_users
+# Filter endpoints
+GET /api/v1/filters/values      → all filter dropdown values
 GET /api/v1/filters/branches    → branches (optionally filtered by province)
-GET /api/v1/filters/statistics  → date_range{min,max}, amount_range, counts
+GET /api/v1/filters/statistics  → date_range, amount_range, counts
+
+# Production data explorer (pivot analysis)
+GET /api/v1/production/catalog   → 19 tables + procedures + dimensions + measures
+GET /api/v1/production/table     → paginated rows from any table
+GET /api/v1/production/lookup    → calls get_static_data procedure
+GET /api/v1/production/explorer  → calls get_tran_summary with multi-dimension, measures, time comparisons, pagination
 ```
 
 **Common query params:** `start_date`, `end_date`, `province`, `branch_code`, `cluster`, `tran_type`, `part_tran_type`, `tran_source`, `product`, `service`, `merchant`, `gl_sub_head_code`, `entry_user`, `vfd_user`, `min_amount`, `max_amount`, `acct_num`, `cif_id`
@@ -143,12 +168,24 @@ GET /api/v1/filters/statistics  → date_range{min,max}, amount_range, counts
 
 ## Data Facts
 
-- **Primary table:** `tran_summary` (partitioned, 164K rows)
+- **Primary table:** `tran_summary` (178K rows, rebuilt from htd)
 - **Date range:** 2021-02-18 → 2024-07-01
+- **Available months:** Feb, May, Jul only (3 per year — demo data)
 - **Transaction types:** only `J` (journal)
 - **Part types:** `CR` (credit/inflow) and `DR` (debit/outflow)
 - **Provinces:** "province 1" … "province 7" (numeric labels from production)
-- **Channels:** `tran_source` — "mobile", "internet", NULL (branch)
+- **Channels:** `tran_source` — "mobile" (~12%), "internet" (~13%), NULL (~75% = branch)
+- **Services:** 10 banking services (Remittance, Utility Payment, Loan EMI, etc.)
+- **Products:** 10 banking products (Savings Account, Fixed Deposit, Home Loan, etc.)
+- **Merchants:** 10 merchants (Nepal Telecom, Ncell, NEA, eSewa, etc.)
+- **Users table:** `users` with `role` column (superadmin/admin/manager/analyst/branch_staff/auditor)
+- **Demo user:** demo@gmail.com / demo (superadmin)
+
+---
+
+## IMPORTANT: Never run `db:schema:load` on production
+
+The `nifi` DB is the production warehouse. Running `rails db:schema:load` or `rails db:migrate` with `create_table` will **drop and recreate production tables**, wiping all data. All production table migrations have `return if table_exists?` guards.
 
 ---
 
