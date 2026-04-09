@@ -1,42 +1,25 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartLegendItem } from '@/components/ui/ChartCard';
-import { useFinancialSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { useFinancialSummary } from '@/lib/hooks/useDashboardData';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
+import { formatNPR, formatPercent } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
-
 export default function FinancialDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const {
+    filters, setFilters, filtersOpen, setFiltersOpen,
+    filterStats, handleClearFilters, topBarProps,
+  } = useDashboardPage();
 
   const { data, isLoading } = useFinancialSummary(filters);
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
-  const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min), [filterStats?.date_range?.min]);
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate && prev.endDate === dateRange.endDate ? prev : { ...prev, ...dateRange }
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') { setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate })); return; }
-    setFilters(getDateRange(period, referenceDate, minReferenceDate || undefined));
-  };
 
   const creditRatio = data?.credit_ratio ?? 0;
   const netFlow = data?.net_flow ?? 0;
@@ -117,7 +100,7 @@ export default function FinancialDashboard() {
   if (isLoading) {
     return (
       <>
-        <TopBar title="Financial Summary" subtitle="Credit, debit & net flow analysis" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
+        <TopBar title="Financial Summary" subtitle="Credit, debit & net flow analysis" {...topBarProps} />
         <StandardDashboardSkeleton />
       </>
     );
@@ -128,14 +111,7 @@ export default function FinancialDashboard() {
       <TopBar
         title="Financial Summary"
         subtitle="Credit, debit & net flow analysis"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
+        {...topBarProps}
       />
       <div className="flex flex-col gap-3.5 p-5">
         <AdvancedFilters

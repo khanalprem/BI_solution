@@ -1,5 +1,9 @@
 class CreateTranSummary < ActiveRecord::Migration[7.2]
   def change
+    # IMPORTANT: tran_summary is a production warehouse table.
+    # Only create if it doesn't exist — never drop/recreate.
+    return if table_exists?(:tran_summary)
+
     create_table :tran_summary, id: false do |t|
       # Account identifiers
       t.string :acct_num

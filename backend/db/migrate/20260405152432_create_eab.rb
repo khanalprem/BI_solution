@@ -1,5 +1,8 @@
 class CreateEab < ActiveRecord::Migration[7.2]
   def change
+    # IMPORTANT: eab is a production warehouse table — never drop/recreate
+    return if table_exists?(:eab)
+
     create_table :eab, id: false do |t|
       t.string :acct_num
       t.string :acid

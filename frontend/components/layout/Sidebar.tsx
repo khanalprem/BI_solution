@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { clearAuth } from '@/lib/auth';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -19,22 +20,28 @@ export function Sidebar() {
   const [userRole, setUserRole] = useState('Admin');
 
   useEffect(() => {
+    // Try the full user object first (set by auth flow)
+    try {
+      const storedUser = localStorage.getItem('bankbi-user');
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email;
+        setUserName(name);
+        setUserRole(u.display_role || u.role || u.email);
+        return;
+      }
+    } catch {}
+
+    // Fallback to legacy keys
     const storedName = localStorage.getItem('bankbi-user-name');
     const storedEmail = localStorage.getItem('bankbi-user-email');
-    if (storedName) {
-      setUserName(storedName);
-    } else if (storedEmail) {
-      setUserName(storedEmail);
-    }
-    if (storedEmail) {
-      setUserRole(storedEmail);
-    }
+    if (storedName) setUserName(storedName);
+    else if (storedEmail) setUserName(storedEmail);
+    if (storedEmail) setUserRole(storedEmail);
   }, []);
 
   const handleSignOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('bankbi-user-email');
-    localStorage.removeItem('bankbi-user-name');
+    clearAuth();
     document.cookie = 'bankbi-auth=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     window.location.assign('/signout');
   };
@@ -235,13 +242,14 @@ export function Sidebar() {
               }
             />
             <NavItem
-              href="/dashboard/profile"
-              label="User Profile"
-              active={pathname === '/dashboard/profile'}
+              href="/dashboard/users"
+              label="User Management"
+              active={pathname === '/dashboard/users'}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
-                  <path d="M2 14c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  <circle cx="5" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
+                  <path d="M1 13c0-2.21 1.79-4 4-4s4 1.79 4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  <path d="M11 7v4M13 9h-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 </svg>
               }
             />
@@ -262,27 +270,34 @@ export function Sidebar() {
                   {userName.slice(0, 2).toUpperCase() || 'U'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium truncate leading-tight">{userName}</div>
+                  <div className="text-[11px] font-medium truncate leading-tight text-text-primary">{userName}</div>
                   <div className="text-[9px] text-text-muted truncate leading-tight mt-0.5">{userRole}</div>
                 </div>
                 <ChevronDown className="w-3 h-3 text-text-muted flex-shrink-0" />
               </button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" side="top" className="w-[180px]">
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              className="w-[200px] z-[200]"
+              style={{ zIndex: 200 }}
+            >
+              <div className="px-2 py-1.5 border-b border-border mb-1">
+                <div className="text-[11px] font-semibold text-text-primary truncate">{userName}</div>
+                <div className="text-[10px] text-text-muted truncate">{userRole}</div>
+              </div>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/profile" className="flex items-center gap-2">
+                <Link href="/dashboard/profile" className="flex items-center gap-2 cursor-pointer">
                   <UserCircle className="w-3.5 h-3.5" />
                   Profile
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onSelect={(event) => {
-                  event.preventDefault();
-                  handleSignOut();
-                }}
-                className="flex items-center gap-2"
+                onSelect={(e) => { e.preventDefault(); handleSignOut(); }}
+                className="flex items-center gap-2 text-accent-red focus:text-accent-red cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 Sign out

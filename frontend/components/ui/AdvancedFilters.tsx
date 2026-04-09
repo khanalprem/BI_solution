@@ -13,6 +13,7 @@ interface AdvancedFiltersProps {
   onClear: () => void;
   advancedOpen?: boolean;
   onAdvancedOpenChange?: (open: boolean) => void;
+  hideStats?: boolean;
 }
 
 type MultiFilterKey =
@@ -109,6 +110,7 @@ export function AdvancedFilters({
   onClear,
   advancedOpen,
   onAdvancedOpenChange,
+  hideStats = false,
 }: AdvancedFiltersProps) {
   const { data: filterValues, isLoading, error } = useFilterValues();
   const { data: filterStats } = useFilterStatistics();
@@ -240,25 +242,7 @@ export function AdvancedFilters({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-3">
-        <DataStat
-          label="Data Range"
-          value={`${formatCoverageDate(filterStats?.date_range?.min)} to ${formatCoverageDate(filterStats?.date_range?.max)}`}
-          hint="Report dates are bounded by imported transaction history."
-        />
-        <DataStat
-          label="Coverage"
-          value={`${(filterStats?.counts.total_transactions ?? 0).toLocaleString()} records`}
-          hint={`${(filterStats?.counts.unique_customers ?? 0).toLocaleString()} customers · ${(filterStats?.counts.unique_accounts ?? 0).toLocaleString()} accounts`}
-        />
-        <DataStat
-          label="Dimensions"
-          value={`${filterValues.branches.length} branches · ${filterValues.provinces.length} provinces`}
-          hint={`${solidOptions.length} SOL IDs · ${schemeTypeOptions.length} schemes · ${glOptions.length} GL codes`}
-        />
-      </div>
-
-      {/* Quick FilterBar — applies immediately */}
+      {/* Quick FilterBar — always first, applies immediately */}
       <FilterBar onClear={handleClear}>
         <FilterLabel>Province</FilterLabel>
         <div className="min-w-[220px] flex-1 sm:flex-none">
@@ -325,7 +309,7 @@ export function AdvancedFilters({
         </button>
       </FilterBar>
 
-      {/* Active filter pills (committed filters only) */}
+      {/* Active filter pills */}
       {activeFilterPills.length > 0 && (
         <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-bg-card px-3 py-2.5">
           {activeFilterPills.map((pill) => (
@@ -339,6 +323,27 @@ export function AdvancedFilters({
               <span className="text-text-muted">×</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Data stats — shown below filter bar, hidden on detail pages */}
+      {!hideStats && (
+        <div className="grid gap-3 md:grid-cols-3">
+          <DataStat
+            label="Data Range"
+            value={`${formatCoverageDate(filterStats?.date_range?.min)} to ${formatCoverageDate(filterStats?.date_range?.max)}`}
+            hint="Report dates are bounded by imported transaction history."
+          />
+          <DataStat
+            label="Coverage"
+            value={`${(filterStats?.counts.total_transactions ?? 0).toLocaleString()} records`}
+            hint={`${(filterStats?.counts.unique_customers ?? 0).toLocaleString()} customers · ${(filterStats?.counts.unique_accounts ?? 0).toLocaleString()} accounts`}
+          />
+          <DataStat
+            label="Dimensions"
+            value={`${filterValues.branches.length} branches · ${filterValues.provinces.length} provinces`}
+            hint={`${solidOptions.length} SOL IDs · ${schemeTypeOptions.length} schemes · ${glOptions.length} GL codes`}
+          />
         </div>
       )}
 

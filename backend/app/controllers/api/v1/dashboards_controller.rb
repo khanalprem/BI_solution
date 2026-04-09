@@ -9,28 +9,10 @@ module Api
           scope = TranSummary.apply_filters(filters)
 
           summary = build_summary(scope)
-          by_branch = scope.group(:gam_branch, :gam_province)
-                           .select('gam_branch AS branch_code, gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT acct_num) AS unique_accounts, AVG(tran_amt) AS avg_transaction')
-                           .order('SUM(tran_amt) DESC')
-                           .limit(20)
-                           .map { |r| row_to_h(r, :branch_code, :province, :total_amount, :transaction_count, :unique_accounts, :avg_transaction) }
-
-          by_province = scope.group(:gam_province)
-                             .select('gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT gam_branch) AS branch_count, COUNT(DISTINCT acct_num) AS unique_accounts')
-                             .order('SUM(tran_amt) DESC')
-                             .map { |r| row_to_h(r, :province, :total_amount, :transaction_count, :branch_count, :unique_accounts).merge(avg_per_branch: safe_divide(r.total_amount, r.branch_count)) }
-
-          by_channel = scope.where.not(tran_source: nil)
-                            .group(:tran_source)
-                            .select('tran_source AS channel, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count')
-                            .order('SUM(tran_amt) DESC')
-                            .map { |r| row_to_h(r, :channel, :total_amount, :transaction_count) }
-
-          trend = scope.group(:tran_date)
-                       .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
-                       .order(:tran_date)
-                       .map { |r| row_to_h(r, :date, :amount, :count) }
-
+          by_branch  = build_by_branch(scope, limit: 20)
+          by_province = build_by_province(scope)
+          by_channel  = build_by_channel(scope)
+          trend       = build_daily_trend(scope)
           { summary: summary, by_branch: by_branch, by_province: by_province, by_channel: by_channel, trend: trend }
         end
 
@@ -44,16 +26,8 @@ module Api
         data = cached('branch_performance') do
           scope = TranSummary.apply_filters(filters)
 
-          branches = scope.group(:gam_branch, :gam_province)
-                          .select('gam_branch AS branch_code, gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT acct_num) AS unique_accounts, AVG(tran_amt) AS avg_transaction')
-                          .order('SUM(tran_amt) DESC')
-                          .map { |r| row_to_h(r, :branch_code, :province, :total_amount, :transaction_count, :unique_accounts, :avg_transaction) }
-
-          provinces = scope.group(:gam_province)
-                           .select('gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT gam_branch) AS branch_count, COUNT(DISTINCT acct_num) AS unique_accounts')
-                           .order('SUM(tran_amt) DESC')
-                           .map { |r| row_to_h(r, :province, :total_amount, :transaction_count, :branch_count, :unique_accounts).merge(avg_per_branch: safe_divide(r.total_amount, r.branch_count)) }
-
+          branches  = build_by_branch(scope, limit: nil)
+          provinces = build_by_province(scope)
           {
             branches: branches,
             provinces: provinces,
@@ -72,11 +46,7 @@ module Api
         filters = filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('province_summary') do
-          TranSummary.apply_filters(filters)
-                     .group(:gam_province)
-                     .select('gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT gam_branch) AS branch_count, COUNT(DISTINCT acct_num) AS unique_accounts')
-                     .order('SUM(tran_amt) DESC')
-                     .map { |r| row_to_h(r, :province, :total_amount, :transaction_count, :branch_count, :unique_accounts).merge(avg_per_branch: safe_divide(r.total_amount, r.branch_count)) }
+          build_by_province(TranSummary.apply_filters(filters))
         end
 
         render json: data
@@ -87,11 +57,7 @@ module Api
         filters = filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('channel_breakdown') do
-          TranSummary.apply_filters(filters)
-                     .group(:tran_source)
-                     .select('tran_source AS channel, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count')
-                     .order('SUM(tran_amt) DESC')
-                     .map { |r| row_to_h(r, :channel, :total_amount, :transaction_count) }
+          build_by_channel(TranSummary.apply_filters(filters))
         end
 
         render json: data
@@ -102,11 +68,7 @@ module Api
         filters = filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('daily_trend') do
-          TranSummary.apply_filters(filters)
-                     .group(:tran_date)
-                     .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
-                     .order(:tran_date)
-                     .map { |r| row_to_h(r, :date, :amount, :count) }
+          build_daily_trend(TranSummary.apply_filters(filters))
         end
 
         render json: data
@@ -167,21 +129,9 @@ module Api
 
           accounts = AccountMasterLookup.customer_accounts(cif_id: cif_id)
 
-          by_branch = scope.group(:gam_branch, :gam_province)
-                           .select('gam_branch AS branch_code, gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT acct_num) AS unique_accounts, AVG(tran_amt) AS avg_transaction')
-                           .order('SUM(tran_amt) DESC')
-                           .map { |r| row_to_h(r, :branch_code, :province, :total_amount, :transaction_count, :unique_accounts, :avg_transaction) }
-
-          by_channel = scope.where.not(tran_source: nil)
-                            .group(:tran_source)
-                            .select('tran_source AS channel, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count')
-                            .order('SUM(tran_amt) DESC')
-                            .map { |r| row_to_h(r, :channel, :total_amount, :transaction_count) }
-
-          trend = scope.group(:tran_date)
-                       .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
-                       .order(:tran_date)
-                       .map { |r| row_to_h(r, :date, :amount, :count) }
+          by_branch  = build_by_branch(scope, limit: nil)
+          by_channel = build_by_channel(scope)
+          trend      = build_daily_trend(scope)
 
           recent = scope.order(tran_date: :desc).limit(20).map do |t|
             {
@@ -417,20 +367,14 @@ module Api
           scope = TranSummary.apply_filters(filters)
           summary = build_summary(scope)
 
-          by_branch = scope.group(:gam_branch, :gam_province)
-                           .select('gam_branch AS branch, gam_province AS province, SUM(tran_amt) AS amount, SUM(tran_count) AS count, COUNT(DISTINCT acct_num) AS accounts')
-                           .order('SUM(tran_amt) DESC')
-                           .map { |r| { branch: r.branch, province: r.province, amount: r.amount.to_f, count: r.count.to_i, accounts: r.accounts.to_i } }
+          by_branch = build_by_branch(scope, limit: nil).map { |r| { branch: r[:branch_code], province: r[:province], amount: r[:total_amount], count: r[:transaction_count], accounts: r[:unique_accounts] } }
 
           by_account = scope.group(:acct_num)
                             .select('acct_num, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
                             .order('SUM(tran_amt) DESC').limit(15)
                             .map { |r| { acct_num: r.acct_num, amount: r.amount.to_f, count: r.count.to_i } }
 
-          daily_trend = scope.group(:tran_date)
-                             .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
-                             .order(:tran_date)
-                             .map { |r| { date: r.date.to_s, amount: r.amount.to_f, count: r.count.to_i } }
+          daily_trend = build_daily_trend(scope)
 
           monthly_trend = scope.group(:year_month)
                                .select("year_month AS month, SUM(tran_amt) AS amount, SUM(tran_count) AS count, SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END) AS credit, SUM(CASE WHEN part_tran_type='DR' THEN tran_amt ELSE 0 END) AS debit")
@@ -459,8 +403,6 @@ module Api
       end
 
       def demographics
-        # Join chain: tran_summary -> accounts -> customers (date_of_birth)
-        # No gender column exists in production — age groups derived from customers.date_of_birth
         data = Rails.cache.fetch('dashboard_demographics', expires_in: 30.minutes) do
           sql = <<~SQL
             SELECT
@@ -472,15 +414,15 @@ module Api
                 WHEN EXTRACT(YEAR FROM AGE(c.date_of_birth)) BETWEEN 55 AND 64 THEN '55-64'
                 ELSE '65+'
               END AS age_group,
-              COUNT(DISTINCT c.customer_id)                                                        AS customers,
-              COUNT(DISTINCT a.account_id)                                                         AS accounts,
-              SUM(ts.tran_amt)                                                                      AS total_amount,
-              SUM(ts.tran_count)                                                                    AS transaction_count,
-              SUM(CASE WHEN ts.part_tran_type = 'CR' THEN ts.tran_amt ELSE 0 END)                  AS credit_amount,
-              SUM(CASE WHEN ts.part_tran_type = 'DR' THEN ts.tran_amt ELSE 0 END)                  AS debit_amount
+              COUNT(DISTINCT c.id)                                                              AS customers,
+              COUNT(DISTINCT a.account_id)                                                      AS accounts,
+              SUM(ts.tran_amt)                                                                   AS total_amount,
+              SUM(ts.tran_count)                                                                 AS transaction_count,
+              SUM(CASE WHEN ts.part_tran_type = 'CR' THEN ts.tran_amt ELSE 0 END)               AS credit_amount,
+              SUM(CASE WHEN ts.part_tran_type = 'DR' THEN ts.tran_amt ELSE 0 END)               AS debit_amount
             FROM tran_summary ts
             JOIN accounts a  ON a.account_number = ts.acct_num
-            JOIN customers c ON c.customer_id    = a.customer_id
+            JOIN customers c ON c.id = a.customer_id
             WHERE c.date_of_birth IS NOT NULL
             GROUP BY 1
             ORDER BY 1
@@ -499,9 +441,7 @@ module Api
             }
           end
 
-          total_customers = age_groups.sum { |r| r[:customers] }
-
-          { age_groups: age_groups, total_customers: total_customers }
+          { age_groups: age_groups, total_customers: age_groups.sum { |r| r[:customers] } }
         end
 
         render json: data
@@ -590,15 +530,47 @@ module Api
         (numerator.to_f / denominator.to_f).round(2)
       end
 
+      # ── Shared query builders (eliminate duplication across actions) ──────────
+
+      def build_by_branch(scope, limit: 20)
+        scope.group(:gam_branch, :gam_province)
+             .select('gam_branch AS branch_code, gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT acct_num) AS unique_accounts, AVG(tran_amt) AS avg_transaction')
+             .order('SUM(tran_amt) DESC')
+             .then { |q| limit ? q.limit(limit) : q }
+             .map { |r| row_to_h(r, :branch_code, :province, :total_amount, :transaction_count, :unique_accounts, :avg_transaction) }
+      end
+
+      def build_by_province(scope)
+        scope.group(:gam_province)
+             .select('gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT gam_branch) AS branch_count, COUNT(DISTINCT acct_num) AS unique_accounts')
+             .order('SUM(tran_amt) DESC')
+             .map { |r| row_to_h(r, :province, :total_amount, :transaction_count, :branch_count, :unique_accounts).merge(avg_per_branch: safe_divide(r.total_amount, r.branch_count)) }
+      end
+
+      def build_by_channel(scope)
+        scope.where.not(tran_source: nil)
+             .group(:tran_source)
+             .select('tran_source AS channel, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count')
+             .order('SUM(tran_amt) DESC')
+             .map { |r| row_to_h(r, :channel, :total_amount, :transaction_count) }
+      end
+
+      def build_daily_trend(scope)
+        scope.group(:tran_date)
+             .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
+             .order(:tran_date)
+             .map { |r| row_to_h(r, :date, :amount, :count) }
+      end
+
       # Lookup personal info from customers table via:
       # tran_summary.cif_id → accounts.account_number = tran_summary.acct_num → customers.customer_id
       def fetch_personal_info(cif_id)
         result = ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'PersonalInfo', [cif_id]).first
-          SELECT c.customer_id, c.first_name, c.last_name, c.email,
-                 c.phone_number, c.address, c.date_of_birth, c.account_status,
+          SELECT c.customer_id AS cif_id, c.first_name, c.last_name, c.email,
+                 c.phone_number, c.address, c.date_of_birth, c.status AS account_status,
                  EXTRACT(YEAR FROM AGE(c.date_of_birth))::integer AS age
           FROM customers c
-          JOIN accounts a ON a.customer_id = c.customer_id
+          JOIN accounts a ON a.customer_id = c.id
           JOIN tran_summary ts ON ts.acct_num = a.account_number
           WHERE ts.cif_id = $1
           LIMIT 1
@@ -608,7 +580,7 @@ module Api
 
         dob = result['date_of_birth']
         {
-          customer_id:    result['customer_id'],
+          customer_id:    result['cif_id'],
           first_name:     result['first_name'].presence,
           last_name:      result['last_name'].presence,
           full_name:      [result['first_name'], result['last_name']].compact.join(' ').presence,

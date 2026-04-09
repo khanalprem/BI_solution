@@ -7,9 +7,42 @@ description: Full-stack implementation guide for BankBI (Rails 7 API + Next.js 1
 
 Use this skill when making changes that span backend API, frontend, and database.
 
-## Environment
+## User Roles & Access Control (RBAC)
 
-- Backend `.env`: `DB_HOST=10.1.1.161`, `DB_NAME=nifi`, `DB_USERNAME=postgres`
+### Roles (stored in `users.role`)
+
+| Role | Level | Access |
+|------|-------|--------|
+| `superadmin` | 5 | Everything including user management |
+| `admin` | 4 | All dashboards + user management, no system config |
+| `manager` | 3 | All dashboards + customer PII |
+| `analyst` | 2 | Dashboards, KPI, pivot — no customer PII |
+| `branch_staff` | 1 | Own branch only — scoped via `user_branch_cluster` |
+| `auditor` | 0 | Read-only financial/risk — no PII |
+
+### Branch Scoping (production table)
+`branch_staff` users are scoped via the production `user_branch_cluster` table:
+- `user_id` matches `user_master.user_id` (pattern: `"user {rails_user_id}"`)
+- `sol_id` → allowed branch SOL IDs
+- `cluster_id` → allowed cluster
+- `access_level` = `'I'` (Inquiry/read-only)
+
+```ruby
+# In ApplicationController — auto-applied for branch_staff
+def scoped_branch_filter(filters)
+  return filters unless current_user&.branch_scoped?
+  allowed = current_user.allowed_branch_names  # from user_branch_cluster
+  filters.merge(branch: allowed)
+end
+```
+
+### Frontend auth helpers (`frontend/lib/auth.ts`)
+```typescript
+import { can, getStoredUser } from '@/lib/auth';
+const user = getStoredUser();
+if (can(user, 'customers')) { /* show customer data */ }
+if (user?.can_see_pii) { /* show PII fields */ }
+```
 - Frontend `.env.local`: `NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1`
 - Rails runs locally on port 3001, connects directly to production `nifi` DB at 10.1.1.161:5432
 - No separate deployed API — run `bundle exec rails s -p 3001` in `backend/`
@@ -122,15 +155,50 @@ GET /api/v1/filters/statistics  → date_range{min,max}, amount_range, counts
 ## Adding a New Endpoint
 
 1. Add route in `config/routes.rb`
-2. Add method in `dashboards_controller.rb` or `filters_controller.rb`
-3. Use `DynamicDashboardService` or direct `TranSummary` queries
-4. Add TypeScript type in `frontend/types/index.ts`
-5. Add React Query hook in `frontend/lib/hooks/useDashboardData.ts`
+2. Add method in `dashboards_controller.rb` — use shared helpers:
+   - `build_by_branch(scope, limit:)` — branch grouping
+   - `build_by_province(scope)` — province grouping
+   - `build_by_channel(scope)` — channel grouping
+   - `build_daily_trend(scope)` — date trend
+   - `build_summary(scope)` — CR/DR/net summary
+3. Add TypeScript type in `frontend/types/index.ts`
+4. Add one-liner hook in `frontend/lib/hooks/useDashboardData.ts` using the factory:
+   ```typescript
+   export const useMyData = (f: DashboardFilters) =>
+     useDashboardQuery<MyType>('my-key', 'my_endpoint', f);
+   ```
+5. Use `useDashboardPage()` hook in the page component — eliminates ~40 lines of boilerplate:
+   ```typescript
+   const { filters, setFilters, filtersOpen, handleClearFilters, topBarProps } = useDashboardPage();
+   ```
 6. Use hook in page component
 
-## Caching
+## Frontend Architecture
 
-- Dashboard responses: `Rails.cache.fetch(key, expires_in: 15.minutes)`
-- Filter values: 1 hour
-- Filter statistics: 30 minutes
-- Clear cache: `bundle exec rails runner "Rails.cache.clear"`
+### Shared Hooks (eliminate boilerplate)
+
+```typescript
+// useDashboardPage — use in every dashboard page instead of 40 lines of state/effect boilerplate
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
+
+export default function MyPage() {
+  const { filters, setFilters, filtersOpen, handleClearFilters, topBarProps } = useDashboardPage();
+  const { data } = useMyHook(filters);
+  return <TopBar title="My Page" {...topBarProps} />;
+}
+
+// useDashboardQuery factory — use for new dashboard hooks
+export const useMyData = (f: DashboardFilters) =>
+  useDashboardQuery<MyType>('my-key', 'my_endpoint', f);
+```
+
+### Backend Shared Query Builders
+
+```ruby
+# In DashboardsController private section — use these instead of inline queries:
+build_by_branch(scope, limit: 20)   # → [{branch_code, province, total_amount, ...}]
+build_by_province(scope)             # → [{province, total_amount, branch_count, avg_per_branch, ...}]
+build_by_channel(scope)              # → [{channel, total_amount, transaction_count}]
+build_daily_trend(scope)             # → [{date, amount, count}]
+build_summary(scope)                 # → {total_amount, credit_amount, debit_amount, net_flow, ...}
+```

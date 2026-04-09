@@ -1,43 +1,26 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { Pill } from '@/components/ui/Pill';
-import { useRiskSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
+import { useRiskSummary } from '@/lib/hooks/useDashboardData';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
+import { formatNPR, formatPercent } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
-
 export default function RiskDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const {
+    filters, setFilters, filtersOpen, setFiltersOpen,
+    filterStats, handleClearFilters, topBarProps,
+  } = useDashboardPage();
 
   const { data, isLoading } = useRiskSummary(filters);
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
-  const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min), [filterStats?.date_range?.min]);
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate && prev.endDate === dateRange.endDate ? prev : { ...prev, ...dateRange }
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') { setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate })); return; }
-    setFilters(getDateRange(period, referenceDate, minReferenceDate || undefined));
-  };
 
   const byGl = data?.by_gl ?? [];
   const byProvince = data?.by_province ?? [];
@@ -153,7 +136,7 @@ export default function RiskDashboard() {
   if (isLoading) {
     return (
       <>
-        <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
+        <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" {...topBarProps} />
         <StandardDashboardSkeleton />
       </>
     );
@@ -161,18 +144,7 @@ export default function RiskDashboard() {
 
   return (
     <>
-      <TopBar
-        title="Risk & Exposure"
-        subtitle="Transaction risk analysis"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
-      />
+      <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" {...topBarProps} />
       <div className="flex flex-col gap-4 p-6">
         <AdvancedFilters
           filters={filters}

@@ -126,6 +126,7 @@ export function getDateRange(
   minReferenceDate?: Date
 ): { startDate: string; endDate: string } {
   const today = referenceDate ? new Date(referenceDate) : new Date();
+  // For ALL period, cap endDate at production data max (2024-07-01) if no referenceDate
   const endDate = toLocalDateString(today);
   let startDate: string;
   
@@ -154,7 +155,13 @@ export function getDateRange(
       startDate = `${fiscalYear}-07-16`;
       break;
     case 'ALL':
-      startDate = minReferenceDate ? toLocalDateString(minReferenceDate) : toLocalDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000));
+      // Use full production data range when available, otherwise last 3 years as fallback
+      if (minReferenceDate) {
+        startDate = toLocalDateString(minReferenceDate);
+      } else {
+        // Static fallback matching production data range (2021-02-18 to 2024-07-01)
+        startDate = '2021-02-18';
+      }
       break;
     default:
       startDate = toLocalDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));

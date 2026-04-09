@@ -19,7 +19,7 @@ const QUARTER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '
 export default function KPIDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
 
   const { data, isLoading } = useKpiSummary(filters);
   const { data: filterStats } = useFilterStatistics();

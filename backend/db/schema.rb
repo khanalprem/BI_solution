@@ -10,9 +10,20 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_04_10_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "accounts", id: false, force: :cascade do |t|
+    t.integer "account_id"
+    t.integer "customer_id"
+    t.string "account_type", limit: 50
+    t.string "account_number", limit: 20
+    t.decimal "balance", precision: 15, scale: 2
+    t.string "currency", limit: 10
+    t.string "account_status", limit: 20
+    t.datetime "created_at", precision: nil
+  end
 
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
@@ -49,6 +60,18 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "branch", primary_key: "sol_id", id: :integer, default: nil, force: :cascade do |t|
+    t.string "branch_name", limit: 100, null: false
+    t.string "province", limit: 20
+    t.integer "cluster_id"
+  end
+
+  create_table "branch_cdc", primary_key: "sol_id", id: :integer, default: nil, force: :cascade do |t|
+    t.string "branch_name", limit: 100, null: false
+    t.string "province", limit: 20
+    t.integer "cluster_id"
+  end
+
   create_table "branches", force: :cascade do |t|
     t.string "branch_code"
     t.string "name"
@@ -74,6 +97,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.index ["name"], name: "index_categories_on_name", unique: true
   end
 
+  create_table "cluster", id: false, force: :cascade do |t|
+    t.string "cluster_name", limit: 10, null: false
+    t.integer "cluster_id"
+  end
+
   create_table "customers", force: :cascade do |t|
     t.string "customer_id"
     t.string "full_name"
@@ -83,6 +111,30 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["customer_id"], name: "index_customers_on_customer_id", unique: true
+  end
+
+  create_table "data_dictionary", primary_key: "item_id", id: :serial, force: :cascade do |t|
+    t.integer "related_itemid"
+    t.string "item_name", limit: 100
+    t.string "item_type", limit: 20
+    t.string "sql", limit: 500
+    t.string "procedure", limit: 200
+    t.integer "parameter_ordinal"
+  end
+
+  create_table "dates", id: false, force: :cascade do |t|
+    t.date "date"
+    t.integer "year"
+    t.string "quarter", limit: 2
+    t.string "month", limit: 2
+    t.string "year_quarter", limit: 7
+    t.string "year_month", limit: 7
+    t.date "month_startdate"
+    t.date "month_enddate"
+    t.date "quarter_startdate"
+    t.date "quarter_enddate"
+    t.date "year_startdate"
+    t.date "year_enddate"
   end
 
   create_table "disclaimers", force: :cascade do |t|
@@ -119,6 +171,104 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "gam", primary_key: "acid", id: { type: :string, limit: 100 }, force: :cascade do |t|
+    t.string "entity_cre_flg", limit: 100
+    t.integer "sol_id"
+    t.string "acct_prefix", limit: 100
+    t.string "acct_num", limit: 100
+    t.string "bacid", limit: 100
+    t.string "foracid", limit: 100
+    t.string "acct_name", limit: 100
+    t.string "acct_short_name", limit: 100
+    t.string "emp_id", limit: 100
+    t.string "gl_sub_head_code", limit: 100
+    t.string "acct_ownership", limit: 100
+    t.string "schm_code", limit: 100
+    t.string "dr_bal_lim", limit: 100
+    t.string "acct_rpt_code", limit: 100
+    t.string "frez_code", limit: 100
+    t.string "frez_reason_code", limit: 100
+    t.string "acct_opn_date", limit: 100
+    t.string "acct_cls_flg", limit: 100
+    t.string "acct_cls_date", limit: 100
+    t.string "clr_bal_amt", limit: 100
+    t.string "un_clr_bal_amt", limit: 100
+    t.string "drwng_power", limit: 100
+    t.string "sanct_lim", limit: 100
+    t.string "adhoc_lim", limit: 100
+    t.string "system_reserved_amt", limit: 100
+    t.string "single_tran_lim", limit: 100
+    t.string "clean_single_tran_lim", limit: 100
+    t.string "system_gen_lim", limit: 100
+    t.string "chq_alwd_flg", limit: 100
+    t.string "cum_dr_amt", limit: 100
+    t.string "cum_cr_amt", limit: 100
+    t.string "acrd_cr_amt", limit: 100
+    t.string "last_tran_date", limit: 100
+    t.string "mode_of_oper_code", limit: 100
+    t.string "pb_ps_code", limit: 100
+    t.string "serv_chrg_coll_flg", limit: 100
+    t.string "free_text", limit: 100
+    t.string "acct_locn_code", limit: 100
+    t.string "int_paid_flg", limit: 100
+    t.string "int_coll_flg", limit: 100
+    t.string "lchg_user_id", limit: 100
+    t.datetime "lchg_time", precision: nil
+    t.string "rcre_user_id", limit: 100
+    t.string "rcre_time", limit: 100
+    t.string "limit_b2kid", limit: 100
+    t.string "drwng_power_ind", limit: 100
+    t.string "drwng_power_pcnt", limit: 100
+    t.string "micr_chq_chrg_coll_flg", limit: 100
+    t.string "last_turnover_date", limit: 100
+    t.string "fd_ref_num", limit: 100
+    t.string "fx_cum_cr_amt", limit: 100
+    t.string "crncy_code", limit: 100
+    t.string "source_of_fund", limit: 100
+    t.string "acct_crncy_code", limit: 100
+    t.string "lien_amt", limit: 100
+    t.string "acct_classification_flg", limit: 100
+    t.string "system_only_acct_flg", limit: 100
+    t.string "single_tran_flg", limit: 100
+    t.string "utilised_amt", limit: 100
+    t.string "acct_mgr_user_id", limit: 100
+    t.string "schm_type", limit: 100
+    t.string "last_frez_date", limit: 100
+    t.string "last_unfrez_date", limit: 100
+    t.string "bal_on_frez_date", limit: 100
+    t.string "chrg_level_code", limit: 100
+    t.string "acct_cls_chrg_pend_verf", limit: 100
+    t.string "partitioned_flg", limit: 100
+    t.string "partitioned_type", limit: 100
+    t.string "wtax_flg", limit: 100
+    t.string "wtax_amount_scope_flg", limit: 100
+    t.string "int_adj_for_deduction_flg", limit: 100
+    t.string "operative_acid", limit: 100
+    t.string "phone_num", limit: 100
+    t.string "native_lang_name", limit: 100
+    t.string "nat_lang_title_code", limit: 100
+    t.string "pool_id", limit: 100
+    t.string "allow_sweeps", limit: 100
+    t.string "wtax_pcnt", limit: 100
+    t.string "product_group", limit: 100
+    t.string "wtax_level_flg", limit: 100
+    t.string "last_modified_date", limit: 100
+    t.string "cif_id", limit: 50
+    t.string "master_b2k_id", limit: 100
+    t.string "bank_id", limit: 100
+    t.string "last_tran_date_cr", limit: 100
+    t.string "last_tran_date_dr", limit: 100
+    t.string "last_tran_id_cr", limit: 100
+    t.string "last_tran_id_dr", limit: 100
+    t.string "dr_int_method", limit: 100
+    t.string "cons_bal_flg", limit: 100
+    t.string "schm_sub_type", limit: 100
+    t.string "report_date", limit: 100
+    t.string "report_clr_bal_amt", limit: 100
+    t.string "cust_id", limit: 100
+    t.decimal "eod_balance", precision: 18, scale: 2
+  end
+
   create_table "get_starteds", force: :cascade do |t|
     t.string "title"
     t.text "description"
@@ -129,6 +279,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "gsh", id: false, force: :cascade do |t|
+    t.string "gl_sub_head_code", limit: 50
+    t.string "gl_sub_head_desc", limit: 100
+    t.string "gl_code", limit: 50
+  end
+
   create_table "hero_sections", force: :cascade do |t|
     t.string "title"
     t.text "subtitle"
@@ -137,6 +293,38 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.boolean "is_active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "htd", primary_key: "tran_id", id: :bigint, default: nil, force: :cascade do |t|
+    t.datetime "tran_date", precision: nil
+    t.string "part_tran_srl_num", limit: 50
+    t.string "del_flg", limit: 5
+    t.string "tran_type", limit: 5
+    t.string "part_tran_type", limit: 5
+    t.string "gl_sub_head_code", limit: 50
+    t.string "acid", limit: 50
+    t.string "value_date", limit: 50
+    t.decimal "tran_amt"
+    t.string "tran_particular", limit: 500
+    t.integer "entry_user_id"
+    t.string "pstd_user_id", limit: 50
+    t.integer "vfd_user_id"
+    t.string "rate_code", limit: 50
+    t.string "tran_crncy_code", limit: 50
+    t.string "ref_crncy_code", limit: 50
+    t.string "ref_amt", limit: 50
+    t.integer "sol_id"
+    t.string "trea_rate", limit: 50
+    t.string "dth_init_sol_id", limit: 50
+    t.string "tran_sub_type", limit: 50
+    t.datetime "entry_date", precision: nil
+    t.datetime "pstd_date", precision: nil
+    t.datetime "vfd_date", precision: nil
+    t.string "ref_num", limit: 50
+    t.string "tran_rmks", limit: 500
+    t.string "tran_particular_2", limit: 500
+    t.string "tran_particular_code", limit: 50
+    t.datetime "lchg_time", precision: nil
   end
 
   create_table "instrument_feeds", force: :cascade do |t|
@@ -195,6 +383,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.boolean "is_active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "merchant", id: false, force: :cascade do |t|
+    t.string "merchant", limit: 100
   end
 
   create_table "nepse_eod_bars", force: :cascade do |t|
@@ -327,6 +519,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "product", id: false, force: :cascade do |t|
+    t.string "product", limit: 100
+  end
+
   create_table "profiles", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "phone"
@@ -334,6 +530,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
     t.text "address"
     t.index ["user_id"], name: "index_profiles_on_user_id"
+  end
+
+  create_table "province", id: false, force: :cascade do |t|
+    t.string "name", limit: 20
   end
 
   create_table "saved_charts", force: :cascade do |t|
@@ -350,6 +550,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.datetime "updated_at", null: false
     t.index ["user_id", "name"], name: "index_saved_charts_on_user_id_and_name", unique: true
     t.index ["user_id"], name: "index_saved_charts_on_user_id"
+  end
+
+  create_table "service", id: false, force: :cascade do |t|
+    t.string "service", limit: 100
   end
 
   create_table "sub_instruments", force: :cascade do |t|
@@ -458,6 +662,32 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.index ["tran_type"], name: "index_tran_summary_on_tran_type"
   end
 
+  create_table "transactions", id: false, force: :cascade do |t|
+    t.integer "transaction_id"
+    t.integer "account_id"
+    t.string "transaction_type", limit: 50
+    t.decimal "amount", precision: 15, scale: 2
+    t.datetime "transaction_date", precision: nil
+    t.string "description", limit: 255
+    t.string "merchant", limit: 100
+    t.string "service", limit: 100
+    t.string "product", limit: 100
+    t.string "status", limit: 20
+    t.integer "trace_id"
+  end
+
+  create_table "user_branch_cluster", id: false, force: :cascade do |t|
+    t.integer "user_id"
+    t.integer "sol_id"
+    t.integer "cluster_id"
+    t.string "access_level", limit: 5
+  end
+
+  create_table "user_master", id: false, force: :cascade do |t|
+    t.integer "user_id"
+    t.string "user_name", limit: 50, null: false
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email"
     t.string "password_digest"
@@ -474,9 +704,13 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_06_000001) do
     t.string "uid"
     t.string "avatar_url"
     t.boolean "has_chart_access", default: false
+    t.string "role", default: "analyst", null: false
+    t.text "assigned_branches", default: [], array: true
+    t.text "assigned_provinces", default: [], array: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token"
+    t.index ["role"], name: "index_users_on_role"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

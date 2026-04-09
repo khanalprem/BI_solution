@@ -247,16 +247,9 @@ export default function CustomerDetailPage() {
       />
 
       <div className="p-6 flex flex-col gap-4">
-          <AdvancedFilters
-            filters={filters}
-            onChange={setFilters}
-            onClear={handleClearFilters}
-            advancedOpen={filtersOpen}
-            onAdvancedOpenChange={setFiltersOpen}
-          />
           <div className="flex items-center justify-between">
             <Link href="/dashboard/customer" className="text-xs text-accent-blue hover:underline">
-              ← Back to Customer & Portfolio
+              ← Back to Customer &amp; Portfolio
             </Link>
             <div className="flex items-center gap-2">
               <Pill variant="blue">{customerSegment}</Pill>
@@ -265,6 +258,14 @@ export default function CustomerDetailPage() {
               </Pill>
             </div>
           </div>
+          <AdvancedFilters
+            filters={filters}
+            onChange={setFilters}
+            onClear={handleClearFilters}
+            advancedOpen={filtersOpen}
+            onAdvancedOpenChange={setFiltersOpen}
+            hideStats
+          />
 
           {/* ── Personal Info Card ── */}
           <div className="rounded-xl border border-border bg-bg-card p-4">
@@ -278,9 +279,7 @@ export default function CustomerDetailPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-[15px] font-bold text-text-primary">
-                    {profile?.first_name && profile?.last_name
-                      ? `${profile.first_name} ${profile.last_name}`
-                      : customerName}
+                    {[profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || customerName}
                   </h2>
                   <Pill variant="blue">{customerSegment}</Pill>
                   <Pill variant={riskTier === 1 ? 'green' : riskTier === 2 ? 'amber' : 'red'}>
@@ -297,9 +296,11 @@ export default function CustomerDetailPage() {
                   {[
                     { label: 'CIF ID',        value: profile?.cif_id },
                     { label: 'Customer ID',   value: profile?.customer_id },
-                    { label: 'Email',         value: profile?.email },
+                    { label: 'Email',         value: profile?.email || '—' },
                     { label: 'Phone',         value: profile?.phone_number || '—' },
-                    { label: 'Date of Birth', value: profile?.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString('en-NP', { year: 'numeric', month: 'short', day: 'numeric' }) : '—' },
+                    { label: 'Date of Birth', value: profile?.date_of_birth
+                        ? new Date(profile.date_of_birth).toLocaleDateString('en-NP', { year: 'numeric', month: 'short', day: 'numeric' })
+                        : '—' },
                     { label: 'Age',           value: profile?.age ? `${profile.age} years` : '—' },
                     { label: 'Address',       value: profile?.address || '—' },
                     { label: 'Accounts',      value: accounts.length },

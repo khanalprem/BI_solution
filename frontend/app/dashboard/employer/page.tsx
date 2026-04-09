@@ -18,7 +18,7 @@ type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CU
 export default function EmployerDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
 
   const { data, isLoading } = useEmployerSummary(filters);
   const { data: filterStats } = useFilterStatistics();

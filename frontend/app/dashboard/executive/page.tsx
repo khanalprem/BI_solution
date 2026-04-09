@@ -250,7 +250,7 @@ function SparkCard({
 
 export default function ExecutiveDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
+  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -428,6 +428,8 @@ export default function ExecutiveDashboard() {
 
   useEffect(() => {
     if (period === 'CUSTOM') return;
+    // Only sync when filterStats has loaded — don't overwrite with today's date
+    if (!filterStats?.date_range?.max) return;
     const dr = getDateRange(period, referenceDate, minReferenceDate);
     setFilters(prev => prev.startDate === dr.startDate && prev.endDate === dr.endDate ? prev : { ...prev, ...dr });
   }, [period, referenceDate, minReferenceDate]);

@@ -1,6 +1,12 @@
 module Api
   module V1
-    class BaseController < ActionController::API
+    class BaseController < ApplicationController
+      # Dashboard, filter, and production endpoints use optional auth.
+      # Token is validated if present; missing token is allowed for now.
+      # UsersController overrides this with require_admin!
+      skip_before_action :authenticate_user!
+      before_action :authenticate_user_optional!
+
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
       rescue_from StandardError, with: :internal_error
