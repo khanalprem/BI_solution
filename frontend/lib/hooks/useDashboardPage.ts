@@ -5,7 +5,7 @@ import { getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import { useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import type { DashboardFilters } from '@/types';
 
-export type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
+export type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'PYTD' | 'FY' | 'CUSTOM';
 
 interface UseDashboardPageOptions {
   extraFilters?: Partial<DashboardFilters>;
@@ -21,8 +21,6 @@ export function useDashboardPage(options: UseDashboardPageOptions = {}) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Default to production data range until filterStats loads
   const [filters, setFilters] = useState<DashboardFilters>({
-    startDate: '2021-02-18',
-    endDate: '2024-07-01',
     ...options.extraFilters,
   });
 

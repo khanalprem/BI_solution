@@ -180,7 +180,6 @@ export function AdvancedFilters({
       { key: 'tranSource', label: 'Channel' },
       { key: 'partTranType', label: 'Part Type' },
       { key: 'cluster', label: 'Cluster' },
-      { key: 'solid', label: 'SOL ID' },
       { key: 'schemeType', label: 'Scheme Type' },
       { key: 'tranType', label: 'Transaction Type' },
       { key: 'product', label: 'Product' },
@@ -373,10 +372,6 @@ export function AdvancedFilters({
             <div>
               <FilterLabel>Cluster</FilterLabel>
               <SearchableMultiSelect value={asArray(draft.cluster)} onChange={(v) => setDraftMulti('cluster', v)} options={clusterOptions} placeholder="All clusters" />
-            </div>
-            <div>
-              <FilterLabel>SOL ID</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.solid)} onChange={(v) => setDraftMulti('solid', v)} options={solidOptions} placeholder="All branch SOL IDs" />
             </div>
             <div>
               <FilterLabel>Scheme Type</FilterLabel>

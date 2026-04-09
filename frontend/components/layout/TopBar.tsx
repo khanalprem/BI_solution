@@ -5,7 +5,7 @@ import { Filter, MoonStar, SunMedium, Download } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 
-const BASE_PERIOD_OPTIONS = ['ALL', '1D', 'WTD', 'MTD', 'QTD', 'YTD', 'FY'] as const;
+const BASE_PERIOD_OPTIONS = ['ALL', '1D', 'WTD', 'MTD', 'QTD', 'YTD', 'PYTD', 'FY'] as const;
 type PeriodOption = (typeof BASE_PERIOD_OPTIONS)[number] | 'CUSTOM';
 
 interface TopBarProps {

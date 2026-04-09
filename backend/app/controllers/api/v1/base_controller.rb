@@ -89,7 +89,21 @@ module Api
           min_amount: parse_decimal(param_value(:min_amount, :minAmount)),
           max_amount: parse_decimal(param_value(:max_amount, :maxAmount)),
           acct_num: param_value(:acct_num, :acctNum),
-          cif_id: param_value(:cif_id, :cifId)
+          cif_id: param_value(:cif_id, :cifId),
+          # Date dimension exact-match filters (pivot explorer)
+          tran_date:         parse_multi_value_param(param_value(:tran_date, :tranDate)),
+          year_month:        parse_multi_value_param(param_value(:year_month, :yearMonth)),
+          year_quarter:      parse_multi_value_param(param_value(:year_quarter, :yearQuarter)),
+          year:              parse_multi_value_param(param_value(:year)),
+          # Date dimension range filters
+          tran_date_from:    param_value(:tran_date_from, :tranDateFrom),
+          tran_date_to:      param_value(:tran_date_to, :tranDateTo),
+          year_month_from:   param_value(:year_month_from, :yearMonthFrom),
+          year_month_to:     param_value(:year_month_to, :yearMonthTo),
+          year_quarter_from: param_value(:year_quarter_from, :yearQuarterFrom),
+          year_quarter_to:   param_value(:year_quarter_to, :yearQuarterTo),
+          year_from:         param_value(:year_from, :yearFrom),
+          year_to:           param_value(:year_to, :yearTo)
         }.compact
       end
     end

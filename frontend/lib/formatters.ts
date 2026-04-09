@@ -149,6 +149,15 @@ export function getDateRange(
     case 'YTD':
       startDate = toLocalDateString(new Date(today.getFullYear(), 0, 1));
       break;
+    case 'PYTD': {
+      // Previous Year-to-Date: Jan 1 of last year → same day-of-year last year
+      const prevYear = today.getFullYear() - 1;
+      startDate = toLocalDateString(new Date(prevYear, 0, 1));
+      return {
+        startDate,
+        endDate: toLocalDateString(new Date(prevYear, today.getMonth(), today.getDate())),
+      };
+    }
     case 'FY':
       // Nepal fiscal year: Mid-July to Mid-July
       const fiscalYear = today.getMonth() >= 6 ? today.getFullYear() : today.getFullYear() - 1;
@@ -159,8 +168,7 @@ export function getDateRange(
       if (minReferenceDate) {
         startDate = toLocalDateString(minReferenceDate);
       } else {
-        // Static fallback matching production data range (2021-02-18 to 2024-07-01)
-        startDate = '2021-02-18';
+        startDate = '';
       }
       break;
     default:

@@ -23,6 +23,20 @@ export interface DashboardFilters {
   maxAmount?: number;
   acctNum?: string;
   cifId?: string;
+  // Date dimension exact-match filters (pivot explorer)
+  tranDate?: MultiValueFilter;    // specific YYYY-MM-DD date(s) on tran_date column
+  yearMonth?: MultiValueFilter;   // e.g., ['2024-01', '2024-02']
+  yearQuarter?: MultiValueFilter; // e.g., ['2024-Q1', '2024-Q2']
+  year?: MultiValueFilter;        // e.g., ['2024', '2023']
+  // Date dimension range filters (pivot explorer — from/to)
+  tranDateFrom?: string;
+  tranDateTo?: string;
+  yearMonthFrom?: string;
+  yearMonthTo?: string;
+  yearQuarterFrom?: string;
+  yearQuarterTo?: string;
+  yearFrom?: string;
+  yearTo?: string;
 }
 
 export interface DashboardSummary {
@@ -241,6 +255,19 @@ export interface ProductionOption {
   label: string;
 }
 
+export interface ProductionPeriodComparisonOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+export interface ProductionTimeComparisonFieldOption {
+  value: string;
+  label: string;
+  period: string;
+  metric: string;
+}
+
 export interface ProductionTableSummary {
   table_name: string;
   label: string;
@@ -262,6 +289,8 @@ export interface ProductionCatalogResponse {
   lookup_types: string[];
   dimension_options: ProductionOption[];
   measure_options: ProductionOption[];
+  period_comparison_options: ProductionPeriodComparisonOption[];
+  time_comparison_field_options: ProductionTimeComparisonFieldOption[];
 }
 
 export interface ProductionColumn {
@@ -282,8 +311,9 @@ export interface ProductionTableDetailResponse {
 }
 
 export interface ProductionExplorerResponse {
-  dimension: string;
+  dimensions: string[];
   measures: string[];
+  time_comparisons: string[];
   columns: string[];
   rows: Array<Record<string, string | number | boolean | null>>;
   total_rows: number;
@@ -294,5 +324,6 @@ export interface ProductionExplorerResponse {
     where_clause: string;
     groupby_clause: string;
     orderby_clause: string;
+    period_wheres: Record<string, string>;
   };
 }

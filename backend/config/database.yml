@@ -22,7 +22,9 @@ default: &default
 
 development:
   <<: *default
-  # IMPORTANT: Use your existing database with tran_summary and eab tables
+  # IMPORTANT: This connects to the production nifi warehouse DB.
+  # NEVER run db:schema:load or db:migrate without checking migrations first.
+  # Rails-only tables (users, customers, accounts) live here alongside production tables.
   database: <%= ENV.fetch("DB_NAME") { "backend_development" } %>
 
 # Warning: The database defined as "test" will be erased and

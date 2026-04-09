@@ -58,6 +58,20 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['vfd_user',         serializeFilterValue(filters.vfdUser)],
     ['acct_num',         filters.acctNum],
     ['cif_id',           filters.cifId],
+    // Date dimension exact-match filters
+    ['tran_date',         serializeFilterValue(filters.tranDate)],
+    ['year_month',        serializeFilterValue(filters.yearMonth)],
+    ['year_quarter',      serializeFilterValue(filters.yearQuarter)],
+    ['year',              serializeFilterValue(filters.year)],
+    // Date dimension range filters
+    ['tran_date_from',    filters.tranDateFrom],
+    ['tran_date_to',      filters.tranDateTo],
+    ['year_month_from',   filters.yearMonthFrom],
+    ['year_month_to',     filters.yearMonthTo],
+    ['year_quarter_from', filters.yearQuarterFrom],
+    ['year_quarter_to',   filters.yearQuarterTo],
+    ['year_from',         filters.yearFrom],
+    ['year_to',           filters.yearTo],
   ];
   map.forEach(([key, val]) => { if (val) params[key] = val; });
   if (typeof filters.minAmount === 'number') params.min_amount = filters.minAmount;
@@ -197,14 +211,23 @@ export function useProductionTable(tableName: string, page = 1, pageSize = 25) {
 
 export function useProductionExplorer(
   filters: DashboardFilters,
-  dimension: string,
+  dimensions: string[],
   measures: string[],
+  timeComparisons: string[] = [],
   page = 1,
-  pageSize = 25,
+  pageSize = 10,
 ) {
   const params = useMemo(
-    () => ({ ...toApiFilters(filters), dimension, measures: measures.join(','), page, page_size: pageSize }),
-    [filters, dimension, measures, page, pageSize],
+    () => ({
+      ...toApiFilters(filters),
+      dimensions: dimensions.join(','),
+      measures: measures.join(','),
+      ...(timeComparisons.length > 0 ? { time_comparisons: timeComparisons.join(',') } : {}),
+      page,
+      page_size: pageSize,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, JSON.stringify(dimensions), JSON.stringify(measures), JSON.stringify(timeComparisons), page, pageSize],
   );
   return useQuery<ProductionExplorerResponse>({
     queryKey: ['production-explorer', params],
@@ -212,7 +235,8 @@ export function useProductionExplorer(
       const { data } = await apiClient.get<ProductionExplorerResponse>('/production/explorer', { params });
       return data;
     },
-    enabled: Boolean(dimension) && measures.length > 0,
+    enabled: dimensions.length > 0 && measures.length > 0,
     staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
