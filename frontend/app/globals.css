@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* BankBI Design System - Extracted from HTML */
+/* BankBI Design System */
 :root {
   --bg-base: #0d0f14;
   --bg-surface: #141720;
@@ -34,6 +34,8 @@
   --chart-tooltip-bg: rgba(26,30,46,0.95);
   --chart-tooltip-border: rgba(255,255,255,0.14);
   --chart-glow: 0 18px 40px rgba(0,0,0,0.30);
+  /* Noise texture as SVG data URI */
+  --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
 }
 
 [data-theme="light"] {
@@ -67,18 +69,33 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.5;
   min-height: 100vh;
+  /* Subtle noise grain for premium texture */
+  background-image: var(--noise);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display font utility (for logo/branding) */
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+/* Mono font for numeric values */
+.font-mono {
+  font-family: var(--font-mono), monospace;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -87,31 +104,51 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 2px;
+  border-radius: 99px;
 }
 
-/* Animations */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ===== Animations ===== */
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Live data pulse (green dot) */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50%       { opacity: 0.7; transform: scale(1.1); box-shadow: 0 0 0 4px rgba(16,185,129,0); }
+}
+
+.animate-live-pulse {
+  animation: livePulse 2.4s cubic-bezier(0.4,0,0.6,1) infinite;
+}
+
+/* Page enter animation for main content */
+.page-enter {
+  animation: pageEnter 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-fade-in {
-  animation: fadeInUp 0.3s ease both;
+  animation: fadeInUp 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-fade-in:nth-child(1) { animation-delay: 0.02s; }
-.animate-fade-in:nth-child(2) { animation-delay: 0.05s; }
-.animate-fade-in:nth-child(3) { animation-delay: 0.08s; }
-.animate-fade-in:nth-child(4) { animation-delay: 0.11s; }
-.animate-fade-in:nth-child(5) { animation-delay: 0.14s; }
-.animate-fade-in:nth-child(6) { animation-delay: 0.17s; }
+.animate-fade-in:nth-child(2) { animation-delay: 0.06s; }
+.animate-fade-in:nth-child(3) { animation-delay: 0.10s; }
+.animate-fade-in:nth-child(4) { animation-delay: 0.14s; }
+.animate-fade-in:nth-child(5) { animation-delay: 0.18s; }
+.animate-fade-in:nth-child(6) { animation-delay: 0.22s; }
+.animate-fade-in:nth-child(7) { animation-delay: 0.26s; }
+.animate-fade-in:nth-child(8) { animation-delay: 0.30s; }
 
 /* Recharts premium polish for all dashboard charts */
 .chart-surface .recharts-responsive-container {
@@ -334,6 +371,12 @@ main .recharts-wrapper .recharts-tooltip-item {
 @keyframes card-shimmer {
   0%   { transform: translateX(-120%) skewX(-15deg); }
   100% { transform: translateX(220%)  skewX(-15deg); }
+}
+
+/* ===== Skeleton loading shimmer ===== */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 /* ===== KPI value pop-in (triggered via key remount) ===== */

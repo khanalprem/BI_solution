@@ -11,6 +11,7 @@ import { useBranchPerformance, useFilterStatistics } from '@/lib/hooks/useDashbo
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart, PremiumScatterChart } from '@/components/ui/PremiumCharts';
+import { BranchDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 interface BranchData {
   branch_code: string;
@@ -251,7 +252,7 @@ export default function BranchDashboard() {
           onToggleFilters={() => setFiltersOpen((current) => !current)}
           filtersOpen={filtersOpen}
         />
-        <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
+        <BranchDashboardSkeleton />
       </>
     );
   }

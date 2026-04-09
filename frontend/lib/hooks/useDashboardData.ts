@@ -8,6 +8,7 @@ import type {
   DashboardFilters,
   DemographicsData,
   DigitalChannelsData,
+  EmployeeDetailData,
   EmployerSummaryData,
   ExecutiveDashboardData,
   FilterStatisticsResponse,
@@ -277,6 +278,24 @@ export function useEmployerSummary(filters: DashboardFilters) {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useEmployeeDetail(filters: DashboardFilters, userId: string) {
+  const params = useMemo(() => {
+    const base = toApiFilters(filters);
+    if (userId) base.entry_user = userId;
+    return base;
+  }, [filters, userId]);
+
+  return useQuery<EmployeeDetailData>({
+    queryKey: ['employee-detail', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<EmployeeDetailData>('/dashboards/employee_detail', { params });
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: Boolean(userId),
   });
 }
 

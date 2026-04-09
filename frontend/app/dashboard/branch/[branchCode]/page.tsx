@@ -12,6 +12,7 @@ import { Pill } from '@/components/ui/Pill';
 import { useProductionExplorer, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
+import { BranchDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
@@ -109,7 +110,7 @@ export default function BranchDetailPage() {
           onToggleFilters={() => setFiltersOpen((current) => !current)}
           filtersOpen={filtersOpen}
         />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <BranchDashboardSkeleton />
       </>
     );
   }

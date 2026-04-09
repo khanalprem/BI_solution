@@ -9,6 +9,8 @@ import { useKpiSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
+import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -42,11 +44,31 @@ export default function KPIDashboard() {
   const byProduct = data?.by_product ?? [];
   const byService = data?.by_service ?? [];
 
+  type QuarterRow = { period: string; amount: number; count: number; accounts: number };
+  const quarterColumns = useMemo<ColumnDef<QuarterRow>[]>(() => [
+    { accessorKey: 'period', header: 'Period', enableColumnFilter: true, cell: ({ row }) => <strong className="text-text-primary">{row.original.period}</strong> },
+    {
+      accessorKey: 'amount',
+      header: 'Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+    },
+    { accessorKey: 'count', header: 'Transactions', enableSorting: true, cell: ({ row }) => row.original.count.toLocaleString() },
+    { accessorKey: 'accounts', header: 'Accounts', enableSorting: true, cell: ({ row }) => row.original.accounts.toLocaleString() },
+    {
+      id: 'avg_txn',
+      header: 'Avg Txn',
+      enableSorting: false,
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
+    },
+  ], []);
+
   if (isLoading) {
     return (
       <>
         <TopBar title="KPI Summary" subtitle="Key performance indicators & metrics" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <StandardDashboardSkeleton />
       </>
     );
   }
@@ -163,36 +185,14 @@ export default function KPIDashboard() {
 
         {/* Quarterly detail table */}
         {byQuarter.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[13px] font-semibold">Quarterly Breakdown</div>
-              <div className="text-[11px] text-text-muted">Volume, transactions, and accounts per quarter</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Period</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Volume</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Transactions</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Accounts</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Avg Txn</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {byQuarter.map((q, idx) => (
-                    <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2.5 font-semibold">{q.period}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-text-primary">{formatNPR(q.amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{q.count.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{q.accounts.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{q.count > 0 ? formatNPR(q.amount / q.count) : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="Quarterly Breakdown"
+            subtitle="Volume, transactions, and accounts per quarter"
+            data={byQuarter as QuarterRow[]}
+            columns={quarterColumns}
+            pageSize={10}
+            enablePagination={false}
+          />
         )}
       </div>
     </>

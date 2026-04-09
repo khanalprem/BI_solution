@@ -191,6 +191,17 @@ export interface EmployerSummaryData {
   by_branch: { branch: string; province: string; users: number; amount: number; count: number }[];
 }
 
+export interface EmployeeDetailData {
+  user_id: string;
+  active_branches: number;
+  summary: DashboardSummary;
+  by_branch: { branch: string; province: string; amount: number; count: number; accounts: number }[];
+  by_account: { acct_num: string; amount: number; count: number }[];
+  daily_trend: { date: string; amount: number; count: number }[];
+  monthly_trend: { month: string; amount: number; count: number; credit: number; debit: number }[];
+  by_product: { product: string; amount: number; count: number }[];
+}
+
 export interface DemographicsData {
   age_groups: {
     age_group: string;
@@ -204,7 +215,7 @@ export interface DemographicsData {
   total_customers: number;
 }
 
-
+export interface FilterStatisticsResponse {
   date_range: {
     min: string | null;
     max: string | null;

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Filter, MoonStar, SunMedium } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Filter, MoonStar, SunMedium, Download } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 
@@ -51,13 +50,11 @@ export function TopBar({
       onPeriodChange(nextPeriod);
       return;
     }
-
     setInternalPeriod(nextPeriod);
   };
 
   useEffect(() => {
     setMounted(true);
-    // Load theme from localStorage on mount
     const savedTheme = localStorage.getItem('bankbi-theme') as 'dark' | 'light' | null;
     if (savedTheme) {
       setTheme(savedTheme);
@@ -71,102 +68,115 @@ export function TopBar({
     document.documentElement.dataset.theme = newTheme;
     localStorage.setItem('bankbi-theme', newTheme);
   };
-  
+
   return (
-    <header className="sticky top-0 z-[90] border-b border-border bg-bg-surface/95 px-5 py-2.5 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <span className="text-[13px] font-semibold">{title}</span>
-        {subtitle && (
-          <span className="text-text-muted font-normal text-[11px] ml-2">
-            › {subtitle}
-          </span>
-        )}
-      </div>
-      
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center rounded-lg border border-border bg-bg-input p-0.5">
-          {BASE_PERIOD_OPTIONS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => handlePeriodChange(p)}
-              aria-pressed={currentPeriod === p}
-              className={`
-                rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all
-                ${currentPeriod === p
-                    ? 'bg-accent-blue text-white shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
-                  }
-              `}
-            >
-              {p}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => handlePeriodChange('CUSTOM')}
-            aria-pressed={currentPeriod === 'CUSTOM'}
-            className={`
-              rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all
-              ${currentPeriod === 'CUSTOM'
-                  ? 'bg-accent-blue text-white shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-                }
-            `}
-          >
-            Custom
-          </button>
+    <header className="sticky top-0 z-[90] border-b border-white/[0.06] bg-[#0f1119]/95 backdrop-blur-md">
+      <div className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+
+        {/* ── Title block ── */}
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <div>
+            <h1 className="font-display text-[13.5px] font-bold tracking-tight leading-none">{title}</h1>
+            {subtitle && (
+              <p className="text-text-muted font-normal text-[10.5px] mt-0.5 leading-none">{subtitle}</p>
+            )}
+          </div>
         </div>
 
-        <DateRangePicker
-          startDate={customRange?.startDate}
-          endDate={customRange?.endDate}
-          minDate={minDate}
-          maxDate={maxDate}
-          active={currentPeriod === 'CUSTOM'}
-          onApply={(range) => {
-            onCustomRangeChange?.(range);
-            handlePeriodChange('CUSTOM');
-          }}
-        />
-        
-        {showFiltersButton && onToggleFilters && (
-          <Button
-            variant="outline"
-            size="sm"
-            className={`
-              h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold
-              ${filtersOpen ? 'border-accent-blue bg-accent-blue/10 text-accent-blue' : ''}
-            `}
-            onClick={onToggleFilters}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            {filtersOpen ? 'Hide Filters' : 'Show Filters'}
-          </Button>
-        )}
+        {/* ── Controls ── */}
+        <div className="flex flex-wrap items-center gap-2">
 
-        {showExportButton && onExport && (
-          <Button size="sm" className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold" onClick={onExport}>
-            ⬇ Export
-          </Button>
-        )}
-        
-        {mounted && (
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-bg-card px-3 h-9">
-            {theme === 'dark' ? (
-              <SunMedium className="h-3.5 w-3.5 text-text-muted" />
-            ) : (
-              <MoonStar className="h-3.5 w-3.5 text-text-muted" />
-            )}
-            <Switch
-              checked={theme === 'light'}
-              onCheckedChange={toggleTheme}
-              aria-label="Toggle theme"
-            />
+          {/* Period picker */}
+          <div className="flex items-center rounded-lg border border-white/[0.07] bg-bg-input p-0.5 gap-px">
+            {BASE_PERIOD_OPTIONS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handlePeriodChange(p)}
+                aria-pressed={currentPeriod === p}
+                className={`
+                  rounded-md px-2.5 py-[5px] text-[10px] font-semibold transition-all duration-150 leading-none
+                  ${currentPeriod === p
+                    ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                  }
+                `}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => handlePeriodChange('CUSTOM')}
+              aria-pressed={currentPeriod === 'CUSTOM'}
+              className={`
+                rounded-md px-2.5 py-[5px] text-[10px] font-semibold transition-all duration-150 leading-none
+                ${currentPeriod === 'CUSTOM'
+                  ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                }
+              `}
+            >
+              Custom
+            </button>
           </div>
-        )}
-      </div>
+
+          <DateRangePicker
+            startDate={customRange?.startDate}
+            endDate={customRange?.endDate}
+            minDate={minDate}
+            maxDate={maxDate}
+            active={currentPeriod === 'CUSTOM'}
+            onApply={(range) => {
+              onCustomRangeChange?.(range);
+              handlePeriodChange('CUSTOM');
+            }}
+          />
+
+          {showFiltersButton && onToggleFilters && (
+            <button
+              type="button"
+              onClick={onToggleFilters}
+              className={`
+                h-[30px] flex items-center gap-1.5 px-3 rounded-lg border text-[10.5px] font-semibold transition-all duration-150
+                ${filtersOpen
+                  ? 'border-accent-blue/40 bg-accent-blue/10 text-accent-blue'
+                  : 'border-white/[0.08] bg-white/[0.03] text-text-secondary hover:text-text-primary hover:bg-white/[0.06]'
+                }
+              `}
+            >
+              <Filter className="h-3 w-3" />
+              {filtersOpen ? 'Hide' : 'Filters'}
+            </button>
+          )}
+
+          {showExportButton && onExport && (
+            <button
+              type="button"
+              onClick={onExport}
+              className="h-[30px] flex items-center gap-1.5 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] text-text-secondary hover:text-text-primary hover:bg-white/[0.06] text-[10.5px] font-semibold transition-all duration-150"
+            >
+              <Download className="h-3 w-3" />
+              Export
+            </button>
+          )}
+
+          {/* Theme toggle */}
+          {mounted && (
+            <div className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 h-[30px]">
+              {theme === 'dark' ? (
+                <SunMedium className="h-3 w-3 text-text-muted" />
+              ) : (
+                <MoonStar className="h-3 w-3 text-text-muted" />
+              )}
+              <Switch
+                checked={theme === 'light'}
+                onCheckedChange={toggleTheme}
+                aria-label="Toggle theme"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

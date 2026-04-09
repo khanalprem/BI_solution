@@ -12,6 +12,7 @@ import { useDashboardData, useFilterStatistics, useTopCustomers } from '@/lib/ho
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart, PremiumComposedChart } from '@/components/ui/PremiumCharts';
+import { CustomerDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 interface CustomerData {
   cif_id: string;
@@ -315,7 +316,7 @@ export default function CustomerDashboard() {
           onToggleFilters={() => setFiltersOpen((current) => !current)}
           filtersOpen={filtersOpen}
         />
-        <div className="p-6"><div className="text-text-secondary">Loading...</div></div>
+        <CustomerDashboardSkeleton />
       </>
     );
   }

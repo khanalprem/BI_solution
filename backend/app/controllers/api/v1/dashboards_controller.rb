@@ -386,6 +386,58 @@ module Api
         render json: data
       end
 
+      def employee_detail
+        user_id = param_value(:entry_user, :user_id).to_s.strip
+        return render json: { error: 'entry_user is required' }, status: :bad_request if user_id.blank?
+
+        start_date, end_date = resolved_dates
+        filters = filter_params.merge(start_date: start_date, end_date: end_date, entry_user: user_id)
+
+        data = cached("employee_detail_#{user_id}") do
+          scope = TranSummary.apply_filters(filters)
+          summary = build_summary(scope)
+
+          by_branch = scope.group(:gam_branch, :gam_province)
+                           .select('gam_branch AS branch, gam_province AS province, SUM(tran_amt) AS amount, SUM(tran_count) AS count, COUNT(DISTINCT acct_num) AS accounts')
+                           .order('SUM(tran_amt) DESC')
+                           .map { |r| { branch: r.branch, province: r.province, amount: r.amount.to_f, count: r.count.to_i, accounts: r.accounts.to_i } }
+
+          by_account = scope.group(:acct_num)
+                            .select('acct_num, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
+                            .order('SUM(tran_amt) DESC').limit(15)
+                            .map { |r| { acct_num: r.acct_num, amount: r.amount.to_f, count: r.count.to_i } }
+
+          daily_trend = scope.group(:tran_date)
+                             .select('tran_date AS date, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
+                             .order(:tran_date)
+                             .map { |r| { date: r.date.to_s, amount: r.amount.to_f, count: r.count.to_i } }
+
+          monthly_trend = scope.group(:year_month)
+                               .select("year_month AS month, SUM(tran_amt) AS amount, SUM(tran_count) AS count, SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END) AS credit, SUM(CASE WHEN part_tran_type='DR' THEN tran_amt ELSE 0 END) AS debit")
+                               .order(:year_month)
+                               .map { |r| { month: r.month, amount: r.amount.to_f, count: r.count.to_i, credit: r.credit.to_f, debit: r.debit.to_f } }
+
+          by_product = scope.where.not(product: [nil, ''])
+                            .group(:product)
+                            .select('product, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
+                            .order('SUM(tran_amt) DESC').limit(10)
+                            .map { |r| { product: r.product, amount: r.amount.to_f, count: r.count.to_i } }
+
+          {
+            user_id: user_id,
+            summary: summary,
+            by_branch: by_branch,
+            by_account: by_account,
+            daily_trend: daily_trend,
+            monthly_trend: monthly_trend,
+            by_product: by_product,
+            active_branches: by_branch.size
+          }
+        end
+
+        render json: data
+      end
+
       def demographics
         # Join chain: tran_summary -> accounts -> customers (date_of_birth)
         # No gender column exists in production — age groups derived from customers.date_of_birth

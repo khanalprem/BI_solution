@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
@@ -9,6 +10,8 @@ import { useEmployerSummary, useFilterStatistics } from '@/lib/hooks/useDashboar
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
+import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -40,11 +43,98 @@ export default function EmployerDashboard() {
   const byBranch = data?.by_branch ?? [];
   const topUsers = byUser.slice(0, 10);
 
+  type UserRow = { user: string; amount: number; count: number; accounts: number; credit: number };
+  const userColumns = useMemo<ColumnDef<UserRow>[]>(() => [
+    {
+      accessorKey: 'user',
+      header: 'User',
+      enableColumnFilter: true,
+      cell: ({ row }) => (
+        <Link href={`/dashboard/employer/${encodeURIComponent(row.original.user)}`} className="font-semibold text-accent-blue hover:underline">
+          {row.original.user}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+    },
+    {
+      accessorKey: 'count',
+      header: 'Transactions',
+      enableSorting: true,
+      cell: ({ row }) => row.original.count.toLocaleString(),
+    },
+    {
+      accessorKey: 'accounts',
+      header: 'Accounts',
+      enableSorting: true,
+      cell: ({ row }) => row.original.accounts.toLocaleString(),
+    },
+    {
+      accessorKey: 'credit',
+      header: 'Credit Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.credit)}</span>,
+    },
+    {
+      id: 'action',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Link href={`/dashboard/employer/${encodeURIComponent(row.original.user)}`} className="text-[10px] text-text-muted hover:text-accent-blue transition-colors">
+          View →
+        </Link>
+      ),
+    },
+  ], []);
+
+  type BranchRow = { branch: string; province: string; users: number; amount: number; count: number };
+  const branchColumns = useMemo<ColumnDef<BranchRow>[]>(() => [
+    {
+      accessorKey: 'branch',
+      header: 'Branch',
+      enableColumnFilter: true,
+      cell: ({ row }) => <span className="font-medium text-text-primary">{row.original.branch}</span>,
+    },
+    {
+      accessorKey: 'province',
+      header: 'Province',
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+      cell: ({ row }) => <span className="capitalize text-text-secondary">{row.original.province}</span>,
+    },
+    {
+      accessorKey: 'users',
+      header: 'Users',
+      enableSorting: true,
+      cell: ({ row }) => row.original.users.toLocaleString(),
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+    },
+    {
+      accessorKey: 'count',
+      header: 'Transactions',
+      enableSorting: true,
+      cell: ({ row }) => row.original.count.toLocaleString(),
+    },
+  ], []);
+
   if (isLoading) {
     return (
       <>
         <TopBar title="Staff & Operations" subtitle="Employee activity and branch operations" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <StandardDashboardSkeleton />
       </>
     );
   }
@@ -132,78 +222,24 @@ export default function EmployerDashboard() {
 
         {/* User Detail Table */}
         {byUser.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-              <div>
-                <div className="text-[13px] font-semibold">Entry User Activity</div>
-                <div className="text-[11px] text-text-muted">{byUser.length} active users</div>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium w-8">#</th>
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">User</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Volume</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Transactions</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Accounts</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Credit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {byUser.map((user, idx) => (
-                    <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2.5">
-                        <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold ${idx < 3 ? 'bg-amber-500/20 text-amber-400' : 'bg-bg-input text-text-muted'}`}>
-                          {idx + 1}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 font-medium">{user.user}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{formatNPR(user.amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{user.count.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{user.accounts.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-accent-green">{formatNPR(user.credit)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="Entry User Activity"
+            subtitle={`${byUser.length} active users — click a name to view details`}
+            data={byUser as UserRow[]}
+            columns={userColumns}
+            pageSize={15}
+          />
         )}
 
         {/* Branch Detail Table */}
         {byBranch.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[13px] font-semibold">Branch Operations Summary</div>
-              <div className="text-[11px] text-text-muted">{byBranch.length} active branches</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Branch</th>
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Province</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Users</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Volume</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Transactions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {byBranch.map((branch, idx) => (
-                    <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2.5 font-medium">{branch.branch}</td>
-                      <td className="px-4 py-2.5 text-text-secondary capitalize">{branch.province}</td>
-                      <td className="px-4 py-2.5 text-right">{branch.users}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{formatNPR(branch.amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-text-secondary">{branch.count.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="Branch Operations Summary"
+            subtitle={`${byBranch.length} active branches`}
+            data={byBranch as BranchRow[]}
+            columns={branchColumns}
+            pageSize={15}
+          />
         )}
       </div>
     </>

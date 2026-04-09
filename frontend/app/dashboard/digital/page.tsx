@@ -9,6 +9,7 @@ import { useDigitalChannels, useFilterStatistics } from '@/lib/hooks/useDashboar
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart, PremiumDonutChart } from '@/components/ui/PremiumCharts';
+import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -66,7 +67,7 @@ export default function DigitalDashboard() {
     return (
       <>
         <TopBar title="Digital Channels" subtitle="Mobile, internet & channel performance" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <StandardDashboardSkeleton />
       </>
     );
   }

@@ -16,7 +16,6 @@ import {
 } from '@tanstack/react-table';
 import { ColumnFilter } from './ColumnFilter';
 
-// Declare custom filter functions for module augmentation
 declare module '@tanstack/react-table' {
   interface FilterFns {
     arrayFilter: FilterFn<any>;
@@ -25,7 +24,6 @@ declare module '@tanstack/react-table' {
   }
 }
 
-// Custom filter functions
 const arrayFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
   const value = row.getValue(columnId);
   if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
@@ -35,33 +33,21 @@ const arrayFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
 const dateRangeFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
   const value = row.getValue(columnId);
   if (!filterValue || !Array.isArray(filterValue)) return true;
-  
   const [start, end] = filterValue as [string, string];
   const dateValue = new Date(String(value));
-  
-  if (start && end) {
-    return dateValue >= new Date(start) && dateValue <= new Date(end);
-  } else if (start) {
-    return dateValue >= new Date(start);
-  } else if (end) {
-    return dateValue <= new Date(end);
-  }
+  if (start && end) return dateValue >= new Date(start) && dateValue <= new Date(end);
+  if (start) return dateValue >= new Date(start);
+  if (end) return dateValue <= new Date(end);
   return true;
 };
 
 const numberRangeFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
   const value = Number(row.getValue(columnId));
   if (!filterValue || !Array.isArray(filterValue)) return true;
-  
   const [min, max] = filterValue as [number, number];
-  
-  if (min && max) {
-    return value >= min && value <= max;
-  } else if (min) {
-    return value >= min;
-  } else if (max) {
-    return value <= max;
-  }
+  if (min && max) return value >= min && value <= max;
+  if (min) return value >= min;
+  if (max) return value <= max;
   return true;
 };
 
@@ -103,11 +89,8 @@ export function AdvancedDataTable<TData>({
       if (value.length <= 2) return value.join(', ');
       return `${value.slice(0, 2).join(', ')} +${value.length - 2}`;
     }
-
     if (typeof value === 'string') return value;
-
     if (typeof value === 'number') return value.toString();
-
     return '';
   }, []);
 
@@ -124,157 +107,127 @@ export function AdvancedDataTable<TData>({
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onGlobalFilterChange: setGlobalFilter,
-    filterFns: {
-      arrayFilter: arrayFilterFn,
-      dateRange: dateRangeFilterFn,
-      numberRange: numberRangeFilterFn,
-    },
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      globalFilter,
-    },
-    initialState: {
-      pagination: {
-        pageSize,
-      },
-    },
+    filterFns: { arrayFilter: arrayFilterFn, dateRange: dateRangeFilterFn, numberRange: numberRangeFilterFn },
+    state: { sorting, columnFilters, columnVisibility, globalFilter },
+    initialState: { pagination: { pageSize } },
   });
 
-  const activeTableFilters = React.useMemo(() => {
-    return columnFilters
+  const activeTableFilters = React.useMemo(() =>
+    columnFilters
       .map((filter) => {
         const column = table.getColumn(filter.id);
         if (!column) return null;
-
         const header = column.columnDef.header;
         const label = typeof header === 'string' ? header : filter.id;
         const valueLabel = summarizeFilterValue(filter.value);
-
-        return {
-          id: filter.id,
-          label: valueLabel ? `${label}: ${valueLabel}` : label,
-        };
+        return { id: filter.id, label: valueLabel ? `${label}: ${valueLabel}` : label };
       })
-      .filter(Boolean) as Array<{ id: string; label: string }>;
-  }, [columnFilters, summarizeFilterValue, table]);
+      .filter(Boolean) as Array<{ id: string; label: string }>,
+    [columnFilters, summarizeFilterValue, table]
+  );
 
   const hasAnyFilter = activeTableFilters.length > 0 || Boolean(globalFilter);
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageCount = table.getPageCount();
+  const totalRows = table.getFilteredRowModel().rows.length;
+  const from = pageIndex * table.getState().pagination.pageSize + 1;
+  const to = Math.min((pageIndex + 1) * table.getState().pagination.pageSize, totalRows);
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-      {/* Header */}
-      <div className="px-4 py-2.5 border-b border-border flex items-center justify-between bg-bg-surface">
-        <div>
-          <div className="text-[12px] font-semibold text-text-primary">{title}</div>
-          {subtitle && <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>}
+    <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border" style={{ background: 'var(--bg-surface)' }}>
+        <div className="min-w-0">
+          <h3 className="font-display text-[13px] font-bold text-text-primary tracking-tight truncate">{title}</h3>
+          {subtitle && <p className="text-[10.5px] text-text-muted mt-0.5 leading-none">{subtitle}</p>}
         </div>
-        <div className="flex gap-2 items-center">
-          {/* Global Search */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           {enableFiltering && (
             <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
               <input
                 type="text"
                 value={globalFilter ?? ''}
                 onChange={(e) => setGlobalFilter(e.target.value)}
-                placeholder="Search all columns..."
-                className="pl-8 pr-3 py-1.5 text-xs bg-bg-input border border-border rounded-lg outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue transition-all"
+                placeholder="Search…"
+                className="pl-7 pr-3 py-1.5 text-[11px] rounded-lg border border-border bg-bg-input outline-none focus:border-accent-blue/60 focus:ring-1 focus:ring-accent-blue/30 transition-all w-[160px] focus:w-[200px] placeholder:text-text-muted"
               />
-              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
             </div>
           )}
+          {/* Row count badge */}
+          <span className="text-[10px] text-text-muted font-medium px-2 py-1 rounded-md border border-border bg-bg-input">
+            {totalRows.toLocaleString()} rows
+          </span>
           {actions}
         </div>
       </div>
 
+      {/* ── Active filter chips ── */}
       {hasAnyFilter && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-bg-card-hover px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2" style={{ background: 'var(--bg-card-hover)' }}>
           {globalFilter && (
             <button
               type="button"
               onClick={() => setGlobalFilter('')}
-              className="inline-flex items-center gap-2 rounded-full border border-accent-blue/25 bg-accent-blue/10 px-2.5 py-1 text-[11px] text-text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent-blue/25 bg-accent-blue/10 px-2.5 py-0.5 text-[10.5px] text-accent-blue hover:bg-accent-blue/15 transition-colors"
             >
-              <span>Search: {globalFilter}</span>
-              <span className="text-text-muted">×</span>
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/><path d="M5 8h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              Search: {globalFilter}
+              <span className="opacity-60">×</span>
             </button>
           )}
-
           {activeTableFilters.map((filter) => (
             <button
               key={filter.id}
               type="button"
               onClick={() => table.getColumn(filter.id)?.setFilterValue(undefined)}
-              className="inline-flex items-center gap-2 rounded-full border border-border-strong bg-bg-input px-2.5 py-1 text-[11px] text-text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-input px-2.5 py-0.5 text-[10.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
             >
-              <span>{filter.label}</span>
-              <span className="text-text-muted">×</span>
+              {filter.label}
+              <span className="opacity-50">×</span>
             </button>
           ))}
-
           <button
             type="button"
-            onClick={() => {
-              table.resetColumnFilters();
-              setGlobalFilter('');
-            }}
-            className="ml-auto text-[11px] font-medium text-accent-red hover:underline"
+            onClick={() => { table.resetColumnFilters(); setGlobalFilter(''); }}
+            className="ml-auto text-[10.5px] font-medium text-accent-red hover:underline"
           >
-            Clear table filters
+            Clear all
           </button>
         </div>
       )}
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead className="sticky top-0 z-[1] bg-bg-surface border-b border-border">
+          <thead className="sticky top-0 z-[1] border-b border-border" style={{ background: 'var(--bg-base)' }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="group px-4 py-2.5 text-left text-[10px] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap"
+                    className="px-4 py-2.5 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap"
                   >
                     {header.isPlaceholder ? null : (
                       <div className="flex items-center gap-2">
-                        {/* Header with Sort */}
                         <div
-                          className={`flex items-center gap-1.5 flex-1 ${
-                            header.column.getCanSort() ? 'cursor-pointer select-none hover:text-text-primary transition-colors' : ''
-                          }`}
+                          className={`flex items-center gap-1 flex-1 ${header.column.getCanSort() ? 'cursor-pointer select-none hover:text-text-primary transition-colors' : ''}`}
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {enableSorting && header.column.getCanSort() && (
-                            <span className="text-[9px] opacity-60">
-                              {{
-                                asc: '▲',
-                                desc: '▼',
-                              }[header.column.getIsSorted() as string] ?? '⇅'}
+                            <span className="text-[8px] opacity-50 ml-0.5">
+                              {({ asc: '▲', desc: '▼' } as Record<string, string>)[header.column.getIsSorted() as string] ?? '⇅'}
                             </span>
                           )}
                         </div>
-
-                        {/* Column Filter Icon */}
                         {(() => {
-                          const filterType = (header.column.columnDef.meta as { filterType?: 'text' | 'select' | 'date-range' | 'number-range' } | undefined)?.filterType;
-                          const shouldShowFilter =
-                            enableFiltering &&
-                            header.column.getCanFilter() &&
-                            (showTextColumnFilters || Boolean(filterType));
-
-                          if (!shouldShowFilter) return null;
-
-                          return (
-                            <ColumnFilter
-                              column={header.column}
-                              filterType={filterType || 'text'}
-                            />
-                          );
+                          const filterType = (header.column.columnDef.meta as { filterType?: string } | undefined)?.filterType;
+                          if (!enableFiltering || !header.column.getCanFilter() || (!showTextColumnFilters && !filterType)) return null;
+                          return <ColumnFilter column={header.column} filterType={filterType as 'text' | 'select' | 'date-range' | 'number-range' || 'text'} />;
                         })()}
                       </div>
                     )}
@@ -286,23 +239,26 @@ export function AdvancedDataTable<TData>({
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-12 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <svg className="w-12 h-12 text-text-muted opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                    <span className="text-text-muted text-xs">No data available</span>
+                <td colSpan={columns.length} className="py-16 text-center">
+                  <div className="flex flex-col items-center gap-3 select-none">
+                    <div className="flex items-end gap-1 h-8 opacity-20">
+                      {[3, 5, 2, 6, 4].map((h, i) => (
+                        <div key={i} className="w-2 rounded-sm bg-text-secondary" style={{ height: `${h * 5}px` }} />
+                      ))}
+                    </div>
+                    <p className="text-[12px] font-medium text-text-secondary">No results</p>
+                    <p className="text-[11px] text-text-muted">Try adjusting your search or filters</p>
                   </div>
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, idx) => (
                 <tr
                   key={row.id}
-                  className="border-b border-border last:border-b-0 odd:bg-transparent even:bg-bg-input/25 hover:bg-bg-card-hover transition-colors"
+                  className="border-b border-border last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.04)]"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-2 text-[11px] text-text-secondary whitespace-nowrap">
+                    <td key={cell.id} className="px-4 py-2.5 text-[11.5px] text-text-secondary whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -313,67 +269,63 @@ export function AdvancedDataTable<TData>({
         </table>
       </div>
 
-      {/* Pagination */}
-      {enablePagination && (
-        <div className="px-4 py-2 border-t border-border flex items-center justify-between bg-bg-surface">
-          <div className="text-[10px] text-text-secondary font-medium">
-            Showing <span className="text-text-primary font-semibold">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to{' '}
-            <span className="text-text-primary font-semibold">{Math.min(
-              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-              table.getFilteredRowModel().rows.length
-            )}</span>{' '}
-            of <span className="text-text-primary font-semibold">{table.getFilteredRowModel().rows.length}</span> results
-          </div>
+      {/* ── Pagination ── */}
+      {enablePagination && pageCount > 0 && (
+        <div className="flex items-center justify-between gap-4 px-4 py-2.5 border-t border-border" style={{ background: 'var(--bg-surface)' }}>
+          <span className="text-[10.5px] text-text-muted">
+            <span className="text-text-primary font-semibold">{from}–{to}</span> of{' '}
+            <span className="text-text-primary font-semibold">{totalRows.toLocaleString()}</span>
+          </span>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-              className="px-2.5 py-1.5 text-xs bg-bg-input border border-border rounded-md hover:bg-bg-card-hover hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium"
-              title="First page"
-            >
-              ««
-            </button>
-            <button
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="px-2.5 py-1.5 text-xs bg-bg-input border border-border rounded-md hover:bg-bg-card-hover hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium"
-              title="Previous page"
-            >
+          <div className="flex items-center gap-1.5">
+            {/* First / Prev */}
+            <PagBtn onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()} title="First">
               «
-            </button>
-            <span className="px-3 text-xs text-text-secondary font-medium">
-              Page <span className="text-text-primary font-semibold">{table.getState().pagination.pageIndex + 1}</span> of{' '}
-              <span className="text-text-primary font-semibold">{table.getPageCount()}</span>
-            </span>
-            <button
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="px-2.5 py-1.5 text-xs bg-bg-input border border-border rounded-md hover:bg-bg-card-hover hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium"
-              title="Next page"
-            >
+            </PagBtn>
+            <PagBtn onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} title="Previous">
+              ‹
+            </PagBtn>
+
+            {/* Page numbers — show up to 5 around current */}
+            {Array.from({ length: Math.min(pageCount, 5) }, (_, i) => {
+              let p: number;
+              if (pageCount <= 5) p = i;
+              else if (pageIndex < 3) p = i;
+              else if (pageIndex > pageCount - 4) p = pageCount - 5 + i;
+              else p = pageIndex - 2 + i;
+              return (
+                <button
+                  key={p}
+                  onClick={() => table.setPageIndex(p)}
+                  className={`min-w-[28px] h-7 rounded-md text-[11px] font-medium transition-all ${
+                    p === pageIndex
+                      ? 'bg-accent-blue text-white shadow-sm'
+                      : 'text-text-secondary hover:bg-bg-card-hover hover:text-text-primary border border-border bg-bg-input'
+                  }`}
+                >
+                  {p + 1}
+                </button>
+              );
+            })}
+
+            {/* Next / Last */}
+            <PagBtn onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} title="Next">
+              ›
+            </PagBtn>
+            <PagBtn onClick={() => table.setPageIndex(pageCount - 1)} disabled={!table.getCanNextPage()} title="Last">
               »
-            </button>
-            <button
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-              className="px-2.5 py-1.5 text-xs bg-bg-input border border-border rounded-md hover:bg-bg-card-hover hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium"
-              title="Last page"
-            >
-              »»
-            </button>
-            
-            <div className="h-4 w-px bg-border mx-1"></div>
-            
+            </PagBtn>
+
+            <div className="h-4 w-px bg-border mx-1" />
+
+            {/* Page size */}
             <select
               value={table.getState().pagination.pageSize}
               onChange={(e) => table.setPageSize(Number(e.target.value))}
-              className="ml-1 px-2.5 py-1.5 text-xs bg-bg-input border border-border rounded-md outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue transition-all font-medium"
+              className="px-2 py-1 text-[11px] bg-bg-input border border-border rounded-md outline-none focus:border-accent-blue/60 transition-all text-text-secondary"
             >
-              {[10, 20, 30, 40, 50, 100].map((size) => (
-                <option key={size} value={size}>
-                  {size} rows
-                </option>
+              {[10, 20, 50, 100].map((sz) => (
+                <option key={sz} value={sz}>{sz} / page</option>
               ))}
             </select>
           </div>
@@ -383,5 +335,17 @@ export function AdvancedDataTable<TData>({
   );
 }
 
-// Export helper for creating columns
+function PagBtn({ onClick, disabled, title, children }: { onClick: () => void; disabled: boolean; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="min-w-[28px] h-7 rounded-md text-[12px] font-medium border border-border bg-bg-input text-text-secondary hover:bg-bg-card-hover hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+    >
+      {children}
+    </button>
+  );
+}
+
 export { type ColumnDef } from '@tanstack/react-table';

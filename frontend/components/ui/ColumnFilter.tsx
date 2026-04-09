@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Column } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -30,7 +31,28 @@ interface ColumnFilterProps<TData> {
 export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilterProps<TData>) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const calcPosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const dropdownWidth = 288; // w-72
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const top = spaceBelow >= 260 ? rect.bottom + 6 : rect.top - 6;
+    const translateY = spaceBelow >= 260 ? '0%' : '-100%';
+
+    // Horizontal: prefer aligning right edge of dropdown to right edge of button,
+    // but clamp so it never goes off-screen on either side.
+    let left = rect.right - dropdownWidth;
+    if (left < 8) left = 8;
+    if (left + dropdownWidth > viewportWidth - 8) left = viewportWidth - dropdownWidth - 8;
+
+    setDropdownStyle({ position: 'fixed', top, left, transform: `translateY(${translateY})`, zIndex: 9999 });
+  }, []);
   
   const columnFilterValue = column.getFilterValue();
   
@@ -43,11 +65,12 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      const inTrigger = triggerRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inTrigger && !inPopover) setIsOpen(false);
     }
-    
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -89,7 +112,7 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
     switch (filterType) {
       case 'select':
         return (
-          <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl py-2">
+          <div className="w-72 bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl py-2">
             {/* Search */}
             <div className="px-3 pb-2 border-b border-border">
               <Input
@@ -161,7 +184,7 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
         const fromDate = toLocalDate(dateRange[0]);
         const endDate = toLocalDate(dateRange[1]);
         return (
-          <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
+          <div className="w-72 bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
             <div className="space-y-3">
               <Calendar
                 mode="range"
@@ -193,7 +216,7 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
       case 'number-range':
         const numRange = (columnFilterValue as [number, number]) || [0, 0];
         return (
-          <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
+          <div className="w-72 bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] text-text-muted block mb-1">Min</label>
@@ -233,7 +256,7 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
       case 'text':
       default:
         return (
-          <div className="w-72 max-w-[calc(100vw-2rem)] bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
+          <div className="w-72 bg-bg-card/95 backdrop-blur border border-border-strong rounded-xl shadow-2xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wide text-text-muted">Text Filter</span>
               <button
@@ -267,11 +290,13 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
   };
 
   return (
-    <div className="relative inline-flex" ref={popoverRef}>
+    <div className="relative inline-flex">
       {/* Filter Icon Button */}
       <button
+        ref={triggerRef}
         onClick={(e) => {
           e.stopPropagation();
+          if (!isOpen) calcPosition();
           setIsOpen(!isOpen);
         }}
         className={`p-1 rounded-md border transition-all ${
@@ -281,32 +306,20 @@ export function ColumnFilter<TData>({ column, filterType = 'text' }: ColumnFilte
         }`}
         title="Filter column"
       >
-        <svg
-          className="w-3 h-3"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-          />
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
         </svg>
         {hasActiveFilter && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent-blue rounded-full"></span>
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent-blue rounded-full" />
         )}
       </button>
 
-      {/* Popover */}
-      {isOpen && (
-        <div
-          className="absolute top-full right-0 mt-2 z-[70]"
-          onClick={(e) => e.stopPropagation()}
-        >
+      {/* Popover — rendered in portal so table overflow can't clip it */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div ref={popoverRef} style={dropdownStyle} onClick={(e) => e.stopPropagation()}>
           {renderFilterContent()}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -9,6 +9,8 @@ import { useFinancialSummary, useFilterStatistics } from '@/lib/hooks/useDashboa
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
+import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -50,11 +52,49 @@ export default function FinancialDashboard() {
   const glCr = useMemo(() => byGl.filter((g) => g.type === 'CR').slice(0, 8), [byGl]);
   const glDr = useMemo(() => byGl.filter((g) => g.type === 'DR').slice(0, 8), [byGl]);
 
+  type GlRow = { gl_code: string; gl_desc?: string; type: string; amount: number; count: number };
+  const glColumns = useMemo<ColumnDef<GlRow>[]>(() => [
+    {
+      accessorKey: 'gl_code',
+      header: 'GL Code',
+      enableColumnFilter: true,
+      cell: ({ row }) => <span className="font-mono text-[11px] text-text-primary">{row.original.gl_code}</span>,
+    },
+    {
+      accessorKey: 'type',
+      header: 'Type',
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+      cell: ({ row }) => (
+        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${row.original.type === 'CR' ? 'bg-accent-green-dim text-accent-green' : 'bg-accent-red-dim text-accent-red'}`}>
+          {row.original.type}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Amount',
+      enableSorting: true,
+      sortDescFirst: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
+      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+    },
+    {
+      accessorKey: 'count',
+      header: 'Transactions',
+      enableSorting: true,
+      cell: ({ row }) => row.original.count.toLocaleString(),
+    },
+  ], []);
+
   if (isLoading) {
     return (
       <>
         <TopBar title="Financial Summary" subtitle="Credit, debit & net flow analysis" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <StandardDashboardSkeleton />
       </>
     );
   }
@@ -171,38 +211,13 @@ export default function FinancialDashboard() {
 
         {/* GL detail table */}
         {byGl.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border">
-              <div className="text-[12px] font-semibold">GL Sub-Head Breakdown</div>
-              <div className="text-[10px] text-text-muted">All GL codes with CR/DR split</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2 text-text-muted font-medium text-[10px]">GL Code</th>
-                    <th className="text-left px-4 py-2 text-text-muted font-medium text-[10px]">Type</th>
-                    <th className="text-right px-4 py-2 text-text-muted font-medium text-[10px]">Amount</th>
-                    <th className="text-right px-4 py-2 text-text-muted font-medium text-[10px]">Transactions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {byGl.map((gl, idx) => (
-                    <tr key={idx} className="hover:bg-bg-input transition-colors">
-                      <td className="px-4 py-2 font-mono text-text-primary">{gl.gl_code}</td>
-                      <td className="px-4 py-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${gl.type === 'CR' ? 'bg-accent-green-dim text-accent-green' : 'bg-accent-red-dim text-accent-red'}`}>
-                          {gl.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-right font-semibold">{formatNPR(gl.amount)}</td>
-                      <td className="px-4 py-2 text-right text-text-secondary">{gl.count.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="GL Sub-Head Breakdown"
+            subtitle="All GL codes with CR/DR split — filter by type, sort by amount"
+            data={byGl as GlRow[]}
+            columns={glColumns}
+            pageSize={10}
+          />
         )}
       </div>
     </>

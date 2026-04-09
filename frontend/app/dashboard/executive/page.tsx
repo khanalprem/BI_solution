@@ -7,6 +7,8 @@ import { useDashboardData, useFilterStatistics, useDemographics } from '@/lib/ho
 import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
 import { SparkLine, PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
+import Link from 'next/link';
 import ReactECharts from 'echarts-for-react';
 import type { ProvinceMetrics as PM } from '@/types';
 
@@ -243,6 +245,113 @@ export default function ExecutiveDashboard() {
   const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
   const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min) ?? undefined, [filterStats?.date_range?.min]);
 
+  // ── Branch table columns ──
+  const branchColumns = useMemo<ColumnDef<BranchMetrics>[]>(() => [
+    {
+      accessorKey: 'branch_code',
+      header: 'Branch',
+      enableColumnFilter: true,
+      cell: ({ row }) => (
+        <Link href={`/dashboard/branch/${encodeURIComponent(row.original.branch_code)}`} className="font-semibold text-accent-blue hover:underline">
+          {row.original.branch_code}
+        </Link>
+      ),
+    },
+    { accessorKey: 'province', header: 'Province', enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' } },
+    {
+      accessorKey: 'total_amount',
+      header: 'Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
+      cell: ({ row }) => <strong className="text-text-primary font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
+    },
+    {
+      accessorKey: 'transaction_count',
+      header: 'Transactions',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => row.original.transaction_count.toLocaleString(),
+    },
+    {
+      accessorKey: 'unique_accounts',
+      header: 'Accounts',
+      enableSorting: true,
+      cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
+    },
+    {
+      accessorKey: 'avg_transaction',
+      header: 'Avg Txn',
+      enableSorting: true,
+      cell: ({ row }) => <span className="font-mono text-[11px]">{formatNPR(row.original.avg_transaction)}</span>,
+    },
+    {
+      id: 'performance',
+      header: 'Share',
+      enableSorting: false,
+      cell: ({ row, table: t }) => {
+        const rows = t.getCoreRowModel().rows;
+        const topAmt = Math.max(1, ...rows.map(r => (r.original as BranchMetrics).total_amount));
+        const pct = (row.original.total_amount / topAmt) * 100;
+        return (
+          <div className="flex items-center gap-2 min-w-[80px]">
+            <div className="flex-1 h-1.5 rounded-full bg-bg-input overflow-hidden">
+              <div className="h-full rounded-full bg-accent-blue transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[9.5px] text-text-muted w-7 text-right">{pct.toFixed(0)}%</span>
+          </div>
+        );
+      },
+    },
+  ], []);
+
+  // ── Age group table columns ──
+  type AgeGroup = { age_group: string; customers: number; total_amount: number; transaction_count: number; credit_amount: number; debit_amount: number };
+  const ageColumns = useMemo<ColumnDef<AgeGroup>[]>(() => [
+    {
+      accessorKey: 'age_group',
+      header: 'Age Group',
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+      cell: ({ row }) => <strong className="text-text-primary">{row.original.age_group}</strong>,
+    },
+    {
+      accessorKey: 'customers',
+      header: 'Customers',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => row.original.customers.toLocaleString(),
+    },
+    {
+      accessorKey: 'total_amount',
+      header: 'Total Volume',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <strong className="text-text-primary font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
+    },
+    {
+      accessorKey: 'transaction_count',
+      header: 'Transactions',
+      enableSorting: true,
+      cell: ({ row }) => row.original.transaction_count.toLocaleString(),
+    },
+    {
+      accessorKey: 'credit_amount',
+      header: 'Credit (CR)',
+      enableSorting: true,
+      cell: ({ row }) => <span className="text-accent-green font-mono text-[11px]">{formatNPR(row.original.credit_amount)}</span>,
+    },
+    {
+      accessorKey: 'debit_amount',
+      header: 'Debit (DR)',
+      enableSorting: true,
+      cell: ({ row }) => <span className="text-accent-purple font-mono text-[11px]">{formatNPR(row.original.debit_amount)}</span>,
+    },
+  ], []);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -476,62 +585,13 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Branch League Table ── */}
-        <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-          <div className="flex justify-between items-center px-4 py-3 border-b border-border">
-            <div>
-              <div className="text-[12px] font-semibold text-text-primary">Branch Performance League</div>
-              <div className="text-[10px] text-text-muted mt-0.5">Top branches by transaction volume</div>
-            </div>
-            <div className="flex gap-2">
-              <button className="text-[10px] px-2.5 py-1 rounded-md bg-bg-input text-text-muted border border-border hover:bg-bg-card-hover transition-colors">Sort</button>
-              <button className="text-[10px] px-2.5 py-1 rounded-md bg-bg-input text-text-muted border border-border hover:bg-bg-card-hover transition-colors">Export CSV</button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[11px]">
-              <thead>
-                <tr className="border-b border-border bg-bg-base">
-                  {['Branch','Province','Total Amount','Transactions','Accounts','Avg/Txn','Performance'].map(h => (
-                    <th key={h} className={`px-3 py-2 ${h === 'Branch' ? 'text-left' : 'text-right'} text-[10px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(data?.by_branch || [] as BranchMetrics[]).slice(0, 15).map((branch: BranchMetrics, i: number) => {
-                  const topAmt = data?.by_branch?.[0]?.total_amount || 1;
-                  const pct = (branch.total_amount / topAmt) * 100;
-                  const rankColor = i === 0 ? '#f59e0b' : i === 1 ? '#9ba3bc' : i === 2 ? '#cd7c39' : 'var(--text-muted)';
-                  return (
-                    <tr key={branch.branch_code} className="hover:bg-bg-input/50 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                            style={{ background: i < 3 ? `${rankColor}22` : 'var(--bg-input)', color: i < 3 ? rankColor : 'var(--text-muted)' }}
-                          >{i + 1}</div>
-                          <span className="font-medium text-text-primary capitalize">{branch.branch_code}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-text-secondary capitalize">{branch.province}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-text-primary">{formatNPR(branch.total_amount)}</td>
-                      <td className="px-3 py-2.5 text-right text-text-secondary">{branch.transaction_count.toLocaleString()}</td>
-                      <td className="px-3 py-2.5 text-right text-text-secondary">{branch.unique_accounts.toLocaleString()}</td>
-                      <td className="px-3 py-2.5 text-right text-text-secondary">{formatNPR(branch.avg_transaction)}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-[60px] h-1.5 rounded-sm bg-bg-input overflow-hidden">
-                            <div className="h-full rounded-sm bg-accent-blue" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-[9px] text-text-muted">{pct.toFixed(0)}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <AdvancedDataTable
+          title="Branch Performance League"
+          subtitle="All branches ranked by transaction volume — sortable, filterable"
+          data={(data?.by_branch || []) as BranchMetrics[]}
+          columns={branchColumns}
+          pageSize={10}
+        />
 
         {/* ── Customer Age Group Demographics ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
@@ -553,60 +613,14 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Age Group Table */}
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[12px] font-semibold text-text-primary">Age Group Breakdown</div>
-              <div className="text-[10px] text-text-muted mt-0.5">
-                {demographics?.total_customers?.toLocaleString() || '—'} customers with date of birth on record
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-[11px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    {['Age Group', 'Customers', 'Total Amount', 'Transactions', 'CR Amount', 'DR Amount'].map(h => (
-                      <th key={h} className={`px-3 py-2 ${h === 'Age Group' ? 'text-left' : 'text-right'} text-[10px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(demographics?.age_groups || []).map((row) => {
-                    const maxAmt = Math.max(1, ...(demographics?.age_groups || []).map(r => r.total_amount));
-                    const pct = (row.total_amount / maxAmt) * 100;
-                    return (
-                      <tr key={row.age_group} className="hover:bg-bg-input/50 transition-colors">
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-accent-blue flex-shrink-0" />
-                            <span className="font-medium text-text-primary">{row.age_group}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-text-secondary">{row.customers.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <div className="w-[40px] h-1 rounded-sm bg-bg-input overflow-hidden">
-                              <div className="h-full rounded-sm bg-accent-blue" style={{ width: `${pct}%` }} />
-                            </div>
-                            <span className="font-semibold text-text-primary">{formatNPR(row.total_amount)}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-text-secondary">{row.transaction_count.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right text-accent-green">{formatNPR(row.credit_amount)}</td>
-                        <td className="px-3 py-2.5 text-right text-accent-purple">{formatNPR(row.debit_amount)}</td>
-                      </tr>
-                    );
-                  })}
-                  {(!demographics?.age_groups?.length) && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-[11px] text-text-muted">
-                        Loading age group data...
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="Age Group Breakdown"
+            subtitle={`${demographics?.total_customers?.toLocaleString() || '—'} customers with date of birth on record`}
+            data={(demographics?.age_groups || []) as AgeGroup[]}
+            columns={ageColumns}
+            pageSize={10}
+            enablePagination={false}
+          />
         </div>
 
         {/* ── Bottom Row: Risk Monitor + Alerts + Supplementary KPIs ── */}

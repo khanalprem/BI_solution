@@ -10,6 +10,8 @@ import { useRiskSummary, useFilterStatistics } from '@/lib/hooks/useDashboardDat
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
+import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
@@ -39,6 +41,58 @@ export default function RiskDashboard() {
 
   const byGl = data?.by_gl ?? [];
   const byProvince = data?.by_province ?? [];
+
+  type ProvinceRow = { province: string; amount: number; accounts: number; debit_amount: number };
+  const provinceColumns = useMemo<ColumnDef<ProvinceRow>[]>(() => [
+    {
+      accessorKey: 'province',
+      header: 'Province',
+      enableColumnFilter: true,
+      cell: ({ row }) => <span className="capitalize font-medium text-text-primary">{row.original.province}</span>,
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Total Amount',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+    },
+    {
+      accessorKey: 'accounts',
+      header: 'Accounts',
+      enableSorting: true,
+      cell: ({ row }) => row.original.accounts.toLocaleString(),
+    },
+    {
+      accessorKey: 'debit_amount',
+      header: 'Debit Exposure',
+      enableSorting: true,
+      sortDescFirst: true,
+      cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.debit_amount)}</span>,
+    },
+    {
+      id: 'debit_pct',
+      header: 'Debit %',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const pct = row.original.amount > 0 ? (row.original.debit_amount / row.original.amount) * 100 : 0;
+        return <span>{formatPercent(pct)}</span>;
+      },
+    },
+    {
+      id: 'risk_level',
+      header: 'Risk Level',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const pct = row.original.amount > 0 ? (row.original.debit_amount / row.original.amount) * 100 : 0;
+        return (
+          <Pill variant={pct > 60 ? 'red' : pct > 45 ? 'amber' : 'green'}>
+            {pct > 60 ? 'High' : pct > 45 ? 'Medium' : 'Low'}
+          </Pill>
+        );
+      },
+    },
+  ], []);
   const totalAmount = data?.total_amount ?? 0;
   const creditAmount = data?.credit_amount ?? 0;
   const debitAmount = data?.debit_amount ?? 0;
@@ -58,7 +112,7 @@ export default function RiskDashboard() {
     return (
       <>
         <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
-        <div className="p-6 text-text-secondary">Loading...</div>
+        <StandardDashboardSkeleton />
       </>
     );
   }
@@ -195,45 +249,14 @@ export default function RiskDashboard() {
 
         {/* Province Risk Table */}
         {byProvince.length > 0 && (
-          <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[13px] font-semibold">Province Risk Summary</div>
-              <div className="text-[11px] text-text-muted">Volume, accounts, and debit exposure by province</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border bg-bg-base">
-                    <th className="text-left px-4 py-2.5 text-text-muted font-medium">Province</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Total Amount</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Accounts</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Debit Exposure</th>
-                    <th className="text-right px-4 py-2.5 text-text-muted font-medium">Debit %</th>
-                    <th className="px-4 py-2.5 text-text-muted font-medium">Risk Level</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {byProvince.map((prov, idx) => {
-                    const debitPct = prov.amount > 0 ? (prov.debit_amount / prov.amount) * 100 : 0;
-                    return (
-                      <tr key={idx} className="hover:bg-bg-input transition-colors">
-                        <td className="px-4 py-2.5 capitalize font-medium">{prov.province}</td>
-                        <td className="px-4 py-2.5 text-right font-semibold">{formatNPR(prov.amount)}</td>
-                        <td className="px-4 py-2.5 text-right text-text-secondary">{prov.accounts.toLocaleString()}</td>
-                        <td className="px-4 py-2.5 text-right text-accent-red">{formatNPR(prov.debit_amount)}</td>
-                        <td className="px-4 py-2.5 text-right">{formatPercent(debitPct)}</td>
-                        <td className="px-4 py-2.5">
-                          <Pill variant={debitPct > 60 ? 'red' : debitPct > 45 ? 'amber' : 'green'}>
-                            {debitPct > 60 ? 'High' : debitPct > 45 ? 'Medium' : 'Low'}
-                          </Pill>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdvancedDataTable
+            title="Province Risk Summary"
+            subtitle="Volume, accounts, and debit exposure by province"
+            data={byProvince as ProvinceRow[]}
+            columns={provinceColumns}
+            pageSize={10}
+            enablePagination={false}
+          />
         )}
       </div>
     </>
