@@ -123,99 +123,68 @@ export default function CustomerDashboard() {
     return tiers;
   }, [customerRows]);
   
-  // Customer table columns with ALL filters
+  // Customer table columns — all production fields from customers + tran_summary
   const customerColumns = useMemo<ColumnDef<CustomerData>[]>(
     () => [
       {
         id: 'rank',
         header: 'Rank',
         cell: ({ row }) => (
-          <div className={`
-            w-6 h-6 rounded flex items-center justify-center text-[10px] font-semibold
-            ${row.index < 3 ? 'bg-accent-amber-dim text-accent-amber' : 'bg-bg-input text-text-muted'}
-          `}>
+          <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-semibold ${row.index < 3 ? 'bg-accent-amber-dim text-accent-amber' : 'bg-bg-input text-text-muted'}`}>
             {row.index + 1}
           </div>
         ),
-        enableColumnFilter: false,
-        enableSorting: false,
+        enableColumnFilter: false, enableSorting: false,
       },
       {
         accessorKey: 'cif_id',
         header: 'CIF ID',
         cell: ({ row }) => (
-          <Link
-            href={`/dashboard/customer/${encodeURIComponent(row.original.cif_id)}`}
-            className="text-accent-blue text-[11px] hover:underline"
-          >
+          <Link href={`/dashboard/customer/${encodeURIComponent(row.original.cif_id)}`} className="text-accent-blue text-[11px] hover:underline">
             <code>{row.original.cif_id}</code>
           </Link>
         ),
         enableColumnFilter: true,
-        // Text filter (default)
       },
       {
         accessorKey: 'name',
         header: 'Customer Name',
         cell: ({ row }) => (
-          <Link
-            href={`/dashboard/customer/${encodeURIComponent(row.original.cif_id)}`}
-            className="font-semibold text-text-primary hover:text-accent-blue transition-colors"
-          >
+          <Link href={`/dashboard/customer/${encodeURIComponent(row.original.cif_id)}`} className="font-semibold text-text-primary hover:text-accent-blue transition-colors">
             {row.original.name}
           </Link>
         ),
         enableColumnFilter: true,
-        // Text filter (default)
       },
       {
         accessorKey: 'segment',
         header: 'Segment',
-        cell: ({ row }) => (
-          <Pill variant="blue">{row.original.segment}</Pill>
-        ),
-        enableColumnFilter: true,
-        filterFn: 'arrayFilter',
-        meta: { filterType: 'select' }
+        cell: ({ row }) => <Pill variant="blue">{row.original.segment}</Pill>,
+        enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },
       {
         accessorKey: 'amount',
         header: 'Total Amount',
-        cell: ({ row }) => (
-          <strong className="text-text-primary">{formatNPR(row.original.amount)}</strong>
-        ),
-        enableSorting: true,
-        sortDescFirst: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        cell: ({ row }) => <strong className="text-text-primary">{formatNPR(row.original.amount)}</strong>,
+        enableSorting: true, sortDescFirst: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'accounts',
         header: 'Accounts',
         cell: ({ row }) => row.original.accounts.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'transaction_count',
         header: 'Transactions',
         cell: ({ row }) => row.original.transaction_count.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'avg_transaction',
         header: 'Avg / Txn',
         cell: ({ row }) => formatNPR(row.original.avg_transaction),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'risk',
@@ -225,9 +194,22 @@ export default function CustomerDashboard() {
             Tier {row.original.risk}
           </Pill>
         ),
-        enableColumnFilter: true,
-        filterFn: 'arrayFilter',
-        meta: { filterType: 'select' }
+        enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
+      },
+      // tran_summary derived columns (hidden by default)
+      {
+        id: 'vol_per_account',
+        header: 'Vol / Account',
+        enableSorting: true,
+        sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.amount / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.amount / b.original.accounts : 0),
+        cell: ({ row }) => formatNPR(row.original.accounts > 0 ? row.original.amount / row.original.accounts : 0),
+      },
+      {
+        id: 'txn_per_account',
+        header: 'Txns / Account',
+        enableSorting: true,
+        sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.transaction_count / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.transaction_count / b.original.accounts : 0),
+        cell: ({ row }) => (row.original.accounts > 0 ? (row.original.transaction_count / row.original.accounts).toFixed(1) : '—'),
       },
     ],
     []
@@ -444,13 +426,14 @@ export default function CustomerDashboard() {
           {/* Top Customers Table with TanStack */}
           <AdvancedDataTable
             title="Top Customers by Portfolio Value"
-            subtitle={`${customerRows.length} high-value customers • Click CIF/name for full detail`}
+            subtitle={`${customerRows.length} high-value customers · Click CIF/name for full detail`}
             data={customerRows}
             columns={customerColumns}
             pageSize={20}
             enableFiltering={true}
             enableSorting={true}
             enablePagination={true}
+            initialHidden={{ vol_per_account: true, txn_per_account: true }}
             actions={
               <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-blue text-white text-xs font-medium hover:opacity-90 transition-opacity">
                 ⬇ Export

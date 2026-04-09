@@ -153,10 +153,19 @@ module Api
         data = cached("customer_profile_#{cif_id}") do
           scope = TranSummary.apply_filters(filters)
           summary = build_summary(scope)
-          customer_name = AccountMasterLookup.customer_name_for(cif_id) || scope.where.not(acct_name: [nil, '']).pick(:acct_name) || 'Unknown'
-          accounts = AccountMasterLookup.customer_accounts(cif_id: cif_id)
           amt = summary[:total_amount].to_f
           avg = summary[:total_count].to_i > 0 ? amt / summary[:total_count].to_i : 0
+
+          # ── Personal info: customers → accounts → tran_summary ──
+          personal_info = fetch_personal_info(cif_id)
+
+          # Fallback name from gam/tran_summary
+          customer_name = personal_info[:full_name].presence ||
+                          AccountMasterLookup.customer_name_for(cif_id) ||
+                          scope.where.not(acct_name: [nil, '']).pick(:acct_name) ||
+                          "Customer #{cif_id}"
+
+          accounts = AccountMasterLookup.customer_accounts(cif_id: cif_id)
 
           by_branch = scope.group(:gam_branch, :gam_province)
                            .select('gam_branch AS branch_code, gam_province AS province, SUM(tran_amt) AS total_amount, SUM(tran_count) AS transaction_count, COUNT(DISTINCT acct_num) AS unique_accounts, AVG(tran_amt) AS avg_transaction')
@@ -192,9 +201,20 @@ module Api
             cif_id: cif_id,
             requested_cif_id: cif_id,
             customer_name: customer_name,
+            # Personal info from customers table
+            first_name:     personal_info[:first_name],
+            last_name:      personal_info[:last_name],
+            email:          personal_info[:email],
+            phone_number:   personal_info[:phone_number],
+            address:        personal_info[:address],
+            date_of_birth:  personal_info[:date_of_birth],
+            account_status: personal_info[:account_status],
+            customer_id:    personal_info[:customer_id],
+            age:            personal_info[:age],
             segment: SegmentClassifier.segment_for(amt),
             risk_tier: SegmentClassifier.risk_tier_for(avg),
             accounts: accounts,
+            account_columns: AccountMasterLookup.gam_columns,
             summary: summary,
             by_branch: by_branch,
             by_channel: by_channel,
@@ -568,6 +588,40 @@ module Api
       def safe_divide(numerator, denominator)
         return 0.0 if denominator.nil? || denominator.to_f.zero?
         (numerator.to_f / denominator.to_f).round(2)
+      end
+
+      # Lookup personal info from customers table via:
+      # tran_summary.cif_id → accounts.account_number = tran_summary.acct_num → customers.customer_id
+      def fetch_personal_info(cif_id)
+        result = ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'PersonalInfo', [cif_id]).first
+          SELECT c.customer_id, c.first_name, c.last_name, c.email,
+                 c.phone_number, c.address, c.date_of_birth, c.account_status,
+                 EXTRACT(YEAR FROM AGE(c.date_of_birth))::integer AS age
+          FROM customers c
+          JOIN accounts a ON a.customer_id = c.customer_id
+          JOIN tran_summary ts ON ts.acct_num = a.account_number
+          WHERE ts.cif_id = $1
+          LIMIT 1
+        SQL
+
+        return {} if result.nil?
+
+        dob = result['date_of_birth']
+        {
+          customer_id:    result['customer_id'],
+          first_name:     result['first_name'].presence,
+          last_name:      result['last_name'].presence,
+          full_name:      [result['first_name'], result['last_name']].compact.join(' ').presence,
+          email:          result['email'].presence,
+          phone_number:   result['phone_number'].presence,
+          address:        result['address'].presence,
+          date_of_birth:  dob.is_a?(String) ? dob.split(' ').first : dob&.to_s,
+          account_status: result['account_status'].presence,
+          age:            result['age']&.to_i
+        }
+      rescue StandardError => e
+        Rails.logger.warn("fetch_personal_info failed for #{cif_id}: #{e.message}")
+        {}
       end
     end
   end

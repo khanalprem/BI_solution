@@ -53,11 +53,11 @@ export function Sidebar() {
         fixed top-0 left-0 bottom-0 z-[100] overflow-y-auto
         transition-transform lg:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        bg-[#0f1119] border-r border-white/[0.06]
+        bg-bg-surface border-r border-border
       `}>
 
         {/* ── Brand mark ── */}
-        <div className="px-4 py-4 border-b border-white/[0.06] flex items-center gap-3 flex-shrink-0">
+        <div className="px-4 py-4 border-b border-border flex items-center gap-3 flex-shrink-0">
           {/* Logo: geometric B mark */}
           <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 relative overflow-hidden"
             style={{ background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #06b6d4 100%)' }}
@@ -249,12 +249,12 @@ export function Sidebar() {
         </nav>
 
         {/* ── User footer ── */}
-        <div className="mt-auto border-t border-white/[0.06] p-2.5 flex-shrink-0">
+        <div className="mt-auto border-t border-border p-2.5 flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.04] transition-all text-left outline-none focus-visible:ring-1 focus-visible:ring-accent-blue/50"
+                className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-bg-input transition-all text-left outline-none focus-visible:ring-1 focus-visible:ring-accent-blue/50"
               >
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' }}
@@ -326,7 +326,7 @@ function NavItem({
         flex items-center gap-2.5 px-3.5 py-[5px] mx-1 rounded-lg transition-all duration-150 text-[11.5px] relative select-none
         ${active
           ? 'bg-accent-blue/[0.13] text-text-primary font-semibold'
-          : 'text-text-secondary hover:bg-white/[0.04] hover:text-text-primary'
+          : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'
         }
       `}
     >

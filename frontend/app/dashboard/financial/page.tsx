@@ -61,6 +61,12 @@ export default function FinancialDashboard() {
       cell: ({ row }) => <span className="font-mono text-[11px] text-text-primary">{row.original.gl_code}</span>,
     },
     {
+      accessorKey: 'gl_desc',
+      header: 'GL Description',
+      enableColumnFilter: true,
+      cell: ({ row }) => <span className="text-text-secondary">{row.original.gl_desc || '—'}</span>,
+    },
+    {
       accessorKey: 'type',
       header: 'Type',
       enableColumnFilter: true,
@@ -74,7 +80,7 @@ export default function FinancialDashboard() {
     },
     {
       accessorKey: 'amount',
-      header: 'Amount',
+      header: 'Amount (NPR)',
       enableSorting: true,
       sortDescFirst: true,
       enableColumnFilter: true,
@@ -86,9 +92,27 @@ export default function FinancialDashboard() {
       accessorKey: 'count',
       header: 'Transactions',
       enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.count.toLocaleString(),
     },
-  ], []);
+    {
+      id: 'avg_amount',
+      header: 'Avg Amount',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
+      cell: ({ row }) => formatNPR(row.original.count > 0 ? row.original.amount / row.original.count : 0),
+    },
+    {
+      id: 'share',
+      header: '% of Total',
+      cell: ({ row }) => {
+        const total = byGl.reduce((s, g) => s + g.amount, 0);
+        return total > 0 ? `${((row.original.amount / total) * 100).toFixed(1)}%` : '—';
+      },
+    },
+  ], [byGl]);
 
   if (isLoading) {
     return (
@@ -148,9 +172,9 @@ export default function FinancialDashboard() {
           subtitle="Month-over-month inflow and outflow"
           legend={
             <>
-              <ChartLegendItem color="#10b981" label="Credit (CR)" />
-              <ChartLegendItem color="#ef4444" label="Debit (DR)" />
-              <ChartLegendItem color="#3b82f6" label="Net Flow" />
+              <ChartLegendItem color="#0ea5e9" label="Credit (CR)" />
+              <ChartLegendItem color="#f43f5e" label="Debit (DR)" />
+              <ChartLegendItem color="#a78bfa" label="Net Flow" />
             </>
           }
         >
@@ -158,9 +182,9 @@ export default function FinancialDashboard() {
             data={monthlyTrend}
             xAxisKey="month"
             series={[
-              { dataKey: 'credit', name: 'Credit (CR)', color: '#10b981' },
-              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#ef4444' },
-              { dataKey: 'net',    name: 'Net Flow',    color: '#3b82f6', dashed: true },
+              { dataKey: 'credit', name: 'Credit (CR)', color: '#0ea5e9' },
+              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#f43f5e' },
+              { dataKey: 'net',    name: 'Net Flow',    color: '#a78bfa', dashed: true },
             ]}
             formatValue={formatNPR}
             referenceLine={0}
@@ -174,8 +198,8 @@ export default function FinancialDashboard() {
             data={monthlyTrend}
             xAxisKey="month"
             series={[
-              { dataKey: 'credit', name: 'Credit (CR)', color: '#10b981' },
-              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#ef4444' },
+              { dataKey: 'credit', name: 'Credit (CR)', color: '#0ea5e9' },
+              { dataKey: 'debit',  name: 'Debit (DR)',  color: '#f43f5e' },
             ]}
             formatValue={formatNPR}
             height={260}
@@ -188,7 +212,7 @@ export default function FinancialDashboard() {
             <PremiumBarChart
               data={glCr}
               xAxisKey="gl_code"
-              series={[{ dataKey: 'amount', name: 'Amount', color: '#10b981' }]}
+              series={[{ dataKey: 'amount', name: 'Amount', color: '#0ea5e9' }]}
               layout="horizontal"
               formatValue={formatNPR}
               yAxisWidth={70}
@@ -200,7 +224,7 @@ export default function FinancialDashboard() {
             <PremiumBarChart
               data={glDr}
               xAxisKey="gl_code"
-              series={[{ dataKey: 'amount', name: 'Amount', color: '#ef4444' }]}
+              series={[{ dataKey: 'amount', name: 'Amount', color: '#f43f5e' }]}
               layout="horizontal"
               formatValue={formatNPR}
               yAxisWidth={70}
@@ -213,10 +237,11 @@ export default function FinancialDashboard() {
         {byGl.length > 0 && (
           <AdvancedDataTable
             title="GL Sub-Head Breakdown"
-            subtitle="All GL codes with CR/DR split — filter by type, sort by amount"
+            subtitle="All GL codes with CR/DR split — use Columns to show/hide fields"
             data={byGl as GlRow[]}
             columns={glColumns}
             pageSize={10}
+            initialHidden={{ avg_amount: true, share: true }}
           />
         )}
       </div>

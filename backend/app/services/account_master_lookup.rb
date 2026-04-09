@@ -74,31 +74,28 @@ class AccountMasterLookup
 
       scope = apply_account_filters(Gam.where(cif_id: cif_id.to_s.strip), filters, skip_cif: true)
 
-      scope.select(
-        :acct_num,
-        :acid,
-        :acct_name,
-        :schm_type,
-        :gl_sub_head_code,
-        :sol_id,
-        :eod_balance,
-        :lchg_time
-      )
-           .order(Arel.sql('COALESCE(eod_balance, 0) DESC'), :acct_num)
+      # Determine the order column safely
+      col_names = Gam.column_names
+      order_col = %w[eod_balance lchg_time acct_num].find { |c| col_names.include?(c) } || col_names.first
+
+      scope.order(Arel.sql("COALESCE(#{ActiveRecord::Base.connection.quote_column_name(order_col)}, 0) DESC"), :acct_num)
            .map do |record|
-        {
-          acct_num: record.acct_num.to_s,
-          acid: record.acid.to_s,
-          acct_name: record.acct_name.to_s,
-          scheme_type: normalize_text(record.schm_type) || FALLBACK_SCHEME_TYPE,
-          gl_sub_head_code: normalize_text(record.gl_sub_head_code),
-          sol_id: record.sol_id&.to_s,
-          eod_balance: record.eod_balance.to_f,
-          last_changed_at: record.lchg_time&.iso8601
-        }
+        # Return every column the GAM table has — frontend controls visibility
+        col_names.each_with_object({}) do |col, hash|
+          raw = record.public_send(col)
+          hash[col] = raw.respond_to?(:iso8601) ? raw.iso8601 : raw
+        end.symbolize_keys
       end
     rescue StandardError => exception
       log_warning("customer account lookup failed for #{cif_id}: #{exception.message}")
+      []
+    end
+
+    # Returns the column names of the GAM table so the frontend can render headers
+    def gam_columns
+      return [] unless available?
+      Gam.column_names
+    rescue StandardError
       []
     end
 

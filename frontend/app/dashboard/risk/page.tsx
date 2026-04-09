@@ -48,6 +48,8 @@ export default function RiskDashboard() {
       accessorKey: 'province',
       header: 'Province',
       enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
       cell: ({ row }) => <span className="capitalize font-medium text-text-primary">{row.original.province}</span>,
     },
     {
@@ -55,12 +57,18 @@ export default function RiskDashboard() {
       header: 'Total Amount',
       enableSorting: true,
       sortDescFirst: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'accounts',
       header: 'Accounts',
       enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.accounts.toLocaleString(),
     },
     {
@@ -68,7 +76,17 @@ export default function RiskDashboard() {
       header: 'Debit Exposure',
       enableSorting: true,
       sortDescFirst: true,
+      enableColumnFilter: true,
+      filterFn: 'numberRange',
+      meta: { filterType: 'number-range' },
       cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.debit_amount)}</span>,
+    },
+    {
+      id: 'credit_amount',
+      header: 'Credit Amount',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.amount - a.original.debit_amount) - (b.original.amount - b.original.debit_amount),
+      cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.amount - row.original.debit_amount)}</span>,
     },
     {
       id: 'debit_pct',
@@ -77,6 +95,30 @@ export default function RiskDashboard() {
       cell: ({ row }) => {
         const pct = row.original.amount > 0 ? (row.original.debit_amount / row.original.amount) * 100 : 0;
         return <span>{formatPercent(pct)}</span>;
+      },
+    },
+    {
+      id: 'credit_pct',
+      header: 'Credit %',
+      cell: ({ row }) => {
+        const cr = row.original.amount - row.original.debit_amount;
+        const pct = row.original.amount > 0 ? (cr / row.original.amount) * 100 : 0;
+        return <span>{formatPercent(pct)}</span>;
+      },
+    },
+    {
+      id: 'avg_per_account',
+      header: 'Avg / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.amount / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.amount / b.original.accounts : 0),
+      cell: ({ row }) => formatNPR(row.original.accounts > 0 ? row.original.amount / row.original.accounts : 0),
+    },
+    {
+      id: 'network_share',
+      header: 'Network Share',
+      cell: ({ row }) => {
+        const total = byProvince.reduce((s, p) => s + p.amount, 0);
+        return total > 0 ? `${((row.original.amount / total) * 100).toFixed(1)}%` : '—';
       },
     },
     {
@@ -92,7 +134,7 @@ export default function RiskDashboard() {
         );
       },
     },
-  ], []);
+  ], [byProvince]);
   const totalAmount = data?.total_amount ?? 0;
   const creditAmount = data?.credit_amount ?? 0;
   const debitAmount = data?.debit_amount ?? 0;
@@ -226,7 +268,7 @@ export default function RiskDashboard() {
               xAxisKey="gl_code"
               series={[{ dataKey: 'amount', name: 'Amount' }]}
               layout="horizontal"
-              itemColors={byGl.slice(0, 8).map((_, i) => i === 0 ? '#ef4444' : i === 1 ? '#f59e0b' : '#3b82f6')}
+              itemColors={byGl.slice(0, 8).map((_, i) => i === 0 ? '#f43f5e' : i === 1 ? '#fb923c' : '#0ea5e9')}
               formatValue={formatNPR}
               yAxisWidth={80}
               height={260}
@@ -238,8 +280,8 @@ export default function RiskDashboard() {
               data={byProvince}
               xAxisKey="province"
               series={[
-                { dataKey: 'amount',       name: 'Total', color: '#3b82f6' },
-                { dataKey: 'debit_amount', name: 'Debit', color: '#ef4444' },
+                { dataKey: 'amount',       name: 'Total', color: '#0ea5e9' },
+                { dataKey: 'debit_amount', name: 'Debit', color: '#f43f5e' },
               ]}
               formatValue={formatNPR}
               height={260}
@@ -251,11 +293,12 @@ export default function RiskDashboard() {
         {byProvince.length > 0 && (
           <AdvancedDataTable
             title="Province Risk Summary"
-            subtitle="Volume, accounts, and debit exposure by province"
+            subtitle="All tran_summary province fields — use Columns to show/hide"
             data={byProvince as ProvinceRow[]}
             columns={provinceColumns}
             pageSize={10}
             enablePagination={false}
+            initialHidden={{ credit_amount: true, credit_pct: true, avg_per_account: true, network_share: true }}
           />
         )}
       </div>

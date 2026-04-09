@@ -7,7 +7,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
-import { DataTable, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/DataTable';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { Pill } from '@/components/ui/Pill';
 import { useProductionExplorer, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
@@ -243,48 +243,132 @@ export default function BranchDetailPage() {
                 />
               )}
             </ChartCard>
-            
-            <DataTable title="Branch Information" subtitle="Contact and regulatory profile">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>Field</TableHeader>
-                    <TableHeader>Value</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Branch Code</TableCell>
-                    <TableCell>
-                      <strong className="text-text-primary">{branchCode}</strong>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Province</TableCell>
-                    <TableCell>{province}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Status</TableCell>
-                    <TableCell>
-                      <Pill variant="green">Operational</Pill>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Last Updated</TableCell>
-                    <TableCell>{filterStats?.date_range?.max || '-'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Channel Coverage</TableCell>
-                    <TableCell>{(channelData || []).length} active channels</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>GL Scope</TableCell>
-                    <TableCell>{(glData || []).length} unique ledger heads active</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </DataTable>
+
+            {/* Branch info summary card */}
+            <div className="bg-bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+              <div className="text-[13px] font-semibold text-text-primary">Branch Profile</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                {[
+                  { label: 'Branch Code',      value: branchCode },
+                  { label: 'Province',          value: province },
+                  { label: 'Status',            value: 'Operational' },
+                  { label: 'Active Channels',   value: `${channelData.length}` },
+                  { label: 'GL Heads Active',   value: `${glData.length}` },
+                  { label: 'Data Up To',        value: filterStats?.date_range?.max || '—' },
+                  { label: 'Credit Ratio',      value: totalAmount > 0 ? `${((creditAmount / totalAmount) * 100).toFixed(1)}%` : '—' },
+                  { label: 'Avg / Txn',         value: formatNPR(avgTxn) },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.4px] text-text-muted">{item.label}</div>
+                    <div className="text-[12px] text-text-primary mt-0.5">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+
+          {/* GL Breakdown table — all tran_summary GL fields */}
+          {glData.length > 0 && (() => {
+            type GlRow = { gl_code: string; credit: number; debit: number; net: number };
+            const glTotal = glData.reduce((s, r) => s + r.credit + r.debit, 0);
+            const glColumns: ColumnDef<GlRow>[] = [
+              {
+                accessorKey: 'gl_code',
+                header: 'GL Sub-Head Code',
+                enableColumnFilter: true,
+                cell: ({ row }) => <span className="font-mono text-[11px] text-text-primary">{row.original.gl_code}</span>,
+              },
+              {
+                accessorKey: 'credit',
+                header: 'Credit (CR)',
+                enableSorting: true, sortDescFirst: true,
+                enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+                cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.credit)}</span>,
+              },
+              {
+                accessorKey: 'debit',
+                header: 'Debit (DR)',
+                enableSorting: true, sortDescFirst: true,
+                enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+                cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.debit)}</span>,
+              },
+              {
+                accessorKey: 'net',
+                header: 'Net Flow',
+                enableSorting: true,
+                cell: ({ row }) => <span className={`font-mono text-[11px] ${row.original.net >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatNPR(row.original.net)}</span>,
+              },
+              {
+                id: 'total',
+                header: 'Total Volume',
+                enableSorting: true,
+                sortingFn: (a, b) => (a.original.credit + a.original.debit) - (b.original.credit + b.original.debit),
+                cell: ({ row }) => <span className="font-mono text-[11px]">{formatNPR(row.original.credit + row.original.debit)}</span>,
+              },
+              {
+                id: 'cr_ratio',
+                header: 'CR Ratio',
+                cell: ({ row }) => {
+                  const tot = row.original.credit + row.original.debit;
+                  return tot > 0 ? `${((row.original.credit / tot) * 100).toFixed(1)}%` : '—';
+                },
+              },
+              {
+                id: 'share',
+                header: '% of Branch',
+                cell: ({ row }) => {
+                  const tot = row.original.credit + row.original.debit;
+                  return glTotal > 0 ? `${((tot / glTotal) * 100).toFixed(1)}%` : '—';
+                },
+              },
+            ];
+            return (
+              <AdvancedDataTable
+                title="GL Sub-Head Breakdown"
+                subtitle={`${glData.length} GL codes active in this branch — all tran_summary GL fields`}
+                data={glData as GlRow[]}
+                columns={glColumns}
+                pageSize={15}
+                enablePagination={false}
+                initialHidden={{ cr_ratio: true, share: true }}
+              />
+            );
+          })()}
+
+          {/* Channel breakdown table */}
+          {channelData.length > 0 && (() => {
+            type ChanRow = { channel: string; total_amount: number };
+            const chanTotal = channelData.reduce((s, c) => s + c.total_amount, 0);
+            const chanColumns: ColumnDef<ChanRow>[] = [
+              {
+                accessorKey: 'channel',
+                header: 'Channel',
+                enableColumnFilter: true,
+                cell: ({ row }) => <span className="capitalize font-medium text-text-primary">{formatChannelLabel(row.original.channel)}</span>,
+              },
+              {
+                accessorKey: 'total_amount',
+                header: 'Total Amount',
+                enableSorting: true, sortDescFirst: true,
+                cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
+              },
+              {
+                id: 'share',
+                header: '% of Branch',
+                cell: ({ row }) => chanTotal > 0 ? `${((row.original.total_amount / chanTotal) * 100).toFixed(1)}%` : '—',
+              },
+            ];
+            return (
+              <AdvancedDataTable
+                title="Channel Breakdown"
+                subtitle="tran_source distribution for this branch"
+                data={channelData as ChanRow[]}
+                columns={chanColumns}
+                pageSize={10}
+                enablePagination={false}
+              />
+            );
+          })()}
       </div>
     </>
   );

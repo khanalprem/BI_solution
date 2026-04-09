@@ -52,11 +52,14 @@ export default function EmployeeDetailPage() {
   const byProduct = data?.by_product ?? [];
 
   type EmpBranchRow = { branch: string; province: string; amount: number; count: number; accounts: number };
+  const empBranchTotal = useMemo(() => byBranch.reduce((s, b) => s + b.amount, 0), [byBranch]);
   const branchColumns = useMemo<ColumnDef<EmpBranchRow>[]>(() => [
     {
       accessorKey: 'branch',
       header: 'Branch',
       enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
       cell: ({ row }) => (
         <Link href={`/dashboard/branch/${encodeURIComponent(row.original.branch)}`} className="font-semibold text-accent-blue hover:underline">
           {row.original.branch}
@@ -66,74 +69,120 @@ export default function EmployeeDetailPage() {
     {
       accessorKey: 'province',
       header: 'Province',
-      enableColumnFilter: true,
-      filterFn: 'arrayFilter',
-      meta: { filterType: 'select' },
+      enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       cell: ({ row }) => <span className="capitalize text-text-secondary">{row.original.province}</span>,
     },
     {
       accessorKey: 'amount',
-      header: 'Volume',
-      enableSorting: true,
-      sortDescFirst: true,
+      header: 'Total Volume',
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
       header: 'Transactions',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.count.toLocaleString(),
     },
     {
       accessorKey: 'accounts',
       header: 'Accounts',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.accounts.toLocaleString(),
     },
     {
       id: 'avg_txn',
       header: 'Avg Txn',
-      enableSorting: false,
-      cell: ({ row }) => (
-        <span className="font-mono text-[11px]">
-          {row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}
-        </span>
-      ),
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
-  ], []);
+    {
+      id: 'txn_per_account',
+      header: 'Txns / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.count / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.count / b.original.accounts : 0),
+      cell: ({ row }) => (row.original.accounts > 0 ? (row.original.count / row.original.accounts).toFixed(1) : '—'),
+    },
+    {
+      id: 'vol_per_account',
+      header: 'Vol / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.amount / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.amount / b.original.accounts : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.accounts > 0 ? formatNPR(row.original.amount / row.original.accounts) : '—'}</span>,
+    },
+    {
+      id: 'share',
+      header: '% of Total',
+      enableSorting: true,
+      sortingFn: (a, b) => a.original.amount - b.original.amount,
+      cell: ({ row }) => {
+        const pct = empBranchTotal > 0 ? (row.original.amount / empBranchTotal) * 100 : 0;
+        return (
+          <div className="flex items-center gap-2 min-w-[70px]">
+            <div className="flex-1 h-1.5 rounded-full bg-bg-input overflow-hidden">
+              <div className="h-full rounded-full bg-accent-blue transition-all" style={{ width: `${Math.min(pct * 3, 100)}%` }} />
+            </div>
+            <span className="text-[9.5px] text-text-muted w-8 text-right">{pct.toFixed(1)}%</span>
+          </div>
+        );
+      },
+    },
+  ], [empBranchTotal]);
 
   type ProductRow = { product: string; amount: number; count: number };
+  const productTotal = useMemo(() => byProduct.reduce((s, p) => s + p.amount, 0), [byProduct]);
   const productColumns = useMemo<ColumnDef<ProductRow>[]>(() => [
     {
       accessorKey: 'product',
       header: 'Product',
       enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
       cell: ({ row }) => <span className="font-medium text-text-primary">{row.original.product}</span>,
     },
     {
       accessorKey: 'amount',
-      header: 'Volume',
-      enableSorting: true,
-      sortDescFirst: true,
+      header: 'Total Volume',
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
       header: 'Transactions',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.count.toLocaleString(),
     },
     {
       id: 'avg_txn',
       header: 'Avg Txn',
-      enableSorting: false,
-      cell: ({ row }) => (
-        <span className="font-mono text-[11px]">
-          {row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}
-        </span>
-      ),
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
-  ], []);
+    {
+      id: 'share',
+      header: '% of Total',
+      enableSorting: true,
+      sortingFn: (a, b) => a.original.amount - b.original.amount,
+      cell: ({ row }) => {
+        const pct = productTotal > 0 ? (row.original.amount / productTotal) * 100 : 0;
+        return (
+          <div className="flex items-center gap-2 min-w-[70px]">
+            <div className="flex-1 h-1.5 rounded-full bg-bg-input overflow-hidden">
+              <div className="h-full rounded-full bg-accent-purple transition-all" style={{ width: `${Math.min(pct * 2, 100)}%` }} />
+            </div>
+            <span className="text-[9.5px] text-text-muted w-8 text-right">{pct.toFixed(1)}%</span>
+          </div>
+        );
+      },
+    },
+  ], [productTotal]);
 
   // Initials from user ID
   const initials = userId
@@ -311,10 +360,11 @@ export default function EmployeeDetailPage() {
         {byBranch.length > 0 && (
           <AdvancedDataTable
             title="Branch Breakdown"
-            subtitle={`${byBranch.length} branch${byBranch.length !== 1 ? 'es' : ''} active`}
+            subtitle={`${byBranch.length} branch${byBranch.length !== 1 ? 'es' : ''} active — use Columns to show/hide fields`}
             data={byBranch as EmpBranchRow[]}
             columns={branchColumns}
             pageSize={10}
+            initialHidden={{ txn_per_account: true, vol_per_account: true, share: true }}
           />
         )}
 
@@ -322,11 +372,12 @@ export default function EmployeeDetailPage() {
         {byProduct.length > 0 && (
           <AdvancedDataTable
             title="Product Breakdown"
-            subtitle="Transaction volume by product type"
+            subtitle="Transaction volume by product type — use Columns to show/hide fields"
             data={byProduct as ProductRow[]}
             columns={productColumns}
             pageSize={10}
             enablePagination={false}
+            initialHidden={{ share: true }}
           />
         )}
       </div>

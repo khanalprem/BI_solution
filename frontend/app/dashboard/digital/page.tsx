@@ -5,6 +5,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
+import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { useDigitalChannels, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
@@ -182,6 +183,97 @@ export default function DigitalDashboard() {
             );
           })}
         </div>
+
+        {/* Channel detail table — all tran_source fields from tran_summary */}
+        {allChannels.length > 0 && (() => {
+          type ChanRow = typeof allChannels[0];
+          const chanTotal = allChannels.reduce((s, c) => s + c.total_amount, 0);
+          const channelColumns: ColumnDef<ChanRow>[] = [
+            {
+              accessorKey: 'channel',
+              header: 'Channel (tran_source)',
+              enableColumnFilter: true,
+              filterFn: 'arrayFilter', meta: { filterType: 'select' },
+              cell: ({ row }) => <span className="capitalize font-medium text-text-primary">{row.original.channel || 'Branch / Counter'}</span>,
+            },
+            {
+              accessorKey: 'total_amount',
+              header: 'Total Amount',
+              enableSorting: true, sortDescFirst: true,
+              enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+              cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
+            },
+            {
+              accessorKey: 'transaction_count',
+              header: 'Transactions',
+              enableSorting: true,
+              enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+              cell: ({ row }) => row.original.transaction_count.toLocaleString(),
+            },
+            {
+              accessorKey: 'unique_accounts',
+              header: 'Unique Accounts',
+              enableSorting: true,
+              enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+              cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
+            },
+            {
+              accessorKey: 'credit_amount',
+              header: 'Credit (CR)',
+              enableSorting: true, sortDescFirst: true,
+              cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.credit_amount)}</span>,
+            },
+            {
+              accessorKey: 'debit_amount',
+              header: 'Debit (DR)',
+              enableSorting: true, sortDescFirst: true,
+              cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.debit_amount)}</span>,
+            },
+            {
+              id: 'net_flow',
+              header: 'Net Flow',
+              enableSorting: true,
+              sortingFn: (a, b) => (a.original.credit_amount - a.original.debit_amount) - (b.original.credit_amount - b.original.debit_amount),
+              cell: ({ row }) => {
+                const net = row.original.credit_amount - row.original.debit_amount;
+                return <span className={`font-mono text-[11px] ${net >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatNPR(net)}</span>;
+              },
+            },
+            {
+              id: 'cr_ratio',
+              header: 'CR Ratio',
+              enableSorting: true,
+              sortingFn: (a, b) => (a.original.total_amount > 0 ? a.original.credit_amount / a.original.total_amount : 0) - (b.original.total_amount > 0 ? b.original.credit_amount / b.original.total_amount : 0),
+              cell: ({ row }) => {
+                const r = row.original.total_amount > 0 ? (row.original.credit_amount / row.original.total_amount) * 100 : 0;
+                return <span className={r > 50 ? 'text-accent-green' : 'text-accent-red'}>{r.toFixed(1)}%</span>;
+              },
+            },
+            {
+              id: 'avg_txn',
+              header: 'Avg / Txn',
+              enableSorting: true,
+              sortingFn: (a, b) => (a.original.transaction_count > 0 ? a.original.total_amount / a.original.transaction_count : 0) - (b.original.transaction_count > 0 ? b.original.total_amount / b.original.transaction_count : 0),
+              cell: ({ row }) => formatNPR(row.original.transaction_count > 0 ? row.original.total_amount / row.original.transaction_count : 0),
+            },
+            {
+              id: 'network_share',
+              header: 'Network Share',
+              cell: ({ row }) => chanTotal > 0 ? `${((row.original.total_amount / chanTotal) * 100).toFixed(1)}%` : '—',
+            },
+          ];
+          return (
+            <AdvancedDataTable
+              title="Channel Detail Table"
+              subtitle="All tran_source fields from tran_summary — use Columns to show/hide"
+              data={allChannels as ChanRow[]}
+              columns={channelColumns}
+              pageSize={10}
+              enablePagination={false}
+              initialHidden={{ cr_ratio: true, avg_txn: true, network_share: true }}
+            />
+          );
+        })()}
       </div>
     </>
   );

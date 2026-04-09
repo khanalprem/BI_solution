@@ -16,46 +16,56 @@ import type { ProvinceMetrics as PM } from '@/types';
 function ProvinceBarChart({ data }: { data: PM[] }) {
   const sorted = [...data].sort((a, b) => a.total_amount - b.total_amount);
   const labels  = sorted.map(p => formatProvinceLabel(p.province));
-  const amounts = sorted.map(p => +(p.total_amount / 1e7).toFixed(2));   // Cr
+  const amounts = sorted.map(p => +(p.total_amount / 1e7).toFixed(2));
   const counts  = sorted.map(p => p.transaction_count);
   const maxAmt  = Math.max(...amounts, 1);
 
+  const t = {
+    bg:        'transparent',
+    tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
+    tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
+    textPri:   css('--text-primary',  '#f0f2f8'),
+    textMuted: css('--text-muted',    '#555d75'),
+    textSec:   css('--text-secondary','#8b92a9'),
+    grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
+    axisLine:  css('--border',        'rgba(255,255,255,0.07)'),
+  };
+
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: t.bg,
     grid: { left: 90, right: 60, top: 10, bottom: 30 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#1a1e2e',
-      borderColor: 'rgba(255,255,255,0.07)',
-      textStyle: { color: '#f0f2f8', fontSize: 11 },
-      formatter: (params: { seriesName: string; value: number }[]) => {
-        return params.map(p =>
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBd,
+      textStyle: { color: t.textPri, fontSize: 11 },
+      formatter: (params: { seriesName: string; value: number }[]) =>
+        params.map(p =>
           `<span style="color:${p.seriesName === 'Volume' ? '#3b82f6' : '#10b981'}">${p.seriesName}</span>: ${
             p.seriesName === 'Volume' ? `Rs. ${p.value}Cr` : p.value.toLocaleString()
           }`
-        ).join('<br/>');
-      },
+        ).join('<br/>'),
     },
     legend: {
       data: ['Volume', 'Transactions'],
-      textStyle: { color: '#8b92a9', fontSize: 10 },
+      textStyle: { color: t.textSec, fontSize: 10 },
       top: 0, right: 0,
     },
     xAxis: [
       {
         type: 'value',
         name: 'Rs. Cr',
-        nameTextStyle: { color: '#555d75', fontSize: 9 },
-        axisLabel: { color: '#555d75', fontSize: 9, formatter: (v: number) => `${v}Cr` },
-        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        nameTextStyle: { color: t.textMuted, fontSize: 9 },
+        axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${v}Cr` },
+        splitLine: { lineStyle: { color: t.grid } },
         axisLine: { show: false },
         max: Math.ceil(maxAmt * 1.1),
       },
       {
         type: 'value',
         name: 'Txns',
-        nameTextStyle: { color: '#555d75', fontSize: 9 },
-        axisLabel: { color: '#555d75', fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
+        nameTextStyle: { color: t.textMuted, fontSize: 9 },
+        axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
         splitLine: { show: false },
         axisLine: { show: false },
       },
@@ -63,8 +73,8 @@ function ProvinceBarChart({ data }: { data: PM[] }) {
     yAxis: {
       type: 'category',
       data: labels,
-      axisLabel: { color: '#8b92a9', fontSize: 10 },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.07)' } },
+      axisLabel: { color: t.textSec, fontSize: 10 },
+      axisLine: { lineStyle: { color: t.axisLine } },
       axisTick: { show: false },
     },
     series: [
@@ -75,20 +85,15 @@ function ProvinceBarChart({ data }: { data: PM[] }) {
         data: amounts.map((v, i) => ({
           value: v,
           itemStyle: {
-            color: {
-              type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
-              colorStops: [
-                { offset: 0, color: 'rgba(59,130,246,0.5)' },
-                { offset: 1, color: '#3b82f6' },
-              ],
-            },
+            color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+              colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.5)' }, { offset: 1, color: '#3b82f6' }] },
             borderRadius: [0, 4, 4, 0],
           },
           label: {
             show: i === amounts.length - 1,
             position: 'right',
             formatter: `Rs. ${v}Cr`,
-            color: '#8b92a9',
+            color: t.textMuted,
             fontSize: 9,
           },
         })),
@@ -121,6 +126,14 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
   const maxAccts  = Math.max(...data.map(p => p.unique_accounts), 1);
   const maxBranch = Math.max(...data.map(p => p.branch_count), 1);
 
+  const t = {
+    tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
+    tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
+    textPri:   css('--text-primary',  '#f0f2f8'),
+    textSec:   css('--text-secondary','#8b92a9'),
+    grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
+  };
+
   const indicators = [
     { name: 'Volume',     max: 100 },
     { name: 'Txns',       max: 100 },
@@ -140,20 +153,19 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
     ],
   }));
 
-  const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#ec4899'];
+  const PALETTE = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#ec4899'];
 
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
-      backgroundColor: '#1a1e2e',
-      borderColor: 'rgba(255,255,255,0.07)',
-      textStyle: { color: '#f0f2f8', fontSize: 11 },
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBd,
+      textStyle: { color: t.textPri, fontSize: 11 },
     },
     legend: {
       data: seriesData.map(s => s.name),
-      textStyle: { color: '#8b92a9', fontSize: 9 },
-      bottom: 0,
-      itemWidth: 8, itemHeight: 8,
+      textStyle: { color: t.textSec, fontSize: 9 },
+      bottom: 0, itemWidth: 8, itemHeight: 8,
     },
     radar: {
       indicator: indicators,
@@ -161,26 +173,30 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
       splitNumber: 4,
       center: ['50%', '46%'],
       radius: '62%',
-      axisName: { color: '#8b92a9', fontSize: 10 },
-      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+      axisName: { color: t.textSec, fontSize: 10 },
+      splitLine: { lineStyle: { color: t.grid } },
       splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'] } },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+      axisLine: { lineStyle: { color: t.grid } },
     },
     series: [{
       type: 'radar',
       data: seriesData.map((s, i) => ({
         name: s.name,
         value: s.value,
-        lineStyle: { color: COLORS[i % COLORS.length], width: 1.5 },
-        itemStyle: { color: COLORS[i % COLORS.length] },
-        areaStyle: { color: `${COLORS[i % COLORS.length]}18` },
-        symbol: 'circle',
-        symbolSize: 4,
+        lineStyle: { color: PALETTE[i % PALETTE.length], width: 1.5 },
+        itemStyle: { color: PALETTE[i % PALETTE.length] },
+        areaStyle: { color: `${PALETTE[i % PALETTE.length]}18` },
+        symbol: 'circle', symbolSize: 4,
       })),
     }],
   };
 
   return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+}
+
+function css(v: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || fallback;
 }
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
@@ -251,6 +267,8 @@ export default function ExecutiveDashboard() {
       accessorKey: 'branch_code',
       header: 'Branch',
       enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
       cell: ({ row }) => (
         <Link href={`/dashboard/branch/${encodeURIComponent(row.original.branch_code)}`} className="font-semibold text-accent-blue hover:underline">
           {row.original.branch_code}
@@ -260,47 +278,61 @@ export default function ExecutiveDashboard() {
     { accessorKey: 'province', header: 'Province', enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' } },
     {
       accessorKey: 'total_amount',
-      header: 'Volume',
-      enableSorting: true,
-      sortDescFirst: true,
-      enableColumnFilter: true,
-      filterFn: 'numberRange',
-      meta: { filterType: 'number-range' },
+      header: 'Total Volume',
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="text-text-primary font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
     },
     {
       accessorKey: 'transaction_count',
       header: 'Transactions',
-      enableSorting: true,
-      sortDescFirst: true,
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.transaction_count.toLocaleString(),
     },
     {
       accessorKey: 'unique_accounts',
       header: 'Accounts',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
     },
     {
       accessorKey: 'avg_transaction',
       header: 'Avg Txn',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <span className="font-mono text-[11px]">{formatNPR(row.original.avg_transaction)}</span>,
     },
     {
+      id: 'txn_per_account',
+      header: 'Txns / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.unique_accounts > 0 ? a.original.transaction_count / a.original.unique_accounts : 0) - (b.original.unique_accounts > 0 ? b.original.transaction_count / b.original.unique_accounts : 0),
+      cell: ({ row }) => (row.original.unique_accounts > 0 ? (row.original.transaction_count / row.original.unique_accounts).toFixed(1) : '—'),
+    },
+    {
+      id: 'vol_per_account',
+      header: 'Vol / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.unique_accounts > 0 ? a.original.total_amount / a.original.unique_accounts : 0) - (b.original.unique_accounts > 0 ? b.original.total_amount / b.original.unique_accounts : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{formatNPR(row.original.unique_accounts > 0 ? row.original.total_amount / row.original.unique_accounts : 0)}</span>,
+    },
+    {
       id: 'performance',
-      header: 'Share',
-      enableSorting: false,
+      header: 'Network Share',
+      enableSorting: true,
+      sortingFn: (a, b) => a.original.total_amount - b.original.total_amount,
       cell: ({ row, table: t }) => {
         const rows = t.getCoreRowModel().rows;
-        const topAmt = Math.max(1, ...rows.map(r => (r.original as BranchMetrics).total_amount));
-        const pct = (row.original.total_amount / topAmt) * 100;
+        const total = rows.reduce((s, r) => s + (r.original as BranchMetrics).total_amount, 0) || 1;
+        const pct = (row.original.total_amount / total) * 100;
         return (
           <div className="flex items-center gap-2 min-w-[80px]">
             <div className="flex-1 h-1.5 rounded-full bg-bg-input overflow-hidden">
-              <div className="h-full rounded-full bg-accent-blue transition-all" style={{ width: `${pct}%` }} />
+              <div className="h-full rounded-full bg-accent-blue transition-all" style={{ width: `${Math.min(pct * 5, 100)}%` }} />
             </div>
-            <span className="text-[9.5px] text-text-muted w-7 text-right">{pct.toFixed(0)}%</span>
+            <span className="text-[9.5px] text-text-muted w-9 text-right">{pct.toFixed(1)}%</span>
           </div>
         );
       },
@@ -308,47 +340,87 @@ export default function ExecutiveDashboard() {
   ], []);
 
   // ── Age group table columns ──
-  type AgeGroup = { age_group: string; customers: number; total_amount: number; transaction_count: number; credit_amount: number; debit_amount: number };
+  type AgeGroup = { age_group: string; customers: number; accounts?: number; total_amount: number; transaction_count: number; credit_amount: number; debit_amount: number };
   const ageColumns = useMemo<ColumnDef<AgeGroup>[]>(() => [
     {
       accessorKey: 'age_group',
       header: 'Age Group',
-      enableColumnFilter: true,
-      filterFn: 'arrayFilter',
-      meta: { filterType: 'select' },
+      enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       cell: ({ row }) => <strong className="text-text-primary">{row.original.age_group}</strong>,
     },
     {
       accessorKey: 'customers',
       header: 'Customers',
-      enableSorting: true,
-      sortDescFirst: true,
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.customers.toLocaleString(),
     },
     {
       accessorKey: 'total_amount',
       header: 'Total Volume',
-      enableSorting: true,
-      sortDescFirst: true,
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="text-text-primary font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
     },
     {
       accessorKey: 'transaction_count',
       header: 'Transactions',
       enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => row.original.transaction_count.toLocaleString(),
     },
     {
       accessorKey: 'credit_amount',
       header: 'Credit (CR)',
-      enableSorting: true,
+      enableSorting: true, sortDescFirst: true,
       cell: ({ row }) => <span className="text-accent-green font-mono text-[11px]">{formatNPR(row.original.credit_amount)}</span>,
     },
     {
       accessorKey: 'debit_amount',
       header: 'Debit (DR)',
+      enableSorting: true, sortDescFirst: true,
+      cell: ({ row }) => <span className="text-accent-red font-mono text-[11px]">{formatNPR(row.original.debit_amount)}</span>,
+    },
+    {
+      id: 'net_flow',
+      header: 'Net Flow',
       enableSorting: true,
-      cell: ({ row }) => <span className="text-accent-purple font-mono text-[11px]">{formatNPR(row.original.debit_amount)}</span>,
+      sortingFn: (a, b) => (a.original.credit_amount - a.original.debit_amount) - (b.original.credit_amount - b.original.debit_amount),
+      cell: ({ row }) => {
+        const net = row.original.credit_amount - row.original.debit_amount;
+        return <span className={`font-mono text-[11px] ${net >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatNPR(net)}</span>;
+      },
+    },
+    {
+      id: 'credit_ratio',
+      header: 'Credit Ratio',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.total_amount > 0 ? a.original.credit_amount / a.original.total_amount : 0) - (b.original.total_amount > 0 ? b.original.credit_amount / b.original.total_amount : 0),
+      cell: ({ row }) => {
+        const ratio = row.original.total_amount > 0 ? (row.original.credit_amount / row.original.total_amount) * 100 : 0;
+        return <span>{ratio.toFixed(1)}%</span>;
+      },
+    },
+    {
+      id: 'avg_txn',
+      header: 'Avg Txn',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.transaction_count > 0 ? a.original.total_amount / a.original.transaction_count : 0) - (b.original.transaction_count > 0 ? b.original.total_amount / b.original.transaction_count : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.transaction_count > 0 ? formatNPR(row.original.total_amount / row.original.transaction_count) : '—'}</span>,
+    },
+    {
+      id: 'txn_per_customer',
+      header: 'Txns / Customer',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.customers > 0 ? a.original.transaction_count / a.original.customers : 0) - (b.original.customers > 0 ? b.original.transaction_count / b.original.customers : 0),
+      cell: ({ row }) => (row.original.customers > 0 ? (row.original.transaction_count / row.original.customers).toFixed(1) : '—'),
+    },
+    {
+      id: 'vol_per_customer',
+      header: 'Vol / Customer',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.customers > 0 ? a.original.total_amount / a.original.customers : 0) - (b.original.customers > 0 ? b.original.total_amount / b.original.customers : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.customers > 0 ? formatNPR(row.original.total_amount / row.original.customers) : '—'}</span>,
     },
   ], []);
 
@@ -587,10 +659,11 @@ export default function ExecutiveDashboard() {
         {/* ── Branch League Table ── */}
         <AdvancedDataTable
           title="Branch Performance League"
-          subtitle="All branches ranked by transaction volume — sortable, filterable"
+          subtitle="All branches ranked by transaction volume — use Columns to show/hide fields"
           data={(data?.by_branch || []) as BranchMetrics[]}
           columns={branchColumns}
           pageSize={10}
+          initialHidden={{ txn_per_account: true, vol_per_account: true }}
         />
 
         {/* ── Customer Age Group Demographics ── */}
@@ -615,11 +688,12 @@ export default function ExecutiveDashboard() {
           {/* Age Group Table */}
           <AdvancedDataTable
             title="Age Group Breakdown"
-            subtitle={`${demographics?.total_customers?.toLocaleString() || '—'} customers with date of birth on record`}
+            subtitle={`${demographics?.total_customers?.toLocaleString() || '—'} customers · use Columns to show/hide fields`}
             data={(demographics?.age_groups || []) as AgeGroup[]}
             columns={ageColumns}
             pageSize={10}
             enablePagination={false}
+            initialHidden={{ net_flow: true, credit_ratio: true, txn_per_customer: true, vol_per_customer: true }}
           />
         </div>
 

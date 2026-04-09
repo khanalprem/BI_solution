@@ -91,9 +91,20 @@ export interface CustomerProfileData {
   cif_id: string;
   requested_cif_id: string;
   customer_name: string;
+  // Personal info from customers table
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  address?: string | null;
+  date_of_birth?: string | null;
+  account_status?: string | null;
+  customer_id?: number | null;
+  age?: number | null;
   segment: string;
   risk_tier: number;
   accounts: CustomerAccountDetail[];
+  account_columns: string[];
   summary: DashboardSummary;
   by_branch: BranchMetrics[];
   by_channel: ChannelMetrics[];
@@ -101,16 +112,8 @@ export interface CustomerProfileData {
   recent_transactions: CustomerRecentTransaction[];
 }
 
-export interface CustomerAccountDetail {
-  acct_num: string;
-  acid: string;
-  acct_name: string;
-  scheme_type: string;
-  gl_sub_head_code?: string | null;
-  sol_id?: string | null;
-  eod_balance: number;
-  last_changed_at?: string | null;
-}
+// All GAM columns returned dynamically — content depends on the production GAM schema
+export type CustomerAccountDetail = Record<string, string | number | boolean | null>;
 
 export interface CustomerRecentTransaction {
   date: string;

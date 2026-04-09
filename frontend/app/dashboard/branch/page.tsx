@@ -81,158 +81,138 @@ export default function BranchDashboard() {
 
   const totalNetworkAmount = data?.total_amount || 0;
   
-  // Branch columns with ALL filters available
+  // Branch columns with ALL production fields
   const branchColumns = useMemo<ColumnDef<BranchData>[]>(
     () => [
       {
         accessorKey: 'branch_code',
-        header: 'Branch Code',
+        header: 'Branch',
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <div
-              className={`
-                w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold
-                ${row.index < 3 ? 'bg-accent-amber-dim text-accent-amber' : 'bg-bg-input text-text-muted'}
-              `}
-            >
+            <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold ${row.index < 3 ? 'bg-accent-amber-dim text-accent-amber' : 'bg-bg-input text-text-muted'}`}>
               {row.index + 1}
             </div>
-            <Link
-              href={`/dashboard/branch/${encodeURIComponent(row.original.branch_code)}`}
-              className="font-medium text-text-primary hover:text-accent-blue transition-colors"
-            >
+            <Link href={`/dashboard/branch/${encodeURIComponent(row.original.branch_code)}`} className="font-medium text-text-primary hover:text-accent-blue transition-colors">
               {row.original.branch_code}
             </Link>
           </div>
         ),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'arrayFilter',
-        meta: { filterType: 'select' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },
       {
         accessorKey: 'province',
         header: 'Province',
         cell: (info) => info.getValue(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'arrayFilter',
-        meta: { filterType: 'select' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },
       {
         accessorKey: 'total_amount',
         header: 'Total Amount',
         cell: ({ row }) => <strong className="text-text-primary">{formatNPR(row.original.total_amount)}</strong>,
-        enableSorting: true,
-        sortDescFirst: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, sortDescFirst: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'transaction_count',
         header: 'Transactions',
         cell: ({ row }) => row.original.transaction_count.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'unique_accounts',
         header: 'Accounts',
         cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'avg_transaction',
-        header: 'Avg/Txn',
+        header: 'Avg / Txn',
         cell: ({ row }) => formatNPR(row.original.avg_transaction),
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+      },
+      {
+        id: 'txn_per_account',
+        header: 'Txns / Account',
         enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        sortingFn: (a, b) => (a.original.unique_accounts > 0 ? a.original.transaction_count / a.original.unique_accounts : 0) - (b.original.unique_accounts > 0 ? b.original.transaction_count / b.original.unique_accounts : 0),
+        cell: ({ row }) => (row.original.unique_accounts > 0 ? (row.original.transaction_count / row.original.unique_accounts).toFixed(1) : '—'),
+      },
+      {
+        id: 'vol_per_account',
+        header: 'Vol / Account',
+        enableSorting: true,
+        sortingFn: (a, b) => (a.original.unique_accounts > 0 ? a.original.total_amount / a.original.unique_accounts : 0) - (b.original.unique_accounts > 0 ? b.original.total_amount / b.original.unique_accounts : 0),
+        cell: ({ row }) => formatNPR(row.original.unique_accounts > 0 ? row.original.total_amount / row.original.unique_accounts : 0),
       },
       {
         id: 'share',
-        header: 'Share of Network',
-        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
+        header: 'Network Share',
         enableSorting: true,
-        sortingFn: (rowA, rowB) => rowA.original.total_amount - rowB.original.total_amount,
-        enableColumnFilter: false,
+        sortingFn: (a, b) => a.original.total_amount - b.original.total_amount,
+        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
       },
     ],
     [totalNetworkAmount]
   );
-  
-  // Province columns with ALL filters
+
+  // Province columns with ALL production fields
   const provinceColumns = useMemo<ColumnDef<ProvinceData>[]>(
     () => [
       {
         accessorKey: 'province',
         header: 'Province',
         cell: (info) => <strong className="text-text-primary">{info.getValue() as string}</strong>,
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'arrayFilter',
-        meta: { filterType: 'select' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },
       {
         accessorKey: 'branch_count',
         header: 'Branches',
         cell: (info) => info.getValue(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'total_amount',
         header: 'Total Amount',
         cell: ({ row }) => <strong className="text-text-primary">{formatNPR(row.original.total_amount)}</strong>,
-        enableSorting: true,
-        sortDescFirst: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, sortDescFirst: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'transaction_count',
         header: 'Transactions',
         cell: ({ row }) => row.original.transaction_count.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'unique_accounts',
         header: 'Accounts',
         cell: ({ row }) => row.original.unique_accounts.toLocaleString(),
-        enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       },
       {
         accessorKey: 'avg_per_branch',
-        header: 'Avg/Branch',
+        header: 'Avg / Branch',
         cell: ({ row }) => formatNPR(row.original.avg_per_branch),
+        enableSorting: true, enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+      },
+      {
+        id: 'avg_per_account',
+        header: 'Avg / Account',
         enableSorting: true,
-        enableColumnFilter: true,
-        filterFn: 'numberRange',
-        meta: { filterType: 'number-range' }
+        sortingFn: (a, b) => (a.original.unique_accounts > 0 ? a.original.total_amount / a.original.unique_accounts : 0) - (b.original.unique_accounts > 0 ? b.original.total_amount / b.original.unique_accounts : 0),
+        cell: ({ row }) => formatNPR(row.original.unique_accounts > 0 ? row.original.total_amount / row.original.unique_accounts : 0),
+      },
+      {
+        id: 'txn_per_branch',
+        header: 'Txns / Branch',
+        enableSorting: true,
+        sortingFn: (a, b) => (a.original.branch_count > 0 ? a.original.transaction_count / a.original.branch_count : 0) - (b.original.branch_count > 0 ? b.original.transaction_count / b.original.branch_count : 0),
+        cell: ({ row }) => (row.original.branch_count > 0 ? Math.round(row.original.transaction_count / row.original.branch_count).toLocaleString() : '—'),
       },
       {
         id: 'share',
-        header: 'Share of Network',
-        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
+        header: 'Network Share',
         enableSorting: true,
-        sortingFn: (rowA, rowB) => rowA.original.total_amount - rowB.original.total_amount,
-        enableColumnFilter: false,
+        sortingFn: (a, b) => a.original.total_amount - b.original.total_amount,
+        cell: ({ row }) => `${totalNetworkAmount > 0 ? ((row.original.total_amount / totalNetworkAmount) * 100).toFixed(1) : '0.0'}%`,
       },
     ],
     [totalNetworkAmount]
@@ -367,25 +347,26 @@ export default function BranchDashboard() {
           {/* Province Performance Table with TanStack */}
           <AdvancedDataTable
             title="Province Performance"
-            subtitle={`${data?.provinces?.length || 0} provinces • Filter, sort, and search`}
+            subtitle={`${data?.provinces?.length || 0} provinces · use Columns to show/hide fields`}
             data={data?.provinces || []}
             columns={provinceColumns}
             pageSize={10}
             enableFiltering={true}
             enableSorting={true}
             enablePagination={false}
+            initialHidden={{ avg_per_account: true, txn_per_branch: true }}
           />
           
-          {/* All Branches Table with TanStack */}
           <AdvancedDataTable
             title="All Branches"
-            subtitle={`${allBranches.length} branches • Click branch code for full detail`}
+            subtitle={`${allBranches.length} branches · Click branch code for full detail`}
             data={allBranches}
             columns={branchColumns}
             pageSize={20}
             enableFiltering={true}
             enableSorting={true}
             enablePagination={true}
+            initialHidden={{ txn_per_account: true, vol_per_account: true }}
             actions={
               <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-blue text-white text-xs font-medium hover:opacity-90 transition-opacity">
                 ⬇ Export

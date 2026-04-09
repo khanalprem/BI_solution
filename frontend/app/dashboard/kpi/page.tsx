@@ -45,24 +45,76 @@ export default function KPIDashboard() {
   const byService = data?.by_service ?? [];
 
   type QuarterRow = { period: string; amount: number; count: number; accounts: number };
+  const quarterTotals = useMemo(() => byQuarter.reduce((s, q) => ({ amount: s.amount + q.amount, count: s.count + q.count }), { amount: 0, count: 0 }), [byQuarter]);
   const quarterColumns = useMemo<ColumnDef<QuarterRow>[]>(() => [
-    { accessorKey: 'period', header: 'Period', enableColumnFilter: true, cell: ({ row }) => <strong className="text-text-primary">{row.original.period}</strong> },
+    {
+      accessorKey: 'period',
+      header: 'Period',
+      enableColumnFilter: true,
+      filterFn: 'arrayFilter',
+      meta: { filterType: 'select' },
+      cell: ({ row }) => <strong className="text-text-primary">{row.original.period}</strong>,
+    },
     {
       accessorKey: 'amount',
       header: 'Volume',
-      enableSorting: true,
-      sortDescFirst: true,
+      enableSorting: true, sortDescFirst: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
       cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
     },
-    { accessorKey: 'count', header: 'Transactions', enableSorting: true, cell: ({ row }) => row.original.count.toLocaleString() },
-    { accessorKey: 'accounts', header: 'Accounts', enableSorting: true, cell: ({ row }) => row.original.accounts.toLocaleString() },
+    {
+      accessorKey: 'count',
+      header: 'Transactions',
+      enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+      cell: ({ row }) => row.original.count.toLocaleString(),
+    },
+    {
+      accessorKey: 'accounts',
+      header: 'Accounts',
+      enableSorting: true,
+      enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
+      cell: ({ row }) => row.original.accounts.toLocaleString(),
+    },
     {
       id: 'avg_txn',
       header: 'Avg Txn',
-      enableSorting: false,
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
       cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
-  ], []);
+    {
+      id: 'txn_per_account',
+      header: 'Txns / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.count / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.count / b.original.accounts : 0),
+      cell: ({ row }) => (row.original.accounts > 0 ? (row.original.count / row.original.accounts).toFixed(1) : '—'),
+    },
+    {
+      id: 'vol_per_account',
+      header: 'Vol / Account',
+      enableSorting: true,
+      sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.amount / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.amount / b.original.accounts : 0),
+      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.accounts > 0 ? formatNPR(row.original.amount / row.original.accounts) : '—'}</span>,
+    },
+    {
+      id: 'share',
+      header: '% of Total',
+      enableSorting: true,
+      sortingFn: (a, b) => a.original.amount - b.original.amount,
+      cell: ({ row }) => {
+        const pct = quarterTotals.amount > 0 ? (row.original.amount / quarterTotals.amount) * 100 : 0;
+        return (
+          <div className="flex items-center gap-2 min-w-[70px]">
+            <div className="flex-1 h-1.5 rounded-full bg-bg-input overflow-hidden">
+              <div className="h-full rounded-full bg-accent-blue transition-all" style={{ width: `${Math.min(pct * 2, 100)}%` }} />
+            </div>
+            <span className="text-[9.5px] text-text-muted w-8 text-right">{pct.toFixed(1)}%</span>
+          </div>
+        );
+      },
+    },
+  ], [quarterTotals]);
 
   if (isLoading) {
     return (
@@ -187,11 +239,12 @@ export default function KPIDashboard() {
         {byQuarter.length > 0 && (
           <AdvancedDataTable
             title="Quarterly Breakdown"
-            subtitle="Volume, transactions, and accounts per quarter"
+            subtitle="Volume, transactions, and accounts per quarter — use Columns to show/hide fields"
             data={byQuarter as QuarterRow[]}
             columns={quarterColumns}
             pageSize={10}
             enablePagination={false}
+            initialHidden={{ txn_per_account: true, vol_per_account: true, share: true }}
           />
         )}
       </div>

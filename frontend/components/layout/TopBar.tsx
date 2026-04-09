@@ -70,13 +70,13 @@ export function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-[90] border-b border-white/[0.06] bg-[#0f1119]/95 backdrop-blur-md">
+    <header className="sticky top-0 z-[90] border-b border-border bg-bg-surface/95 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-3 px-5 py-2.5">
 
         {/* ── Title block ── */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <div>
-            <h1 className="font-display text-[13.5px] font-bold tracking-tight leading-none">{title}</h1>
+            <h1 className="font-display text-[13.5px] font-bold tracking-tight leading-none text-text-primary">{title}</h1>
             {subtitle && (
               <p className="text-text-muted font-normal text-[10.5px] mt-0.5 leading-none">{subtitle}</p>
             )}
@@ -87,7 +87,7 @@ export function TopBar({
         <div className="flex flex-wrap items-center gap-2">
 
           {/* Period picker */}
-          <div className="flex items-center rounded-lg border border-white/[0.07] bg-bg-input p-0.5 gap-px">
+          <div className="flex items-center rounded-lg border border-border bg-bg-input p-0.5 gap-px">
             {BASE_PERIOD_OPTIONS.map((p) => (
               <button
                 key={p}
@@ -98,7 +98,7 @@ export function TopBar({
                   rounded-md px-2.5 py-[5px] text-[10px] font-semibold transition-all duration-150 leading-none
                   ${currentPeriod === p
                     ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-card'
                   }
                 `}
               >
@@ -113,7 +113,7 @@ export function TopBar({
                 rounded-md px-2.5 py-[5px] text-[10px] font-semibold transition-all duration-150 leading-none
                 ${currentPeriod === 'CUSTOM'
                   ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.04]'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-card'
                 }
               `}
             >
@@ -141,7 +141,7 @@ export function TopBar({
                 h-[30px] flex items-center gap-1.5 px-3 rounded-lg border text-[10.5px] font-semibold transition-all duration-150
                 ${filtersOpen
                   ? 'border-accent-blue/40 bg-accent-blue/10 text-accent-blue'
-                  : 'border-white/[0.08] bg-white/[0.03] text-text-secondary hover:text-text-primary hover:bg-white/[0.06]'
+                  : 'border-border bg-bg-input text-text-secondary hover:text-text-primary hover:bg-bg-card'
                 }
               `}
             >
@@ -154,7 +154,7 @@ export function TopBar({
             <button
               type="button"
               onClick={onExport}
-              className="h-[30px] flex items-center gap-1.5 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] text-text-secondary hover:text-text-primary hover:bg-white/[0.06] text-[10.5px] font-semibold transition-all duration-150"
+              className="h-[30px] flex items-center gap-1.5 px-3 rounded-lg border border-border bg-bg-input text-text-secondary hover:text-text-primary hover:bg-bg-card text-[10.5px] font-semibold transition-all duration-150"
             >
               <Download className="h-3 w-3" />
               Export
@@ -163,7 +163,7 @@ export function TopBar({
 
           {/* Theme toggle */}
           {mounted && (
-            <div className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 h-[30px]">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-input px-2.5 h-[30px]">
               {theme === 'dark' ? (
                 <SunMedium className="h-3 w-3 text-text-muted" />
               ) : (
