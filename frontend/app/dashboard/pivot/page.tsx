@@ -221,7 +221,7 @@ export default function PivotDashboard() {
       explorer.rows as DataRow[],
       dateDim!,
       rowDims,
-      [...effectiveMeasures, ...timeComparisons],
+      effectiveMeasures,
     );
     return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
   }, [explorer, selectedDimensions, effectiveMeasures, timeComparisons]);

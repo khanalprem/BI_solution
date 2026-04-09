@@ -328,6 +328,14 @@ class ProductionDataService
 
     normalized_page = [page.to_i, 1].max
     normalized_page_size = [[page_size.to_i, 1].max, 100].min
+
+    # Count active comparison periods early
+    requested_periods_count = Array(time_comparisons).map(&:to_s).filter_map { |key|
+      meta = TIME_COMPARISON_FIELDS[key]
+      meta[:period] if meta
+    }.uniq.length
+    has_comparisons = requested_periods_count > 0
+
     selected_measures = measure_keys.map { |key| MEASURES.fetch(key) }
 
     # Build multi-dimension SELECT and GROUP BY
@@ -344,13 +352,11 @@ class ProductionDataService
     groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}"
     orderby_clause = "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
 
-    # PARTITION BY: only partition by non-date dimensions for correct total_rows count.
-    # If we partition by tran_date, count(1) OVER() gives per-date count, not total.
-    non_date_dim_sqls = dimension_keys
-      .reject { |k| %w[tran_date year_month year_quarter year].include?(k) }
-      .map { |k| DIMENSIONS.fetch(k).fetch(:sql) }
-
-    partitionby_clause = non_date_dim_sqls.any? ? "PARTITION BY #{non_date_dim_sqls.join(', ')}" : ''
+    # PARTITION BY: empty for correct pagination.
+    # The procedure uses ROW_NUMBER() OVER(partitionby_clause orderby_clause) for pagination.
+    # If we partition, RN resets per group and pagination breaks (returns page_size * num_groups rows).
+    # Empty partition = global RN = correct pagination.
+    partitionby_clause = ''
 
     # EAB join: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
     eab_join = if include_eab
@@ -384,60 +390,133 @@ class ProductionDataService
       end
     end
 
-    with_connection do
-      # Drop any stale result table from a previous call on this connection
-      @connection.execute('DROP TABLE IF EXISTS result')
+    # CRITICAL: Use ActiveRecord::Base.connection directly.
+    # The procedure creates a temp table `result` which is connection-scoped.
+    conn = ActiveRecord::Base.connection
 
-      @connection.execute(<<~SQL.squish)
-        CALL public.get_tran_summary(
-          select_outer => #{@connection.quote(select_outer)},
-          select_inner => #{@connection.quote(select_inner)},
-          where_clause => #{@connection.quote(where_clause)},
-          prevdate_where => #{@connection.quote(period_wheres['prevdate_where'])},
-          thismonth_where => #{@connection.quote(period_wheres['thismonth_where'])},
-          thisyear_where => #{@connection.quote(period_wheres['thisyear_where'])},
-          prevmonth_where => #{@connection.quote(period_wheres['prevmonth_where'])},
-          prevyear_where => #{@connection.quote(period_wheres['prevyear_where'])},
-          prevmonthmtd_where => #{@connection.quote(period_wheres['prevmonthmtd_where'])},
-          prevyearytd_where => #{@connection.quote(period_wheres['prevyearytd_where'])},
-          prevmonthsamedate_where => #{@connection.quote(period_wheres['prevmonthsamedate_where'])},
-          prevyearsamedate_where => #{@connection.quote(period_wheres['prevyearsamedate_where'])},
-          groupby_clause => #{@connection.quote(groupby_clause)},
-          having_clause => '',
-          orderby_clause => #{@connection.quote(orderby_clause)},
-          partitionby_clause => #{@connection.quote(partitionby_clause)},
-          eab_join => #{@connection.quote(eab_join)},
-          user_id => '',
-          page => #{normalized_page},
-          page_size => #{normalized_page_size}
-        )
-      SQL
+    # ── CALL 1: Main query — paginated by the procedure ──────────────────────
+    empty_period_wheres = PERIOD_COMPARISONS.transform_values { '' }
+    conn.execute('DROP TABLE IF EXISTS result')
+    conn.execute(<<~SQL.squish)
+      CALL public.get_tran_summary(
+        select_outer => #{conn.quote(select_outer)},
+        select_inner => #{conn.quote(select_inner)},
+        where_clause => #{conn.quote(where_clause)},
+        prevdate_where => '',
+        thismonth_where => '',
+        thisyear_where => '',
+        prevmonth_where => '',
+        prevyear_where => '',
+        prevmonthmtd_where => '',
+        prevyearytd_where => '',
+        prevmonthsamedate_where => '',
+        prevyearsamedate_where => '',
+        groupby_clause => #{conn.quote(groupby_clause)},
+        having_clause => '',
+        orderby_clause => #{conn.quote(orderby_clause)},
+        partitionby_clause => #{conn.quote(partitionby_clause)},
+        eab_join => #{conn.quote(eab_join)},
+        user_id => '',
+        page => #{normalized_page},
+        page_size => #{normalized_page_size}
+      )
+    SQL
 
-      rows = @connection.exec_query('SELECT * FROM result').to_a
-      total_rows = (rows.first&.[]('pivoted_totalrows') || rows.first&.[]('total_rows') || rows.first&.[]('TOTAL_ROWS') || rows.length).to_i
-      sanitized_rows = rows.map { |row| row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN', 'TOTAL_ROWS') }
-      columns = sanitized_rows.first&.keys || (dimension_keys + measure_keys)
+    main_rows = conn.exec_query('SELECT * FROM result').to_a
+    total_rows = (main_rows.first&.[]('pivoted_totalrows') || main_rows.length).to_i
+    main_sanitized = main_rows.map { |row| row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN') }
 
-      {
-        dimensions: dimension_keys,
-        measures: measure_keys,
-        time_comparisons: requested_periods,
-        columns: columns,
-        rows: sanitized_rows,
-        total_rows: total_rows,
-        page: normalized_page,
-        page_size: normalized_page_size,
-        sql_preview: {
-          select_inner:   select_inner,
-          where_clause:   where_clause,
-          groupby_clause: groupby_clause,
-          orderby_clause: orderby_clause,
-          page:           normalized_page,
-          page_size:      normalized_page_size,
-          period_wheres:  period_wheres.reject { |_, v| v.empty? }
-        }
-      }
+    # ── CALL 2: Comparison periods — only if requested ────────────────────────
+    # Fetch comparison data for the SAME dimension values as the paginated main rows.
+    # This keeps memory bounded: only page_size * num_periods rows.
+    comparison_sanitized = []
+    if has_comparisons && main_sanitized.any?
+      non_date_dims = dimension_keys.reject { |k| %w[tran_date year_month year_quarter year].include?(k) }
+
+      # Build a WHERE clause that restricts to the dimension values from page 1
+      dim_value_clauses = non_date_dims.filter_map do |dim_key|
+        values = main_sanitized.map { |r| r[dim_key] }.compact.uniq
+        next if values.empty?
+        "#{DIMENSIONS.fetch(dim_key).fetch(:sql)} IN (#{values.map { |v| conn.quote(v) }.join(', ')})"
+      end
+
+      # For each active comparison period, call the procedure with the period's WHERE.
+      # Keep the same dimensions (including date) so we get date-wise breakdown.
+      # Prefix the date value with the period label so pivot creates distinct columns.
+      requested_periods.each do |period_key|
+        period_where = build_period_where(period: period_key, end_date: reference_date, filters: filters, dimension: period_dimension)
+        next if period_where.blank?
+
+        period_label = PERIOD_COMPARISONS[period_key][:label].downcase.gsub(' ', '_')
+
+        # Add dimension value restriction to the period WHERE
+        restricted_where = if dim_value_clauses.any?
+          period_where.sub('WHERE ', "WHERE #{dim_value_clauses.join(' AND ')} AND ")
+        else
+          period_where
+        end
+
+        conn.execute('DROP TABLE IF EXISTS result')
+        conn.execute(<<~SQL.squish)
+          CALL public.get_tran_summary(
+            select_outer => #{conn.quote(select_outer)},
+            select_inner => #{conn.quote(select_inner)},
+            where_clause => #{conn.quote(restricted_where)},
+            prevdate_where => '',
+            thismonth_where => '',
+            thisyear_where => '',
+            prevmonth_where => '',
+            prevyear_where => '',
+            prevmonthmtd_where => '',
+            prevyearytd_where => '',
+            prevmonthsamedate_where => '',
+            prevyearsamedate_where => '',
+            groupby_clause => #{conn.quote(groupby_clause)},
+            having_clause => '',
+            orderby_clause => #{conn.quote(orderby_clause)},
+            partitionby_clause => '',
+            eab_join => #{conn.quote(eab_join)},
+            user_id => '',
+            page => 1,
+            page_size => #{normalized_page_size}
+          )
+        SQL
+
+        date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+        comp_rows = conn.exec_query('SELECT * FROM result').to_a
+        comp_rows.each do |row|
+          sanitized = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
+          # Prefix date value with period label: "this_year:2022-03-15"
+          if date_dim && sanitized[date_dim]
+            sanitized[date_dim] = "#{period_label}:#{sanitized[date_dim]}"
+          end
+          comparison_sanitized << sanitized
+        end
+      end
     end
+
+    sanitized_rows = main_sanitized + comparison_sanitized
+    columns = sanitized_rows.first&.keys || (dimension_keys + measure_keys)
+
+    {
+      dimensions: dimension_keys,
+      measures: measure_keys,
+      time_comparisons: requested_periods,
+      columns: columns,
+      rows: sanitized_rows,
+      total_rows: total_rows,
+      page: normalized_page,
+      page_size: normalized_page_size,
+      sql_preview: {
+        select_inner:   select_inner,
+        where_clause:   where_clause,
+        groupby_clause: groupby_clause,
+        orderby_clause: orderby_clause,
+        page:           normalized_page,
+        page_size:      normalized_page_size,
+        period_wheres:  period_wheres.reject { |_, v| v.empty? }
+      }
+    }
   end
 
   private
@@ -510,6 +589,7 @@ class ProductionDataService
 
   def explorer_where_clause(filters:)
     clauses = []
+    conn = ActiveRecord::Base.connection
 
     # Categorical filters
     {
@@ -543,7 +623,7 @@ class ProductionDataService
       vals = normalize_filter_values(opts[:exact])
 
       if from && to
-        clauses << "#{column} BETWEEN #{@connection.quote(from)} AND #{@connection.quote(to)}"
+        clauses << "#{column} BETWEEN #{conn.quote(from)} AND #{conn.quote(to)}"
       elsif vals.any?
         clauses << "#{column} IN (#{quoted_values(vals)})"
       end
@@ -551,16 +631,16 @@ class ProductionDataService
 
     if filters[:acct_num].present?
       pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:acct_num].to_s.strip)}%"
-      clauses << "acct_num::text ILIKE #{@connection.quote(pattern)}"
+      clauses << "acct_num::text ILIKE #{conn.quote(pattern)}"
     end
 
     if filters[:cif_id].present?
       pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
-      clauses << "cif_id::text ILIKE #{@connection.quote(pattern)}"
+      clauses << "cif_id::text ILIKE #{conn.quote(pattern)}"
     end
 
-    clauses << "tran_amt >= #{@connection.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
-    clauses << "tran_amt <= #{@connection.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
+    clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
+    clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
 
     return 'WHERE 1=1' if clauses.empty?
 
