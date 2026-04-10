@@ -246,7 +246,7 @@ export default function CustomerDetailPage() {
         filtersOpen={filtersOpen}
       />
 
-      <div className="p-6 flex flex-col gap-4">
+      <div className="px-5 py-4 flex flex-col gap-[14px]">
           <div className="flex items-center justify-between">
             <Link href="/dashboard/customer" className="text-xs text-accent-blue hover:underline">
               ← Back to Customer &amp; Portfolio

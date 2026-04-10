@@ -13,23 +13,15 @@ interface ChartCardProps {
 
 // Top-accent gradient per variant — maps to a thin colored rule at the very top
 const ACCENT_LINE: Record<NonNullable<ChartCardProps['variant']>, string> = {
-  premium: 'bg-gradient-to-r from-transparent via-accent-blue to-accent-teal/60 opacity-70',
-  default: 'bg-gradient-to-r from-transparent via-accent-green/70 to-transparent opacity-50',
+  premium: 'opacity-0',
+  default: 'opacity-0',
   minimal: 'opacity-0',
 };
 
 // Card surface styles per variant
 const CARD_SURFACE: Record<NonNullable<ChartCardProps['variant']>, string> = {
-  premium: [
-    'bg-bg-card/[0.97] border-border/60 backdrop-blur-sm',
-    'shadow-[0_8px_32px_rgba(0,0,0,0.30),inset_0_1px_0_rgba(255,255,255,0.04)]',
-    'hover:border-accent-blue/20 hover:shadow-[0_14px_48px_rgba(59,130,246,0.10),inset_0_1px_0_rgba(255,255,255,0.06)]',
-  ].join(' '),
-  default: [
-    'bg-bg-card border-border',
-    'shadow-[0_6px_24px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.03)]',
-    'hover:border-border-strong hover:shadow-[0_10px_32px_rgba(0,0,0,0.30)]',
-  ].join(' '),
+  premium: 'bg-bg-card border-border shadow-sm',
+  default: 'bg-bg-card border-border shadow-sm',
   minimal: 'bg-bg-card/70 border-border/40 shadow-sm hover:border-border',
 };
 
@@ -45,7 +37,7 @@ export function ChartCard({
   return (
     <section
       className={cn(
-        'group relative overflow-hidden rounded-xl border flex flex-col transition-all duration-300 p-4',
+        'relative overflow-hidden rounded-xl border flex flex-col p-4',
         CARD_SURFACE[variant],
         className
       )}
@@ -58,31 +50,12 @@ export function ChartCard({
         )}
       />
 
-      {/* ── Shimmer sweep on hover (pure CSS, no JS) ── */}
-      <div
-        className={cn(
-          'pointer-events-none absolute top-0 bottom-0 w-1/3 -skew-x-[15deg]',
-          'bg-gradient-to-r from-transparent via-white/[0.025] to-transparent',
-          'group-hover:animate-[card-shimmer_0.75s_ease-out_forwards]'
-        )}
-      />
-
-      {/* ── Ambient inner glow (premium only) ── */}
-      {variant === 'premium' && (
-        <>
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(59,130,246,0.05),transparent)]" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-[linear-gradient(0deg,rgba(6,182,212,0.03),transparent)]" />
-        </>
-      )}
-
       {/* ── Header row ── */}
-      <div className="relative z-10 flex items-start justify-between mb-3.5">
+      <div className="relative z-10 flex items-start justify-between mb-2.5">
         <div>
-          <h3 className="text-[13px] font-semibold text-text-primary leading-tight tracking-[0.12px]">
-            {title}
-          </h3>
+          <div className="text-[12px] font-semibold text-text-primary">{title}</div>
           {subtitle && (
-            <p className="text-[11px] text-text-muted mt-0.5 leading-snug">{subtitle}</p>
+            <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>
           )}
         </div>
         {controls && <div className="flex gap-1.5 shrink-0 ml-3">{controls}</div>}
@@ -90,16 +63,11 @@ export function ChartCard({
 
       {/* ── Legend row ── */}
       {legend && (
-        <div className="relative z-10 flex gap-1.5 flex-wrap mb-3">{legend}</div>
+        <div className="relative z-10 flex gap-1.5 flex-wrap mb-2.5">{legend}</div>
       )}
 
       {/* ── Chart surface ── */}
-      <div
-        className={cn(
-          'chart-surface flex-1 min-h-0 relative rounded-lg',
-          variant === 'premium' && 'premium-chart-surface'
-        )}
-      >
+      <div className="chart-surface flex-1 min-h-0 relative rounded-lg">
         {children}
       </div>
     </section>

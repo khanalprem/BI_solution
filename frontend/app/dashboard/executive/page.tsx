@@ -6,10 +6,9 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { useDashboardData, useFilterStatistics, useDemographics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, formatProvinceLabel, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, BranchMetrics, ProvinceMetrics, ChannelMetrics, TrendData } from '@/types';
-import { SparkLine, PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
+import { SparkLine, PremiumLineChart, PremiumBarChart, useEChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import Link from 'next/link';
-import ReactECharts from 'echarts-for-react';
 import type { ProvinceMetrics as PM } from '@/types';
 
 // ── Apache ECharts: Province horizontal bar + transaction count line ──
@@ -20,102 +19,104 @@ function ProvinceBarChart({ data }: { data: PM[] }) {
   const counts  = sorted.map(p => p.transaction_count);
   const maxAmt  = Math.max(...amounts, 1);
 
-  const t = {
-    bg:        'transparent',
-    tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
-    tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
-    textPri:   css('--text-primary',  '#f0f2f8'),
-    textMuted: css('--text-muted',    '#555d75'),
-    textSec:   css('--text-secondary','#8b92a9'),
-    grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
-    axisLine:  css('--border',        'rgba(255,255,255,0.07)'),
-  };
+  const chartRef = useEChart(() => {
+    const t = {
+      bg:        'transparent',
+      tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
+      tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
+      textPri:   css('--text-primary',  '#f0f2f8'),
+      textMuted: css('--text-muted',    '#555d75'),
+      textSec:   css('--text-secondary','#8b92a9'),
+      grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
+      axisLine:  css('--border',        'rgba(255,255,255,0.07)'),
+    };
 
-  const option = {
-    backgroundColor: t.bg,
-    grid: { left: 90, right: 60, top: 10, bottom: 30 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: t.tooltipBg,
-      borderColor: t.tooltipBd,
-      textStyle: { color: t.textPri, fontSize: 11 },
-      formatter: (params: { seriesName: string; value: number }[]) =>
-        params.map(p =>
-          `<span style="color:${p.seriesName === 'Volume' ? '#3b82f6' : '#10b981'}">${p.seriesName}</span>: ${
-            p.seriesName === 'Volume' ? `Rs. ${p.value}Cr` : p.value.toLocaleString()
-          }`
-        ).join('<br/>'),
-    },
-    legend: {
-      data: ['Volume', 'Transactions'],
-      textStyle: { color: t.textSec, fontSize: 10 },
-      top: 0, right: 0,
-    },
-    xAxis: [
-      {
-        type: 'value',
-        name: 'Rs. Cr',
-        nameTextStyle: { color: t.textMuted, fontSize: 9 },
-        axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${v}Cr` },
-        splitLine: { lineStyle: { color: t.grid } },
-        axisLine: { show: false },
-        max: Math.ceil(maxAmt * 1.1),
+    return {
+      backgroundColor: t.bg,
+      grid: { left: 90, right: 60, top: 10, bottom: 30 },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: t.tooltipBg,
+        borderColor: t.tooltipBd,
+        textStyle: { color: t.textPri, fontSize: 11 },
+        formatter: (params: { seriesName: string; value: number }[]) =>
+          params.map(p =>
+            `<span style="color:${p.seriesName === 'Volume' ? '#3b82f6' : '#10b981'}">${p.seriesName}</span>: ${
+              p.seriesName === 'Volume' ? `Rs. ${p.value}Cr` : p.value.toLocaleString()
+            }`
+          ).join('<br/>'),
       },
-      {
-        type: 'value',
-        name: 'Txns',
-        nameTextStyle: { color: t.textMuted, fontSize: 9 },
-        axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
-        splitLine: { show: false },
-        axisLine: { show: false },
+      legend: {
+        data: ['Volume', 'Transactions'],
+        textStyle: { color: t.textSec, fontSize: 10 },
+        top: 0, right: 0,
       },
-    ],
-    yAxis: {
-      type: 'category',
-      data: labels,
-      axisLabel: { color: t.textSec, fontSize: 10 },
-      axisLine: { lineStyle: { color: t.axisLine } },
-      axisTick: { show: false },
-    },
-    series: [
-      {
-        name: 'Volume',
-        type: 'bar',
-        xAxisIndex: 0,
-        data: amounts.map((v, i) => ({
-          value: v,
-          itemStyle: {
-            color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
-              colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.5)' }, { offset: 1, color: '#3b82f6' }] },
-            borderRadius: [0, 4, 4, 0],
-          },
-          label: {
-            show: i === amounts.length - 1,
-            position: 'right',
-            formatter: `Rs. ${v}Cr`,
-            color: t.textMuted,
-            fontSize: 9,
-          },
-        })),
-        barMaxWidth: 18,
-        emphasis: { itemStyle: { color: '#60a5fa' } },
+      xAxis: [
+        {
+          type: 'value',
+          name: 'Rs. Cr',
+          nameTextStyle: { color: t.textMuted, fontSize: 9 },
+          axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${v}Cr` },
+          splitLine: { lineStyle: { color: t.grid } },
+          axisLine: { show: false },
+          max: Math.ceil(maxAmt * 1.1),
+        },
+        {
+          type: 'value',
+          name: 'Txns',
+          nameTextStyle: { color: t.textMuted, fontSize: 9 },
+          axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
+          splitLine: { show: false },
+          axisLine: { show: false },
+        },
+      ],
+      yAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: { color: t.textSec, fontSize: 10 },
+        axisLine: { lineStyle: { color: t.axisLine } },
+        axisTick: { show: false },
       },
-      {
-        name: 'Transactions',
-        type: 'line',
-        xAxisIndex: 1,
-        data: counts,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 5,
-        lineStyle: { color: '#10b981', width: 2 },
-        itemStyle: { color: '#10b981' },
-        areaStyle: { color: 'rgba(16,185,129,0.08)' },
-      },
-    ],
-  };
+      series: [
+        {
+          name: 'Volume',
+          type: 'bar',
+          xAxisIndex: 0,
+          data: amounts.map((v, i) => ({
+            value: v,
+            itemStyle: {
+              color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+                colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.5)' }, { offset: 1, color: '#3b82f6' }] },
+              borderRadius: [0, 4, 4, 0],
+            },
+            label: {
+              show: i === amounts.length - 1,
+              position: 'right',
+              formatter: `Rs. ${v}Cr`,
+              color: t.textMuted,
+              fontSize: 9,
+            },
+          })),
+          barMaxWidth: 18,
+          emphasis: { itemStyle: { color: '#60a5fa' } },
+        },
+        {
+          name: 'Transactions',
+          type: 'line',
+          xAxisIndex: 1,
+          data: counts,
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 5,
+          lineStyle: { color: '#10b981', width: 2 },
+          itemStyle: { color: '#10b981' },
+          areaStyle: { color: 'rgba(16,185,129,0.08)' },
+        },
+      ],
+    };
+  }, [data]);
 
-  return <ReactECharts option={option} style={{ height: 240 }} notMerge />;
+  return <div ref={chartRef} className="h-[240px] w-full" />;
 }
 
 // ── Apache ECharts: Province radar ──
@@ -125,14 +126,6 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
   const maxCount  = Math.max(...data.map(p => p.transaction_count), 1);
   const maxAccts  = Math.max(...data.map(p => p.unique_accounts), 1);
   const maxBranch = Math.max(...data.map(p => p.branch_count), 1);
-
-  const t = {
-    tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
-    tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
-    textPri:   css('--text-primary',  '#f0f2f8'),
-    textSec:   css('--text-secondary','#8b92a9'),
-    grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
-  };
 
   const indicators = [
     { name: 'Volume',     max: 100 },
@@ -155,43 +148,53 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
 
   const PALETTE = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#ec4899'];
 
-  const option = {
-    backgroundColor: 'transparent',
-    tooltip: {
-      backgroundColor: t.tooltipBg,
-      borderColor: t.tooltipBd,
-      textStyle: { color: t.textPri, fontSize: 11 },
-    },
-    legend: {
-      data: seriesData.map(s => s.name),
-      textStyle: { color: t.textSec, fontSize: 9 },
-      bottom: 0, itemWidth: 8, itemHeight: 8,
-    },
-    radar: {
-      indicator: indicators,
-      shape: 'polygon',
-      splitNumber: 4,
-      center: ['50%', '46%'],
-      radius: '62%',
-      axisName: { color: t.textSec, fontSize: 10 },
-      splitLine: { lineStyle: { color: t.grid } },
-      splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'] } },
-      axisLine: { lineStyle: { color: t.grid } },
-    },
-    series: [{
-      type: 'radar',
-      data: seriesData.map((s, i) => ({
-        name: s.name,
-        value: s.value,
-        lineStyle: { color: PALETTE[i % PALETTE.length], width: 1.5 },
-        itemStyle: { color: PALETTE[i % PALETTE.length] },
-        areaStyle: { color: `${PALETTE[i % PALETTE.length]}18` },
-        symbol: 'circle', symbolSize: 4,
-      })),
-    }],
-  };
+  const chartRef = useEChart(() => {
+    const t = {
+      tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
+      tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
+      textPri:   css('--text-primary',  '#f0f2f8'),
+      textSec:   css('--text-secondary','#8b92a9'),
+      grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
+    };
 
-  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        backgroundColor: t.tooltipBg,
+        borderColor: t.tooltipBd,
+        textStyle: { color: t.textPri, fontSize: 11 },
+      },
+      legend: {
+        data: seriesData.map(s => s.name),
+        textStyle: { color: t.textSec, fontSize: 9 },
+        bottom: 0, itemWidth: 8, itemHeight: 8,
+      },
+      radar: {
+        indicator: indicators,
+        shape: 'polygon',
+        splitNumber: 4,
+        center: ['50%', '46%'],
+        radius: '62%',
+        axisName: { color: t.textSec, fontSize: 10 },
+        splitLine: { lineStyle: { color: t.grid } },
+        splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'] } },
+        axisLine: { lineStyle: { color: t.grid } },
+      },
+      series: [{
+        type: 'radar',
+        data: seriesData.map((s, i) => ({
+          name: s.name,
+          value: s.value,
+          lineStyle: { color: PALETTE[i % PALETTE.length], width: 1.5 },
+          itemStyle: { color: PALETTE[i % PALETTE.length] },
+          areaStyle: { color: `${PALETTE[i % PALETTE.length]}18` },
+          symbol: 'circle', symbolSize: 4,
+        })),
+      }],
+    };
+  }, [data]);
+
+  return <div ref={chartRef} className="h-[260px] w-full" />;
 }
 
 function css(v: string, fallback: string): string {
@@ -470,7 +473,7 @@ export default function ExecutiveDashboard() {
         filtersOpen={filtersOpen}
       />
 
-      <div className="p-5 flex flex-col gap-3.5">
+      <div className="px-5 py-4 flex flex-col gap-[14px]">
 
         {/* ── Dynamic Filters (Province, Branch, Channel, Product, etc.) ── */}
         <AdvancedFilters
@@ -489,7 +492,7 @@ export default function ExecutiveDashboard() {
         )}
 
         {/* ── KPI Cards (6 — derived from CR/DR data) ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">
           {/* 1. Total Volume (= Net Revenue equivalent) */}
           <SparkCard
             label="Total Volume" highlighted

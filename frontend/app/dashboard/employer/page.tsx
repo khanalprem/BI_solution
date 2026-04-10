@@ -241,7 +241,7 @@ export default function EmployerDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -254,8 +254,8 @@ export default function EmployerDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <KPICard label="Entry Users" value={(data?.total_entry_users ?? 0).toLocaleString()} iconBg="var(--accent-blue-dim)" />
           <KPICard label="VFD Users" value={(data?.total_vfd_users ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" />
-          <KPICard label="Active Branches" value={(data?.total_branches ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" />
-          <KPICard label="Total Volume" value={formatNPR(data?.total_amount ?? 0)} highlighted iconBg="var(--accent-teal-dim)" />
+          <KPICard label="Active Branches" value={(data?.total_branches ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" sparkData={byBranch.slice(0, 12).map(b => b.amount)} />
+          <KPICard label="Total Volume" value={formatNPR(data?.total_amount ?? 0)} highlighted iconBg="var(--accent-teal-dim)" sparkData={topUsers.map(u => u.amount)} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

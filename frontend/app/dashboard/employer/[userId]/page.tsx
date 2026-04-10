@@ -225,7 +225,7 @@ export default function EmployeeDetailPage() {
         showFiltersButton={false}
       />
 
-      <div className="flex flex-col gap-4 p-6 page-enter">
+      <div className="flex flex-col gap-[14px] px-5 py-4 page-enter">
 
         {/* ── Back + Identity header ── */}
         <div className="flex items-center gap-4">

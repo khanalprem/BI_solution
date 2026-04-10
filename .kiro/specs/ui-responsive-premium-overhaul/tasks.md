@@ -1,0 +1,195 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - UI Responsive & Design Token Defects
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bugs exist
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bugs exist across all three categories
+  - **Scoped PBT Approach**: Scope the property to the concrete failing cases:
+    - Category A (Responsiveness): Assert `DashboardLayout` main element renders with `ml-0 lg:ml-[220px]` classes (currently only `ml-[220px]`); assert a hamburger/menu button element exists in the DOM for mobile viewports (currently missing)
+    - Category B (CSS Tokens): Parse `globals.css` and assert `:root` block contains `--accent-green: #10b981` (currently `#16a34a`), `--accent-red: #ef4444` (currently `#e11d48`), `--accent-amber: #f59e0b` (currently `#d97706`), `--accent-purple: #8b5cf6` (currently `#7c3aed`), `--accent-teal: #06b6d4` (currently `#0284c7`); assert dim variables use correct rgba base colors; assert `[data-theme="light"]` block redeclares accent dim variables with correct base colors
+    - Category C (Spacing): Assert executive page content wrapper uses `px-5 py-4 gap-[14px]` classes (currently `p-5 gap-3.5`); assert `globals.css` body font-size is `13px` (currently `12px`)
+  - Write a test file at `frontend/__tests__/bugfix-exploration.test.ts` that reads source files and checks for the expected Tailwind classes and CSS variable values
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bugs exist)
+  - Document counterexamples found to understand root cause
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.6, 1.7, 1.8, 1.10, 1.11_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Desktop Layout & Blue Accent Unchanged
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe: `DashboardLayout` renders `ml-[220px]` on main element (desktop offset present)
+  - Observe: `globals.css` `:root` contains `--accent-blue: #3b82f6` and `--accent-blue-dim: rgba(59,130,246,0.12)` (correct values)
+  - Observe: `Sidebar.tsx` contains navigation links, active state highlighting, user dropdown, sign-out logic
+  - Observe: `TopBar.tsx` contains period picker buttons with `BASE_PERIOD_OPTIONS`, filter toggle, export button, theme toggle
+  - Observe: `AdvancedFilters.tsx` contains draft/apply workflow with `hasPendingChanges`, `handleApply`, `handleClear`
+  - Write a test file at `frontend/__tests__/preservation.test.ts` that:
+    - Asserts `DashboardLayout` source contains `ml-[220px]` (desktop offset preserved — must appear in the class string)
+    - Asserts `globals.css` `:root` block contains `--accent-blue: #3b82f6` and `--accent-blue-dim: rgba(59,130,246,0.12)` unchanged
+    - Asserts `Sidebar.tsx` contains all navigation route hrefs (`/dashboard/executive`, `/dashboard/branch`, `/dashboard/customer`, etc.)
+    - Asserts `TopBar.tsx` contains all period options (`ALL`, `1D`, `WTD`, `MTD`, `QTD`, `YTD`, `PYTD`, `FY`, `CUSTOM`)
+    - Asserts `AdvancedFilters.tsx` contains draft/apply workflow functions (`handleApply`, `handleClear`, `hasPendingChanges`)
+    - Asserts `KPICard.tsx` contains accent map entries for all 6 accent colors
+    - Asserts chart-related CSS classes in `globals.css` (`.premium-tooltip`, `.chart-glow-blue`, etc.) are preserved
+  - Property-based: for any file in the preservation set, the structural patterns must remain intact
+  - Verify test passes on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
+
+- [x] 3. Fix UI responsive and design token bugs
+
+  - [x] 3.1 Fix accent color CSS variables in globals.css
+    - In `:root` block, change `--accent-green` from `#16a34a` to `#10b981`
+    - Change `--accent-red` from `#e11d48` to `#ef4444`
+    - Change `--accent-amber` from `#d97706` to `#f59e0b`
+    - Change `--accent-purple` from `#7c3aed` to `#8b5cf6`
+    - Change `--accent-teal` from `#0284c7` to `#06b6d4`
+    - ALL changes via editing CSS file only — no inline styles
+    - _Bug_Condition: isBugCondition(input) where cssVar values != style guide values_
+    - _Expected_Behavior: All 5 accent colors match style guide exactly_
+    - _Preservation: --accent-blue (#3b82f6) and --accent-blue-dim must NOT change_
+    - _Requirements: 2.6_
+
+  - [x] 3.2 Fix dim variable rgba values in globals.css
+    - In `:root` block, change `--accent-green-dim` to `rgba(16,185,129,0.12)`
+    - Change `--accent-red-dim` to `rgba(239,68,68,0.10)`
+    - Change `--accent-amber-dim` to `rgba(245,158,11,0.10)`
+    - Change `--accent-purple-dim` to `rgba(139,92,246,0.10)`
+    - Change `--accent-teal-dim` to `rgba(6,182,212,0.10)`
+    - _Bug_Condition: dim rgba values derived from wrong base colors_
+    - _Expected_Behavior: dim variables use correct base color rgb components_
+    - _Preservation: --accent-blue-dim must NOT change_
+    - _Requirements: 2.7_
+
+  - [x] 3.3 Add light theme accent dim overrides in globals.css
+    - In `[data-theme="light"]` block, update `--accent-green-dim` to `rgba(16,185,129,0.08)`
+    - Update `--accent-red-dim` to `rgba(239,68,68,0.07)`
+    - Update `--accent-amber-dim` to `rgba(245,158,11,0.08)`
+    - Update `--accent-purple-dim` to `rgba(139,92,246,0.08)`
+    - Update `--accent-teal-dim` to `rgba(6,182,212,0.08)`
+    - _Bug_Condition: light theme inherits incorrect dim values from :root_
+    - _Expected_Behavior: light theme dim variables use correct base colors with light-appropriate opacity_
+    - _Preservation: --accent-blue-dim light override must NOT change_
+    - _Requirements: 2.8_
+
+  - [x] 3.4 Update base font size to 13px in globals.css
+    - Change `font-size: 12px` to `font-size: 13px` on `body` selector
+    - Keep Plus Jakarta Sans as the font family (already configured throughout the app)
+    - _Bug_Condition: body font-size is 12px instead of style guide's 13px_
+    - _Expected_Behavior: body font-size is 13px_
+    - _Preservation: font-family, line-height, and all other body styles unchanged_
+    - _Requirements: 2.11_
+
+  - [x] 3.5 Make DashboardLayout responsive
+    - In `frontend/app/dashboard/layout.tsx`, change `ml-[220px]` to `ml-0 lg:ml-[220px]` on the `<main>` element using Tailwind classes only
+    - Lift sidebar open state: add `useState` for `sidebarOpen` and pass `onToggleSidebar` callback
+    - Pass `sidebarOpen` and `onClose` props to `Sidebar` component
+    - Pass `onToggleSidebar` to children via a wrapper or context so TopBar can access it
+    - _Bug_Condition: viewport < 1024px with ml-[220px] always applied_
+    - _Expected_Behavior: ml-0 on mobile, ml-[220px] on lg+ via Tailwind responsive prefix_
+    - _Preservation: Desktop layout (≥1024px) must still show ml-[220px]_
+    - _Requirements: 2.1, 3.1_
+
+  - [x] 3.6 Update Sidebar to accept external open/close control
+    - In `frontend/components/layout/Sidebar.tsx`, add `isOpen` and `onClose` props (optional, falling back to internal state)
+    - Use props when provided, internal state when not
+    - Add close behavior on backdrop click and on navigation link click (mobile only)
+    - All styling via Tailwind classes — no inline styles for layout
+    - _Bug_Condition: sidebar has no external trigger mechanism_
+    - _Expected_Behavior: sidebar can be controlled externally via props_
+    - _Preservation: All navigation links, active states, user dropdown, sign-out must remain unchanged_
+    - _Requirements: 2.2, 3.7_
+
+  - [x] 3.7 Add hamburger button and make TopBar responsive
+    - In `frontend/components/layout/TopBar.tsx`, add an `onToggleSidebar` optional prop
+    - Render a hamburger `Menu` icon button visible only below `lg` breakpoint (`lg:hidden`) using Tailwind classes
+    - Make the controls row responsive: add `overflow-x-auto` on the period picker container for small screens
+    - Ensure all controls remain accessible without horizontal page overflow
+    - All styling via Tailwind utility classes — no inline styles
+    - _Bug_Condition: no hamburger button exists; controls overflow on narrow viewports_
+    - _Expected_Behavior: hamburger button visible on mobile; controls scroll/wrap without page overflow_
+    - _Preservation: Desktop TopBar layout unchanged; period picker logic unchanged_
+    - _Requirements: 2.2, 2.3, 3.5_
+
+  - [x] 3.8 Make AdvancedFilters responsive
+    - In `frontend/components/ui/AdvancedFilters.tsx`, change fixed `min-w-[220px]`, `min-w-[240px]`, `min-w-[190px]`, `min-w-[160px]` to responsive values: `min-w-0 w-full sm:min-w-[220px]` (etc.) using Tailwind classes
+    - Ensure filter selects stack vertically on mobile and return to inline on `sm:` and above
+    - Hide `FilterDivider` on mobile (`hidden sm:block`)
+    - All styling via Tailwind utility classes — no inline styles
+    - _Bug_Condition: fixed min-widths cause horizontal overflow on narrow viewports_
+    - _Expected_Behavior: filters stack on mobile, inline on desktop_
+    - _Preservation: Filter interactions, draft/apply workflow, pills unchanged_
+    - _Requirements: 2.4, 3.3_
+
+  - [x] 3.9 Fix dashboard page spacing — executive page + migrate inline ECharts
+    - In `frontend/app/dashboard/executive/page.tsx`, change `p-5` to `px-5 py-4` and `gap-3.5` to `gap-[14px]` using Tailwind classes
+    - Change KPI grid from `grid-cols-2 md:grid-cols-3 xl:grid-cols-6` to `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6`
+    - Migrate `ProvinceBarChart` and `ProvinceRadarChart` from `echarts-for-react` (ReactECharts) to use the `useEChart` hook from `PremiumCharts.tsx` (raw echarts/core pattern) — standardize on a single ECharts approach
+    - Remove the `import ReactECharts from 'echarts-for-react'` import
+    - Replace `<ReactECharts option={option} style={{ height: 240 }} notMerge />` with a `<div ref={chartRef} className="h-[240px] w-full" />` pattern using `useEChart`
+    - Replace all inline `style={{}}` on chart containers with Tailwind classes (e.g., `className="h-[240px]"` instead of `style={{ height: 240 }}`)
+    - All styling via Tailwind utility classes — no inline styles
+    - _Bug_Condition: padding is p-5 (20px all sides) instead of px-5 py-4 (20px horizontal, 16px vertical); uses echarts-for-react instead of standardized echarts/core_
+    - _Expected_Behavior: padding 16px 20px, gap 14px, responsive KPI grid, unified ECharts approach_
+    - _Preservation: All chart rendering output, data display, filter interactions unchanged_
+    - _Requirements: 2.5, 2.10_
+
+  - [x] 3.10 Fix dashboard page spacing — branch page
+    - In `frontend/app/dashboard/branch/page.tsx`, change `p-5` to `px-5 py-4` and `gap-3.5` to `gap-[14px]` using Tailwind classes
+    - Update KPI grid breakpoints to include intermediate step (e.g., `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5`)
+    - _Bug_Condition: same spacing mismatch as executive page_
+    - _Expected_Behavior: padding 16px 20px, gap 14px_
+    - _Requirements: 2.10_
+
+  - [x] 3.11 Fix dashboard page spacing — all remaining pages
+    - Update `frontend/app/dashboard/financial/page.tsx`: change `p-5` to `px-5 py-4` and `gap-3.5` to `gap-[14px]`
+    - Update `frontend/app/dashboard/branch/[branchCode]/page.tsx`: change `p-5` to `px-5 py-4` and `gap-3.5` to `gap-[14px]`
+    - Update `frontend/app/dashboard/customer/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/customer/[cifId]/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/risk/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/digital/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/employer/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/employer/[userId]/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/kpi/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/scheduled/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/board/page.tsx`: change `p-6` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/config/page.tsx`: change `p-5` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - Update `frontend/app/dashboard/users/page.tsx`: change `p-5` to `px-5 py-4` and `gap-4` to `gap-[14px]`
+    - All styling via Tailwind utility classes — no inline styles
+    - _Bug_Condition: inconsistent padding/gap across all dashboard pages_
+    - _Expected_Behavior: all pages use px-5 py-4 gap-[14px] consistently_
+    - _Requirements: 2.10_
+
+  - [x] 3.12 Clean up dead Recharts CSS and echarts-for-react dependency
+    - In `frontend/app/globals.css`, remove all `.recharts-*` CSS selectors (dead code — no Recharts imports exist in the codebase)
+    - Remove selectors: `.chart-surface .recharts-*`, `main .recharts-wrapper .recharts-*`, and any other `.recharts-` prefixed rules
+    - Keep all `.premium-tooltip`, `.premium-chart-surface`, `.chart-glow-*`, and other non-Recharts chart CSS intact
+    - Run `npm uninstall recharts echarts-for-react` in the `frontend/` directory to remove unused dependencies
+    - Verify no import errors after removal
+    - _Bug_Condition: dead CSS and unused dependencies bloat the codebase_
+    - _Expected_Behavior: only ECharts (echarts/core) is used; no Recharts or echarts-for-react dependencies_
+    - _Preservation: All ECharts rendering must continue to work; premium tooltip and chart glow CSS preserved_
+
+  - [x] 3.13 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - UI Responsive & Design Token Defects Fixed
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bugs are fixed)
+    - _Requirements: 2.1, 2.2, 2.6, 2.7, 2.8, 2.10, 2.11_
+
+  - [x] 3.14 Verify preservation tests still pass
+    - **Property 2: Preservation** - Desktop Layout & Blue Accent Unchanged
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix (no regressions)
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run full test suite to confirm both exploration and preservation tests pass
+  - Verify no TypeScript compilation errors across modified files
+  - Ensure all tests pass, ask the user if questions arise

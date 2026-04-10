@@ -7,6 +7,7 @@ import {
   LineChart  as ELine,
   ScatterChart as EScatter,
   PieChart   as EPie,
+  RadarChart as ERadar,
 } from 'echarts/charts';
 import {
   GridComponent,
@@ -14,6 +15,7 @@ import {
   LegendComponent,
   MarkLineComponent,
   DataZoomComponent,
+  RadarComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { ECharts, EChartsCoreOption as EChartsOption } from 'echarts/core';
@@ -21,9 +23,9 @@ import { formatNPR } from '@/lib/formatters';
 
 // ─── Register once ────────────────────────────────────────────────────────────
 echarts.use([
-  EBar, ELine, EScatter, EPie,
+  EBar, ELine, EScatter, EPie, ERadar,
   GridComponent, TooltipComponent, LegendComponent,
-  MarkLineComponent, DataZoomComponent,
+  MarkLineComponent, DataZoomComponent, RadarComponent,
   CanvasRenderer,
 ]);
 
@@ -146,7 +148,7 @@ function areaGradient(color: string) {
 }
 
 // ─── Core hook ────────────────────────────────────────────────────────────────
-function useEChart(
+export function useEChart(
   buildOption: () => EChartsOption,
   deps: unknown[],
 ) {

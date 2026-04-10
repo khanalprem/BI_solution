@@ -87,7 +87,7 @@ export default function DigitalDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -98,11 +98,11 @@ export default function DigitalDashboard() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          <KPICard label="Total Volume" value={formatNPR(totalAmount)} iconBg="var(--accent-blue-dim)" />
-          <KPICard label="Digital Volume" value={formatNPR(digitalAmount)} iconBg="var(--accent-green-dim)" />
+          <KPICard label="Total Volume" value={formatNPR(totalAmount)} iconBg="var(--accent-blue-dim)" sparkData={allChannels.map(c => c.total_amount)} />
+          <KPICard label="Digital Volume" value={formatNPR(digitalAmount)} iconBg="var(--accent-green-dim)" sparkData={digitalChannels.map(c => c.total_amount)} />
           <KPICard label="Branch Volume" value={formatNPR(branchAmount)} iconBg="var(--accent-amber-dim)" />
           <KPICard label="Digital Ratio" value={formatPercent(digitalRatio)} iconBg="var(--accent-purple-dim)" />
-          <KPICard label="Digital Accounts" value={totalDigitalAccounts.toLocaleString()} iconBg="var(--accent-teal-dim)" />
+          <KPICard label="Digital Accounts" value={totalDigitalAccounts.toLocaleString()} iconBg="var(--accent-teal-dim)" sparkData={digitalChannels.map(c => c.unique_accounts)} />
         </div>
 
         {/* Charts Row 1 */}

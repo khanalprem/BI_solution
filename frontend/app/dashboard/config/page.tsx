@@ -44,7 +44,7 @@ export default function ConfigDashboard() {
         showExportButton={false}
       />
 
-      <div className="flex flex-col gap-4 p-5">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         {/* KPI row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <KPICard label="Production Tables" value={(catalog?.tables.length || 0).toString()} iconBg="var(--accent-blue-dim)" />

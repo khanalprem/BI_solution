@@ -147,15 +147,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_10_000001) do
   create_table "eab", id: false, force: :cascade do |t|
     t.string "acct_num"
     t.string "acid"
-    t.date "balance_date"
-    t.decimal "eod_balance", precision: 18, scale: 2
-    t.string "currency", default: "NPR"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["acct_num", "balance_date"], name: "index_eab_on_acct_num_and_balance_date"
+    t.date "eod_date"
+    t.date "end_eod_date"
+    t.decimal "tran_date_bal", precision: 18, scale: 2
     t.index ["acct_num"], name: "index_eab_on_acct_num"
     t.index ["acid"], name: "index_eab_on_acid"
-    t.index ["balance_date"], name: "index_eab_on_balance_date"
+    t.index ["eod_date"], name: "index_eab_on_eod_date"
   end
 
   create_table "email_systems", force: :cascade do |t|

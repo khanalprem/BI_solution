@@ -253,7 +253,7 @@ export default function BranchDashboard() {
           maxDate={filterStats?.date_range?.max || undefined}
         />
         
-        <div className="flex flex-col gap-3.5 p-5">
+        <div className="flex flex-col gap-[14px] px-5 py-4">
           {/* Advanced Filters */}
           <AdvancedFilters
             filters={filters}
@@ -264,7 +264,7 @@ export default function BranchDashboard() {
           />
           
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             <KPICard
               label="Active Branches"
               value={allBranches.length}
@@ -278,6 +278,7 @@ export default function BranchDashboard() {
               change={7.2}
               changeType="up"
               iconBg="var(--accent-green-dim)"
+              sparkData={allBranches.slice(0, 12).map(b => b.total_amount)}
             />
             <KPICard
               label="Avg per Branch"
@@ -290,6 +291,7 @@ export default function BranchDashboard() {
               value={topBranches[0]?.branch_code || '-'}
               subtitle={formatNPR(topBranches[0]?.total_amount || 0)}
               iconBg="var(--accent-amber-dim)"
+              sparkData={topBranches.map(b => b.total_amount)}
             />
             <KPICard
               label="Province Count"
@@ -314,7 +316,7 @@ export default function BranchDashboard() {
                   series={[{ dataKey: 'total_amount', name: 'Amount', color: '#3b82f6' }]}
                   layout="horizontal"
                   formatValue={formatNPR}
-                  yAxisWidth={72}
+                  yAxisWidth={90}
                   height={280}
                 />
               )}
@@ -322,13 +324,14 @@ export default function BranchDashboard() {
             
             <ChartCard
               title="Branch Scatter: Amount vs Count"
-              subtitle="Bubble size = unique accounts"
+              subtitle="Top 20 branches · Bubble size = unique accounts"
             >
               {allBranches.length === 0 ? (
                 <ChartEmptyState title="No branch scatter data" />
               ) : (
                 <PremiumScatterChart
-                  data={allBranches}
+                  data={allBranches.slice(0, 20)}
+                  maxSize={24}
                   xKey="transaction_count"
                   yKey="total_amount"
                   sizeKey="unique_accounts"

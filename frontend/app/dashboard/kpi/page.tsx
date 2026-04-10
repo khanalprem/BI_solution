@@ -139,7 +139,7 @@ export default function KPIDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -150,9 +150,9 @@ export default function KPIDashboard() {
 
         {/* Primary KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KPICard label="Total Volume" value={formatNPR(data?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" />
-          <KPICard label="Total Transactions" value={(data?.total_count ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" />
-          <KPICard label="Unique Accounts" value={(data?.unique_accounts ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" />
+          <KPICard label="Total Volume" value={formatNPR(data?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" sparkData={byQuarter.map(q => q.amount)} />
+          <KPICard label="Total Transactions" value={(data?.total_count ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" sparkData={byQuarter.map(q => q.count)} />
+          <KPICard label="Unique Accounts" value={(data?.unique_accounts ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" sparkData={byQuarter.map(q => q.accounts)} />
           <KPICard label="Unique Customers" value={(data?.unique_customers ?? 0).toLocaleString()} iconBg="var(--accent-teal-dim)" />
         </div>
 

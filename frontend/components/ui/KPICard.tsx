@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { SparkLine } from '@/components/ui/PremiumCharts';
 
 interface KPICardProps {
   label: string;
@@ -11,6 +12,8 @@ interface KPICardProps {
   iconBg?: string;
   highlighted?: boolean;
   onClick?: () => void;
+  sparkData?: number[];
+  sparkColor?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +73,16 @@ const FALLBACK_ACCENT: AccentBundle = {
   ring:   '',
 };
 
+// Map dim CSS variable to its full accent hex for sparkline rendering
+const ACCENT_SPARK_COLOR_MAP: Record<string, string> = {
+  'var(--accent-blue-dim)':   '#3b82f6',
+  'var(--accent-green-dim)':  '#10b981',
+  'var(--accent-red-dim)':    '#ef4444',
+  'var(--accent-amber-dim)':  '#f59e0b',
+  'var(--accent-purple-dim)': '#8b5cf6',
+  'var(--accent-teal-dim)':   '#06b6d4',
+};
+
 // Change-indicator classes
 const CHANGE_COLOR: Record<NonNullable<KPICardProps['changeType']>, string> = {
   up:      'text-accent-green',
@@ -99,12 +112,15 @@ export function KPICard({
   iconBg,
   highlighted,
   onClick,
+  sparkData,
+  sparkColor,
 }: KPICardProps) {
   const accent: AccentBundle = (iconBg ? ACCENT_MAP[iconBg] : undefined) ?? FALLBACK_ACCENT;
   const changeText = CHANGE_COLOR[changeType];
   const changeBg   = CHANGE_BG[changeType];
-  const sparkColor = SPARK_BG[changeType];
+  const sparkBarColor = SPARK_BG[changeType];
   const changeSymbol = changeType === 'down' ? '▼' : '▲';
+  const resolvedSparkColor = sparkColor || (iconBg ? ACCENT_SPARK_COLOR_MAP[iconBg] : undefined);
 
   // Spark bar width: clamp change% to [4, 92] range so it's always visible
   // but never overflows. Expressed as a fixed Tailwind arbitrary value isn't
@@ -166,6 +182,13 @@ export function KPICard({
         {value}
       </div>
 
+      {/* ── Inline sparkline (when data provided) ── */}
+      {sparkData && sparkData.length > 0 && (
+        <div className="h-8 -mx-0.5 my-0.5">
+          <SparkLine data={sparkData} color={resolvedSparkColor || '#3b82f6'} height={32} />
+        </div>
+      )}
+
       {/* ── Bottom row: change badge + subtitle ── */}
       <div className="flex items-center justify-between gap-1 mt-0.5">
         {change !== undefined && (
@@ -189,18 +212,18 @@ export function KPICard({
         )}
       </div>
 
-      {/* ── Spark indicator bar ── */}
-      {/* A thin animated fill bar that visually echoes the change direction.
-          It is decorative (not a precise data glyph) and requires no chart lib. */}
-      <div className="h-[2px] w-full rounded-full overflow-hidden bg-bg-input mt-0.5">
-        <div
-          className={cn(
-            'h-full rounded-full opacity-60 animate-spark-fill',
-            sparkColor,
-            sparkWidthClass
-          )}
-        />
-      </div>
+      {/* ── Spark indicator bar (only when no sparkline data) ── */}
+      {(!sparkData || sparkData.length === 0) && (
+        <div className="h-[2px] w-full rounded-full overflow-hidden bg-bg-input mt-0.5">
+          <div
+            className={cn(
+              'h-full rounded-full opacity-60 animate-spark-fill',
+              sparkBarColor,
+              sparkWidthClass
+            )}
+          />
+        </div>
+      )}
     </div>
   );
 }

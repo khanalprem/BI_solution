@@ -145,7 +145,7 @@ export default function BranchDetailPage() {
     <>
       <TopBar title={branchCode} subtitle="Branch Detail · Production View" {...topBarProps} />
 
-      <div className="p-5 flex flex-col gap-3.5">
+      <div className="px-5 py-4 flex flex-col gap-[14px]">
 
         {/* ── Back link + status — very first, above everything ── */}
         <div className="flex items-center justify-between">

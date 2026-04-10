@@ -13,9 +13,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { clearAuth } from '@/lib/auth';
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpenInternal, setIsOpenInternal] = useState(false);
+
+  // Use props when provided, internal state when not
+  const isOpen = isOpenProp !== undefined ? isOpenProp : isOpenInternal;
+  const handleClose = onClose ?? (() => setIsOpenInternal(false));
+
   const [userName, setUserName] = useState('Prakash Sharma');
   const [userRole, setUserRole] = useState('Admin');
 
@@ -51,7 +61,7 @@ export function Sidebar() {
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-[95] lg:hidden"
-          onClick={() => setIsOpen(false)}
+          onClick={handleClose}
         />
       )}
 
@@ -92,6 +102,7 @@ export function Sidebar() {
               href="/dashboard/executive"
               label="Executive Overview"
               active={pathname === '/dashboard/executive'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
@@ -105,6 +116,7 @@ export function Sidebar() {
               href="/dashboard/skills"
               label="Platform Guide"
               active={pathname === '/dashboard/skills'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4"/>
@@ -119,6 +131,7 @@ export function Sidebar() {
               href="/dashboard/financial"
               label="Financial Results"
               active={pathname === '/dashboard/financial'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <path d="M2 12l3.5-4 3 2.5L12 5l2 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -132,6 +145,7 @@ export function Sidebar() {
               href="/dashboard/branch"
               label="Branch & Regional"
               active={pathname?.startsWith('/dashboard/branch') ?? false}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <path d="M2 14V7l6-5 6 5v7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
@@ -143,6 +157,7 @@ export function Sidebar() {
               href="/dashboard/customer"
               label="Customer & Portfolio"
               active={pathname?.startsWith('/dashboard/customer') ?? false}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="6" cy="5" r="3" stroke="currentColor" strokeWidth="1.5"/>
@@ -156,6 +171,7 @@ export function Sidebar() {
               href="/dashboard/employer"
               label="Employer & Payroll"
               active={pathname === '/dashboard/employer'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="2.5" y="4" width="11" height="9" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
@@ -169,6 +185,7 @@ export function Sidebar() {
               label="Loan & Risk Quality"
               active={pathname === '/dashboard/risk'}
               badge="3"
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <path d="M8 2l1.5 3 3.5.5-2.5 2.5.6 3.5L8 10l-3.1 1.5.6-3.5L3 5.5l3.5-.5L8 2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
@@ -179,6 +196,7 @@ export function Sidebar() {
               href="/dashboard/digital"
               label="Digital Channels"
               active={pathname === '/dashboard/digital'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -193,6 +211,7 @@ export function Sidebar() {
               href="/dashboard/kpi"
               label="KPI Tree"
               active={pathname === '/dashboard/kpi'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <path d="M4 2h6l4 4v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.4"/>
@@ -204,6 +223,7 @@ export function Sidebar() {
               href="/dashboard/pivot"
               label="Pivot Analysis"
               active={pathname === '/dashboard/pivot'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
@@ -220,6 +240,7 @@ export function Sidebar() {
               href="/dashboard/board"
               label="Board & Governance"
               active={pathname === '/dashboard/board'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/>
@@ -231,6 +252,7 @@ export function Sidebar() {
               href="/dashboard/scheduled"
               label="Scheduled Reports"
               active={pathname === '/dashboard/scheduled'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4"/>
@@ -245,6 +267,7 @@ export function Sidebar() {
               href="/dashboard/config"
               label="Configuration"
               active={pathname === '/dashboard/config'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.4"/>
@@ -256,6 +279,7 @@ export function Sidebar() {
               href="/dashboard/users"
               label="User Management"
               active={pathname === '/dashboard/users'}
+              onClick={handleClose}
               icon={
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="5" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -338,16 +362,19 @@ function NavItem({
   icon,
   badge,
   active = false,
+  onClick,
 }: {
   href: string;
   label: string;
   icon?: React.ReactNode;
   badge?: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={`
         flex items-center gap-2.5 px-3.5 py-[5px] mx-1 rounded-lg transition-all duration-150 text-[11.5px] relative select-none
         ${active

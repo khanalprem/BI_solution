@@ -122,7 +122,7 @@ export default function BoardDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -132,8 +132,8 @@ export default function BoardDashboard() {
         />
         {/* Executive KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KPICard label="Total Transaction Volume" value={formatNPR(summary?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" />
-          <KPICard label="Total Transactions" value={(summary?.total_count ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" />
+          <KPICard label="Total Transaction Volume" value={formatNPR(summary?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" sparkData={trend.slice(-30).map(t => t.amount)} />
+          <KPICard label="Total Transactions" value={(summary?.total_count ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" sparkData={trend.slice(-30).map(t => t.count)} />
           <KPICard label="Unique Customers" value={(summary?.unique_customers ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" />
           <KPICard label="Active Accounts" value={(summary?.unique_accounts ?? 0).toLocaleString()} iconBg="var(--accent-teal-dim)" />
         </div>

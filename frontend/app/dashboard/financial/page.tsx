@@ -113,7 +113,7 @@ export default function FinancialDashboard() {
         subtitle="Credit, debit & net flow analysis"
         {...topBarProps}
       />
-      <div className="flex flex-col gap-3.5 p-5">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -124,14 +124,15 @@ export default function FinancialDashboard() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KPICard label="Total Volume" value={formatNPR(totalAmount)} highlighted iconBg="var(--accent-blue-dim)" />
-          <KPICard label="Credit Inflow (CR)" value={formatNPR(creditAmount)} iconBg="var(--accent-green-dim)" />
-          <KPICard label="Debit Outflow (DR)" value={formatNPR(debitAmount)} iconBg="var(--accent-red-dim)" />
+          <KPICard label="Total Volume" value={formatNPR(totalAmount)} highlighted iconBg="var(--accent-blue-dim)" sparkData={monthlyTrend.map(m => m.credit + m.debit)} />
+          <KPICard label="Credit Inflow (CR)" value={formatNPR(creditAmount)} iconBg="var(--accent-green-dim)" sparkData={monthlyTrend.map(m => m.credit)} />
+          <KPICard label="Debit Outflow (DR)" value={formatNPR(debitAmount)} iconBg="var(--accent-red-dim)" sparkData={monthlyTrend.map(m => m.debit)} />
           <KPICard
             label="Net Flow"
             value={formatNPR(netFlow)}
             subtitle={netFlow >= 0 ? 'Net positive' : 'Net negative'}
             iconBg={netFlow >= 0 ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)'}
+            sparkData={monthlyTrend.map(m => m.net)}
           />
         </div>
 

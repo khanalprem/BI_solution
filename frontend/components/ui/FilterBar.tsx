@@ -87,5 +87,5 @@ export function FilterChips({ options, selected, onChange }: FilterChipsProps) {
 }
 
 export function FilterDivider() {
-  return <div className="w-px h-[18px] bg-border mx-0.5" />;
+  return <div className="hidden sm:block w-px h-[18px] bg-border mx-0.5" />;
 }

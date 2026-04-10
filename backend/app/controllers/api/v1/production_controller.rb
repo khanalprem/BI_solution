@@ -21,23 +21,31 @@ module Api
       end
 
       def explorer
-        start_date       = parse_date(param_value(:start_date, :startDate)) || 30.days.ago.to_date
-        end_date         = parse_date(param_value(:end_date, :endDate)) || Date.today
-        measures         = parse_multi_value_param(params[:measures]) || 'total_amount'
-        time_comparisons = Array.wrap(parse_multi_value_param(params[:time_comparisons]))
-        raw_dims         = param_value(:dimensions, :dimension)
-        dimensions       = Array.wrap(parse_multi_value_param(raw_dims))
-        dimensions       = ['gam_branch'] if dimensions.empty?
+        # Parse dates explicitly so we can distinguish "user set a range" from "no range set".
+        # When start_date is absent (e.g. ALL period before filter-stats loads), pass nil so
+        # explorer_where_clause skips the tran_date BETWEEN clause rather than defaulting to
+        # last-30-days and silently showing a narrow window.
+        explicit_start    = parse_date(param_value(:start_date, :startDate))
+        explicit_end      = parse_date(param_value(:end_date, :endDate))
+        measures          = parse_multi_value_param(params[:measures]) || 'total_amount'
+        time_comparisons  = Array.wrap(parse_multi_value_param(params[:time_comparisons]))
+        raw_dims          = param_value(:dimensions, :dimension)
+        dimensions        = Array.wrap(parse_multi_value_param(raw_dims))
+        dimensions        = ['gam_branch'] if dimensions.empty?
+        # partitionby_clause: bare column names from the frontend (e.g. "gam_branch, year_month").
+        # The procedure prepends PARTITION BY itself — never send "PARTITION BY col" here.
+        partitionby_clause = params[:partitionby_clause].to_s.strip
 
         render json: production_service.tran_summary_explorer(
-          start_date:       start_date,
-          end_date:         end_date,
-          dimensions:       dimensions,
-          measures:         measures,
-          filters:          filter_params,
-          time_comparisons: time_comparisons,
-          page:             params[:page],
-          page_size:        params[:page_size]
+          start_date:        explicit_start,
+          end_date:          explicit_end,
+          dimensions:        dimensions,
+          measures:          measures,
+          filters:           filter_params,
+          time_comparisons:  time_comparisons,
+          partitionby_clause: partitionby_clause,
+          page:              params[:page],
+          page_size:         params[:page_size]
         )
       end
 

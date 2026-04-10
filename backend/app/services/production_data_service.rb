@@ -313,7 +313,13 @@ class ProductionDataService
     end
   end
 
-  def tran_summary_explorer(start_date:, end_date:, dimensions:, measures:, filters:, time_comparisons: [], page: 1, page_size: 10)
+  def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', page: 1, page_size: 10)
+    # Fallback dates used for internal calculations (EAB join, period comparisons).
+    # start_date / end_date may be nil when frontend sends no date params (ALL period before
+    # filter-stats loads) — in that case we skip the tran_date WHERE clause but still need
+    # valid dates for everything else.
+    calc_end_date = end_date || Date.today
+
     dimension_keys = Array(dimensions).filter_map do |d|
       key = d.to_s
       key if DIMENSIONS.key?(key)
@@ -348,19 +354,20 @@ class ProductionDataService
     acid_groupby = include_eab ? ', acid' : ''
 
     select_inner   = "SELECT #{dim_selects.join(', ')}#{acid_select}, #{selected_measures.map { |m| m[:select_sql] }.join(', ')}"
-    where_clause   = explorer_where_clause(filters: filters)
+    where_clause   = explorer_where_clause(filters: filters, start_date: start_date, end_date: end_date)
     groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}"
+    having_clause  = ''
     orderby_clause = "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
 
-    # PARTITION BY: empty for correct pagination.
-    # The procedure uses ROW_NUMBER() OVER(partitionby_clause orderby_clause) for pagination.
-    # If we partition, RN resets per group and pagination breaks (returns page_size * num_groups rows).
-    # Empty partition = global RN = correct pagination.
-    partitionby_clause = ''
+    # PARTITION BY: the procedure expects the FULL clause including the 'PARTITION BY' keyword.
+    # Frontend sends '' (no pivot) or 'PARTITION BY field1, field2' (pivot mode).
+    # Empty string = global ROW_NUMBER (standard pagination).
+    # Non-empty = per-group ROW_NUMBER — the procedure uses it verbatim inside OVER(...).
+    partitionby_clause = partitionby_clause.to_s.strip
 
     # EAB join: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
     eab_join = if include_eab
-      quoted_end = @connection.quote(end_date.to_s)
+      quoted_end = @connection.quote(calc_end_date.to_s)
       "LEFT JOIN eab e ON e.acid = tb2.acid AND #{quoted_end} >= e.eod_date::date AND #{quoted_end} < e.end_eod_date::date"
     else
       ''
@@ -369,7 +376,7 @@ class ProductionDataService
     select_outer = include_eab ? 'SELECT tb2.*, e.tran_date_bal AS eab_balance' : 'SELECT tb2.*'
 
     # Resolve reference date for period comparisons from user-selected filter values
-    reference_date = resolve_reference_date(filters: filters, end_date: end_date, dimension_keys: dimension_keys)
+    reference_date = resolve_reference_date(filters: filters, end_date: calc_end_date, dimension_keys: dimension_keys)
 
     # Primary date dimension drives period clause SQL.
     # First check selected GROUP BY dimensions, then fall back to whichever date filter is active,
@@ -628,9 +635,20 @@ class ProductionDataService
     end
   end
 
-  def explorer_where_clause(filters:)
+  def explorer_where_clause(filters:, start_date: nil, end_date: nil)
     clauses = []
     conn = ActiveRecord::Base.connection
+
+    # Global date range — applied as tran_date BETWEEN unless the user has already set
+    # an explicit tran_date exact-match or range filter (which would be more specific).
+    # start_date is nil only when the frontend sends no start_date param (ALL period before
+    # filter-stats loads), in which case we skip the clause to avoid a 30-day default window.
+    has_explicit_tran_date = filters[:tran_date].present? ||
+                             filters[:tran_date_from].present? ||
+                             filters[:tran_date_to].present?
+    if start_date && end_date && !has_explicit_tran_date
+      clauses << "tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
+    end
 
     # Categorical filters
     {

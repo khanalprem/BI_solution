@@ -12,7 +12,7 @@ export default function ScheduledDashboard() {
   return (
     <>
       <TopBar title="Scheduled & Regulatory Runs" subtitle="Production procedures & dictionary metadata" showFiltersButton={false} showExportButton={false} />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {(catalog?.procedures || []).map((procedure) => (
             <div key={procedure.name} className="rounded-xl border border-border bg-bg-card p-4">

@@ -244,7 +244,7 @@ export function AdvancedFilters({
       {/* Quick FilterBar — always first, applies immediately */}
       <FilterBar onClear={handleClear}>
         <FilterLabel>Province</FilterLabel>
-        <div className="min-w-[220px] flex-1 sm:flex-none">
+        <div className="min-w-0 w-full sm:min-w-[220px] sm:w-auto flex-1 sm:flex-none">
           <SearchableMultiSelect
             value={asArray(filters.province)}
             onChange={(v) => setQuickFilter('province', v)}
@@ -256,7 +256,7 @@ export function AdvancedFilters({
         <FilterDivider />
 
         <FilterLabel>Branch</FilterLabel>
-        <div className="min-w-[240px] flex-1 sm:flex-none">
+        <div className="min-w-0 w-full sm:min-w-[240px] sm:w-auto flex-1 sm:flex-none">
           <SearchableMultiSelect
             value={asArray(filters.branchCode)}
             onChange={(v) => setQuickFilter('branchCode', v)}
@@ -268,7 +268,7 @@ export function AdvancedFilters({
         <FilterDivider />
 
         <FilterLabel>Channel</FilterLabel>
-        <div className="min-w-[190px] flex-1 sm:flex-none">
+        <div className="min-w-0 w-full sm:min-w-[190px] sm:w-auto flex-1 sm:flex-none">
           <SearchableMultiSelect
             value={asArray(filters.tranSource)}
             onChange={(v) => setQuickFilter('tranSource', v)}
@@ -280,7 +280,7 @@ export function AdvancedFilters({
         <FilterDivider />
 
         <FilterLabel>Part Type</FilterLabel>
-        <div className="min-w-[160px] flex-1 sm:flex-none">
+        <div className="min-w-0 w-full sm:min-w-[160px] sm:w-auto flex-1 sm:flex-none">
           <SearchableMultiSelect
             value={asArray(filters.partTranType)}
             onChange={(v) => setQuickFilter('partTranType', v)}

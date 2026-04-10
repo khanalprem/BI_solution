@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Filter, MoonStar, SunMedium, Download } from 'lucide-react';
+import { Filter, Menu, MoonStar, SunMedium, Download } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 const BASE_PERIOD_OPTIONS = ['ALL', '1D', 'WTD', 'MTD', 'QTD', 'YTD', 'PYTD', 'FY'] as const;
 type PeriodOption = (typeof BASE_PERIOD_OPTIONS)[number] | 'CUSTOM';
@@ -22,6 +23,7 @@ interface TopBarProps {
   filtersOpen?: boolean;
   onToggleFilters?: () => void;
   onExport?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export function TopBar({
@@ -38,7 +40,10 @@ export function TopBar({
   filtersOpen = false,
   onToggleFilters,
   onExport,
+  onToggleSidebar: onToggleSidebarProp,
 }: TopBarProps) {
+  const { onToggleSidebar: onToggleSidebarContext } = useSidebar();
+  const onToggleSidebar = onToggleSidebarProp ?? onToggleSidebarContext;
   const [internalPeriod, setInternalPeriod] = useState<PeriodOption>('ALL');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [mounted, setMounted] = useState(false);
@@ -75,6 +80,14 @@ export function TopBar({
 
         {/* ── Title block ── */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="lg:hidden flex items-center justify-center h-[30px] w-[30px] rounded-lg border border-border bg-bg-input text-text-secondary hover:text-text-primary hover:bg-bg-card transition-all duration-150"
+            aria-label="Toggle sidebar"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
           <div>
             <h1 className="font-display text-[13.5px] font-bold tracking-tight leading-none text-text-primary">{title}</h1>
             {subtitle && (
@@ -87,7 +100,7 @@ export function TopBar({
         <div className="flex flex-wrap items-center gap-2">
 
           {/* Period picker */}
-          <div className="flex items-center rounded-lg border border-border bg-bg-input p-0.5 gap-px">
+          <div className="flex items-center rounded-lg border border-border bg-bg-input p-0.5 gap-px overflow-x-auto">
             {BASE_PERIOD_OPTIONS.map((p) => (
               <button
                 key={p}

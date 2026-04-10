@@ -145,7 +145,7 @@ export default function RiskDashboard() {
   return (
     <>
       <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" {...topBarProps} />
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}

@@ -137,14 +137,14 @@ function HowItWorksPanel() {
 
 // ─── Dimension field definitions ──────────────────────────────────────────────
 
-type FieldType = 'categorical' | 'text' | 'date' | 'month' | 'quarter' | 'year';
+type FieldType = 'categorical' | 'text' | 'date' | 'month' | 'quarter' | 'year' | 'measure_dim';
 type DateFilterMode = 'single' | 'range' | 'multi';
 
 interface DimensionFieldDef {
   key: string;
   label: string;
   type: FieldType;
-  filterKey: keyof DashboardFilters;
+  filterKey?: keyof DashboardFilters;
   fromKey?: keyof DashboardFilters;
   toKey?: keyof DashboardFilters;
   optionsKey?: keyof FilterValuesResponse;
@@ -175,6 +175,8 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'year_month',   label: 'Year Month',       type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
   { key: 'year_quarter', label: 'Year Quarter',     type: 'quarter', filterKey: 'yearQuarter', fromKey: 'yearQuarterFrom', toKey: 'yearQuarterTo', description: 'Quarterly period (YYYY-Qn)' },
   { key: 'year',         label: 'Year',             type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
+  // ── EOD Balance — measure rendered in the Dimension panel ─────────────────
+  { key: 'eod_balance',  label: 'EOD Balance (EAB)', type: 'measure_dim',                                                                description: 'MAX(eod_balance) — triggers EAB LEFT JOIN on acid' },
 ];
 
 // ─── Measure definitions ──────────────────────────────────────────────────────
@@ -195,7 +197,7 @@ const STANDARD_MEASURES: MeasureDef[] = [
   { key: 'credit_amount',     label: 'Credit Amount',      description: "SUM where part_tran_type = 'CR'",     group: 'standard' },
   { key: 'debit_amount',      label: 'Debit Amount',       description: "SUM where part_tran_type = 'DR'",     group: 'standard' },
   { key: 'net_flow',          label: 'Net Flow',           description: 'CR amount − DR amount',                group: 'standard' },
-  { key: 'eod_balance',       label: 'EOD Balance (EAB)',  description: 'MAX(eod_balance) via EAB join',        group: 'standard' },
+  // eod_balance moved to Dimensions panel — selected there, sent as measure to backend
 ];
 
 const COMPARISON_MEASURES: MeasureDef[] = [
@@ -228,6 +230,7 @@ const TYPE_BADGE: Record<FieldType, { label: string; cls: string }> = {
   month:       { label: 'month',   cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
   quarter:     { label: 'quarter', cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
   year:        { label: 'year',    cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
+  measure_dim: { label: 'eab',     cls: 'bg-accent-teal/10 text-accent-teal border-accent-teal/20' },
 };
 
 // ─── Date option generation ───────────────────────────────────────────────────
@@ -262,37 +265,158 @@ function generateDateOptions(filterStats?: FilterStatisticsResponse) {
   };
 }
 
-// ─── Pivot transformation ─────────────────────────────────────────────────────
+// ─── Pivot data structures ────────────────────────────────────────────────────
 
 type DataRow = Record<string, string | number | boolean | null>;
 
-function pivotRows(
+// Separator used internally to key pivot cells: pivotValue + SEP + measureKey.
+// Null byte never appears in real data values.
+const PIVOT_SEP = '\x00';
+
+interface PivotData {
+  rowDimKeys:  string[];   // left-side "row" dimension columns
+  pivotValues: string[];   // unique values of the pivot field — become column group headers
+  measureKeys: string[];   // measure names — become sub-column headers under each pivot value
+  rows:        DataRow[];  // keyed as `pivotValue\x00measureKey` for pivot cells
+}
+
+// Build structured pivot data from flat rows.
+// pivotFieldKey: the column whose distinct values become top-level column groups.
+function buildPivotData(
   rows: DataRow[],
-  dateDimKey: string,
+  pivotFieldKey: string,
   rowDimKeys: string[],
   measureKeys: string[],
-): { pivotedColumns: string[]; pivotedRows: DataRow[] } {
-  const dateValues = [...new Set(rows.map((r) => String(r[dateDimKey] ?? '')).filter(Boolean))].sort();
-
-  const pivotedColumns: string[] = [
-    ...rowDimKeys,
-    ...dateValues.flatMap((dv) => measureKeys.map((mk) => `${dv} | ${mk}`)),
-  ];
+): PivotData {
+  const pivotValues = [...new Set(
+    rows.map((r) => String(r[pivotFieldKey] ?? '')).filter(Boolean),
+  )].sort();
 
   const grouped = new Map<string, DataRow>();
   for (const row of rows) {
-    const rowKey = rowDimKeys.map((k) => String(row[k] ?? '')).join('\x00');
+    const rowKey = rowDimKeys.map((k) => String(row[k] ?? '')).join('\x01');
     if (!grouped.has(rowKey)) {
-      const newRow: DataRow = {};
-      rowDimKeys.forEach((k) => { newRow[k] = row[k] ?? null; });
-      grouped.set(rowKey, newRow);
+      const seed: DataRow = {};
+      rowDimKeys.forEach((k) => { seed[k] = row[k] ?? null; });
+      grouped.set(rowKey, seed);
     }
-    const outRow = grouped.get(rowKey)!;
-    const dv = String(row[dateDimKey] ?? '');
-    measureKeys.forEach((mk) => { outRow[`${dv} | ${mk}`] = row[mk] ?? null; });
+    const out = grouped.get(rowKey)!;
+    const pv  = String(row[pivotFieldKey] ?? '');
+    measureKeys.forEach((mk) => { out[`${pv}${PIVOT_SEP}${mk}`] = row[mk] ?? null; });
   }
 
-  return { pivotedColumns, pivotedRows: Array.from(grouped.values()) };
+  return { rowDimKeys, pivotValues, measureKeys, rows: Array.from(grouped.values()) };
+}
+
+// ─── Excel-style PivotTable component ────────────────────────────────────────
+
+function renderCell(v: string | number | boolean | null | undefined): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return String(v);
+}
+
+function PivotTable({ data, title, subtitle }: { data: PivotData; title: string; subtitle?: string }) {
+  const { rowDimKeys, pivotValues, measureKeys, rows } = data;
+  const hasMultiMeasure = measureKeys.length > 1;
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
+      {/* Table header bar */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border" style={{ background: 'var(--bg-surface)' }}>
+        <div className="min-w-0">
+          <h3 className="font-display text-[13px] font-bold text-text-primary tracking-tight truncate">{title}</h3>
+          {subtitle && <p className="text-[10.5px] text-text-muted mt-0.5 leading-none">{subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-accent-purple/30 bg-accent-purple/10 text-accent-purple uppercase tracking-wider">
+            pivot
+          </span>
+          <span className="text-[10px] text-text-muted font-medium px-2 py-1 rounded-md border border-border bg-bg-input">
+            {rows.length.toLocaleString()} rows
+          </span>
+        </div>
+      </div>
+
+      {/* Two-tier pivot header */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[11.5px]">
+          <thead className="sticky top-0 z-[1]" style={{ background: 'var(--bg-base)' }}>
+
+            {/* Top row — row dim headers (rowspan=2) + pivot value group headers */}
+            <tr className="border-b border-border">
+              {rowDimKeys.map((k) => (
+                <th
+                  key={k}
+                  rowSpan={hasMultiMeasure ? 2 : 1}
+                  className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap border-r border-border bg-bg-base"
+                >
+                  {k.replaceAll('_', ' ')}
+                </th>
+              ))}
+              {pivotValues.map((pv) => (
+                <th
+                  key={pv}
+                  colSpan={measureKeys.length}
+                  className="px-3 py-2 text-center text-[10px] font-bold text-accent-purple border-l border-border whitespace-nowrap bg-accent-purple/5"
+                >
+                  {pv}
+                </th>
+              ))}
+            </tr>
+
+            {/* Sub-header row — measure names under each pivot value group */}
+            {hasMultiMeasure && (
+              <tr className="border-b border-border">
+                {pivotValues.map((pv) =>
+                  measureKeys.map((mk) => (
+                    <th
+                      key={`${pv}-${mk}`}
+                      className="px-3 py-1.5 text-center text-[8.5px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 bg-accent-purple/3"
+                    >
+                      {mk.replaceAll('_', ' ')}
+                    </th>
+                  ))
+                )}
+              </tr>
+            )}
+          </thead>
+
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={rowDimKeys.length + pivotValues.length * measureKeys.length}
+                  className="py-12 text-center text-[11px] text-text-muted"
+                >
+                  No data
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, i) => (
+                <tr key={i} className="border-b border-border last:border-0 hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+                  {/* Row dimension cells */}
+                  {rowDimKeys.map((k) => (
+                    <td key={k} className="px-4 py-2.5 text-text-primary font-medium whitespace-nowrap border-r border-border/40">
+                      {renderCell(row[k])}
+                    </td>
+                  ))}
+                  {/* Pivot value × measure cells */}
+                  {pivotValues.map((pv) =>
+                    measureKeys.map((mk) => (
+                      <td key={`${pv}-${mk}`} className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]">
+                        {renderCell(row[`${pv}${PIVOT_SEP}${mk}`])}
+                      </td>
+                    ))
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -304,6 +428,9 @@ export default function PivotDashboard() {
 
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>(['gam_branch']);
   const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(['total_amount', 'transaction_count']);
+  // partitionDimensions: ordered list of dimension keys checked for "Include in Partition"
+  // Order follows the sequence the user checked them — used as pivot column headers top-to-bottom.
+  const [partitionDimensions, setPartitionDimensions] = useState<string[]>([]);
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
@@ -317,12 +444,52 @@ export default function PivotDashboard() {
   const { data: filterValues } = useFilterValues();
   const { data: catalog }      = useProductionCatalog();
 
-  const measures        = useMemo(() => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)), [selectedMeasures]);
-  const timeComparisons = useMemo(() => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)), [selectedMeasures]);
-  const effectiveMeasures = measures.length > 0 ? measures : ['total_amount'];
+  // eod_balance lives in the Dimension panel — when selected there, pass it as a measure to the backend.
+  const eodSelected = selectedDimensions.includes('eod_balance');
+
+  // Dimensions sent to the backend — eod_balance is not a real GROUP BY dimension.
+  const backendDimensions = useMemo(
+    () => selectedDimensions.filter((k) => k !== 'eod_balance'),
+    [selectedDimensions],
+  );
+
+  const standardMeasures = useMemo(
+    () => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)),
+    [selectedMeasures],
+  );
+  const timeComparisons = useMemo(
+    () => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)),
+    [selectedMeasures],
+  );
+  // Combine standard measures + eod_balance if selected in the dimension panel.
+  const measures = useMemo(() => {
+    const base = standardMeasures.length > 0 ? standardMeasures : ['total_amount'];
+    return eodSelected && !base.includes('eod_balance') ? [...base, 'eod_balance'] : base;
+  }, [standardMeasures, eodSelected]);
+
+  // rowDims: the dimensions that become the LEFT-SIDE row keys in the pivot table.
+  // = all backend dimensions EXCEPT the ones the user chose as pivot (column-header) fields.
+  const rowDims = useMemo(
+    () => backendDimensions.filter((k) => !partitionDimensions.includes(k)),
+    [backendDimensions, partitionDimensions],
+  );
+
+  // partitionby_clause controls how the stored procedure paginates.
+  // CRITICAL: we partition by the ROW dimensions (not the pivot fields).
+  // This ensures each page contains page_size unique row-key groups, each with
+  // ALL their pivot-field values present — enabling correct cross-tab display.
+  // Example: if acct_num is a row dim and tran_date is the pivot field,
+  //   PARTITION BY acct_num  → page 1 = 10 accounts, every date they have data for.
+  //   PARTITION BY tran_date → page 1 = 10 dates, one row per account (wrong).
+  const partitionbyClause = useMemo(
+    () => partitionDimensions.length > 0 && rowDims.length > 0
+      ? `PARTITION BY ${rowDims.join(', ')}`
+      : '',
+    [partitionDimensions, rowDims],
+  );
 
   const { data: explorer, isLoading, isFetching } = useProductionExplorer(
-    filters, selectedDimensions, effectiveMeasures, timeComparisons, page, pageSize,
+    filters, backendDimensions, measures, timeComparisons, page, pageSize, partitionbyClause,
   );
 
   // ── Date options generated from filter stats ──────────────────────────────
@@ -337,35 +504,36 @@ export default function PivotDashboard() {
   //   by the backend, so main vs comparison rows appear as separate column groups.
   // Case C — no date dim, no comparisons: flat table.
 
-  const hasDateDim   = selectedDimensions.some((k) => DATE_DIM_KEYS.has(k));
-  const needsPeriodPivot = !hasDateDim && timeComparisons.length > 0;
-
-  const { displayColumns, displayRows, isPivoted } = useMemo(() => {
-    if (!explorer || !explorer.rows.length) {
-      return { displayColumns: explorer?.columns ?? [], displayRows: explorer?.rows ?? [], isPivoted: false };
-    }
+  // pivotData is non-null only when user has checked Partition fields.
+  // flatDisplay is used otherwise — always a plain table.
+  const { pivotData, flatColumns, flatRows, isPivoted } = useMemo(() => {
+    const emptyFlat = { pivotData: null, flatColumns: explorer?.columns ?? [], flatRows: explorer?.rows ?? [], isPivoted: false };
+    if (!explorer || !explorer.rows.length) return emptyFlat;
 
     const rows = explorer.rows as DataRow[];
 
-    // Case A: date dim selected
-    if (hasDateDim) {
-      const dateDim = selectedDimensions.find((k) => DATE_DIM_KEYS.has(k))!;
-      const rowDims = selectedDimensions.filter((k) => !DATE_DIM_KEYS.has(k));
-      const { pivotedColumns, pivotedRows } = pivotRows(rows, dateDim, rowDims, effectiveMeasures);
-      return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
+    if (partitionDimensions.length > 0) {
+      if (partitionDimensions.length === 1) {
+        // Single pivot field — its distinct values are top-level column groups.
+        const pd = buildPivotData(rows, partitionDimensions[0], rowDims, measures);
+        return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
+      }
+
+      // Multiple pivot fields — composite key becomes the column group header
+      // in the order the user ticked them.
+      const compositeRows = rows.map((r) => ({
+        ...r,
+        _pivot_key: partitionDimensions.map((k) => String(r[k] ?? '')).join(' › '),
+      }));
+      const pd = buildPivotData(compositeRows, '_pivot_key', rowDims, measures);
+      return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
     }
 
-    // Case B: no date dim but comparisons active — pivot on _period column
-    if (needsPeriodPivot && rows[0]?.['_period'] !== undefined) {
-      const { pivotedColumns, pivotedRows } = pivotRows(rows, '_period', selectedDimensions, effectiveMeasures);
-      return { displayColumns: pivotedColumns, displayRows: pivotedRows, isPivoted: true };
-    }
-
-    // Case C: flat
+    // No partition — flat table, strip internal _period column.
     const flatCols = explorer.columns.filter((c) => c !== '_period');
-    const flatRows = rows.map((r) => { const { _period, ...rest } = r; return rest; });
-    return { displayColumns: flatCols, displayRows: flatRows, isPivoted: false };
-  }, [explorer, selectedDimensions, effectiveMeasures, timeComparisons, hasDateDim, needsPeriodPivot]);
+    const flat     = rows.map((r) => { const { _period, ...rest } = r; return rest; });
+    return { pivotData: null, flatColumns: flatCols, flatRows: flat, isPivoted: false };
+  }, [explorer, backendDimensions, partitionDimensions, measures]);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -424,7 +592,8 @@ export default function PivotDashboard() {
 
   const fieldHasFilter = useCallback(
     (field: DimensionFieldDef): boolean => {
-      const v = filters[field.filterKey];
+      if (!field.filterKey) return false;
+      const v    = filters[field.filterKey];
       const from = field.fromKey ? filters[field.fromKey] : undefined;
       const to   = field.toKey   ? filters[field.toKey]   : undefined;
       if (Array.isArray(v)) return v.length > 0;
@@ -438,9 +607,26 @@ export default function PivotDashboard() {
   const toggleDimension = useCallback((key: string) => {
     setSelectedDimensions((prev) => {
       if (prev.includes(key)) {
+        // Also remove from partition if deselected
+        setPartitionDimensions((pp) => pp.filter((k) => k !== key));
         const next = prev.filter((k) => k !== key);
-        return next.length > 0 ? next : prev; // keep at least one
+        // Keep at least one non-eod_balance dimension
+        const hasReal = next.some((k) => k !== 'eod_balance');
+        return hasReal ? next : prev;
       }
+      return [...prev, key];
+    });
+    setPage(1);
+  }, []);
+
+  // ── Partition toggle — maintains check order (top-to-bottom = first-checked-first) ─
+
+  const togglePartition = useCallback((key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPartitionDimensions((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
+      // Auto-select the dimension too so it appears in GROUP BY
+      setSelectedDimensions((dims) => dims.includes(key) ? dims : [...dims, key]);
       return [...prev, key];
     });
     setPage(1);
@@ -476,7 +662,10 @@ export default function PivotDashboard() {
   );
 
   const dimensionLabels = useMemo(
-    () => selectedDimensions.map((d) => catalog?.dimension_options.find((o) => o.value === d)?.label ?? d).join(' × '),
+    () => selectedDimensions.map((d) => {
+      if (d === 'eod_balance') return 'EOD Balance';
+      return catalog?.dimension_options.find((o) => o.value === d)?.label ?? d;
+    }).join(' × '),
     [catalog, selectedDimensions],
   );
 
@@ -511,10 +700,10 @@ export default function PivotDashboard() {
     lines.push({ text: `  having_clause            => '${sp.having_clause ?? ''}',`,            kind: 'group' });
     lines.push({ text: `  orderby_clause           => '${sp.orderby_clause}',`,                 kind: 'group' });
 
-    // partitionby_clause — always '' for correct pagination
+    // partitionby_clause — full PARTITION BY clause passed verbatim to the procedure
     const pbVal = sp.partitionby_clause ?? '';
     lines.push({
-      text: `  partitionby_clause       => '${pbVal}',  -- '' = global ROW_NUMBER (correct pagination)${pbVal ? `  ← pass column name only, not 'PARTITION BY ${pbVal}'` : ''}`,
+      text: `  partitionby_clause       => '${pbVal}',${pbVal ? '  -- ✓ pivot active' : '  -- \'\' = global ROW_NUMBER (no pivot)'}`,
       kind: 'partition',
     });
 
@@ -539,10 +728,9 @@ export default function PivotDashboard() {
   // Clamp: if total_rows < rows actually on this page, the SP under-reported — trust actual count.
   const backendTotal = useMemo(() => {
     if (!explorer) return 0;
-    const mainPageRows = isPivoted ? explorer.rows.length : explorer.rows.length;
-    const minFromPage  = (page - 1) * pageSize + mainPageRows;
+    const minFromPage = (page - 1) * pageSize + explorer.rows.length;
     return Math.max(explorer.total_rows ?? 0, minFromPage);
-  }, [explorer, page, pageSize, isPivoted]);
+  }, [explorer, page, pageSize]);
 
   const totalPages = Math.ceil(backendTotal / pageSize) || 1;
 
@@ -577,21 +765,25 @@ export default function PivotDashboard() {
 
               <ul className="divide-y divide-border">
                 {DIMENSION_FIELDS.map((field) => {
-                  const selected = selectedDimensions.includes(field.key);
-                  const expanded = expandedField === field.key;
-                  const filtered = fieldHasFilter(field);
-                  const badge    = TYPE_BADGE[field.type];
-                  const isDate   = DATE_DIM_KEYS.has(field.key);
-                  const mode     = isDate ? (dateFilterModes[field.key] ?? 'single') : null;
+                  const selected    = selectedDimensions.includes(field.key);
+                  const partitioned = partitionDimensions.includes(field.key);
+                  const partOrder   = partitionDimensions.indexOf(field.key);
+                  const expanded    = expandedField === field.key;
+                  const filtered    = fieldHasFilter(field);
+                  const badge       = TYPE_BADGE[field.type];
+                  const isDate      = DATE_DIM_KEYS.has(field.key);
+                  const isMeasure   = field.type === 'measure_dim';
+                  const mode        = isDate ? (dateFilterModes[field.key] ?? 'single') : null;
+                  const hasFilter   = !isMeasure && field.filterKey;
 
                   return (
-                    <li key={field.key} className={`transition-colors ${selected ? 'bg-accent-blue/5' : 'hover:bg-bg-hover'}`}>
+                    <li key={field.key} className={`transition-colors ${selected ? (partitioned ? 'bg-accent-purple/5' : 'bg-accent-blue/5') : 'hover:bg-bg-hover'}`}>
                       {/* Row */}
                       <div
                         className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none"
                         onClick={() => toggleDimension(field.key)}
                       >
-                        {/* Checkbox */}
+                        {/* Dimension checkbox */}
                         <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-accent-blue bg-accent-blue' : 'border-border'}`}>
                           {selected && (
                             <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -602,7 +794,7 @@ export default function PivotDashboard() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center flex-wrap gap-1.5">
-                            <span className={`text-[12px] font-medium ${selected ? 'text-accent-blue' : 'text-text-primary'}`}>
+                            <span className={`text-[12px] font-medium ${selected ? (partitioned ? 'text-accent-purple' : 'text-accent-blue') : 'text-text-primary'}`}>
                               {field.label}
                             </span>
                             <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${badge.cls}`}>
@@ -613,22 +805,51 @@ export default function PivotDashboard() {
                                 filtered
                               </span>
                             )}
+                            {partitioned && (
+                              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-purple/30 bg-accent-purple/10 text-accent-purple">
+                                pivot #{partOrder + 1}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 truncate">{field.description}</p>
                         </div>
 
+                        {/* Include in Partition — always visible on every field */}
                         <button
                           type="button"
-                          aria-label={expanded ? 'Collapse filter' : 'Expand filter'}
-                          onClick={(e) => { e.stopPropagation(); setExpanded(expanded ? null : field.key); }}
-                          className="flex-shrink-0 text-text-muted hover:text-text-primary text-[10px] px-1.5 py-0.5 rounded hover:bg-bg-input transition-colors"
+                          onClick={(e) => togglePartition(field.key, e)}
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
+                            partitioned
+                              ? 'border-accent-purple/40 bg-accent-purple/15 text-accent-purple'
+                              : 'border-border bg-bg-input text-text-muted hover:border-accent-purple/30 hover:text-accent-purple'
+                          }`}
+                          title="Include this field as a pivot column header"
                         >
-                          {expanded ? '▲' : '▼'}
+                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${partitioned ? 'border-accent-purple bg-accent-purple' : 'border-current'}`}>
+                            {partitioned && (
+                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="1,4 3,6 7,1.5" />
+                              </svg>
+                            )}
+                          </span>
+                          Partition
                         </button>
+
+                        {/* Expand filter — only for fields that have filters */}
+                        {hasFilter && (
+                          <button
+                            type="button"
+                            aria-label={expanded ? 'Collapse filter' : 'Expand filter'}
+                            onClick={(e) => { e.stopPropagation(); setExpanded(expanded ? null : field.key); }}
+                            className="flex-shrink-0 text-text-muted hover:text-text-primary text-[10px] px-1.5 py-0.5 rounded hover:bg-bg-input transition-colors"
+                          >
+                            {expanded ? '▲' : '▼'}
+                          </button>
+                        )}
                       </div>
 
                       {/* Inline filter control */}
-                      {expanded && (
+                      {expanded && hasFilter && (
                         <div className="px-4 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
 
                           {/* Categorical → multi-select from API values */}
@@ -719,7 +940,7 @@ export default function PivotDashboard() {
                                     value={getMultiValue(field).join(', ')}
                                     onChange={(e) => {
                                       const vals = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
-                                      setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined);
+                                      if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined);
                                     }}
                                     placeholder="YYYY-MM-DD, YYYY-MM-DD, …"
                                     className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono"
@@ -780,7 +1001,7 @@ export default function PivotDashboard() {
               <ul className="divide-y divide-border">
                 {STANDARD_MEASURES.map((measure) => {
                   const active = selectedMeasures.includes(measure.key);
-                  const isLast = active && effectiveMeasures.length === 1 && effectiveMeasures[0] === measure.key;
+                  const isLast = active && measures.length === 1 && measures[0] === measure.key;
                   return (
                     <li key={measure.key}>
                       <button
@@ -879,19 +1100,55 @@ export default function PivotDashboard() {
             {/* How it works */}
             <HowItWorksPanel />
 
-            {/* Period comparison hint — shown when comparisons active but no date dim selected */}
-            {needsPeriodPivot && (
-              <div className="rounded-lg border border-accent-amber/30 bg-accent-amber/8 px-4 py-2.5 flex items-start gap-2.5">
-                <span className="text-accent-amber text-[13px] leading-none mt-0.5">⚠</span>
-                <div>
-                  <p className="text-[11px] font-semibold text-accent-amber">Period comparison columns active</p>
+            {/* Partition clause summary — shown when any field is checked for partition */}
+            {partitionDimensions.length > 0 ? (
+              <div className="rounded-lg border border-accent-purple/30 bg-accent-purple/8 px-4 py-2.5 flex items-start gap-2.5">
+                <span className="text-accent-purple text-[13px] leading-none mt-0.5">⊞</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-accent-purple">Partition pivot active</p>
                   <p className="text-[10.5px] text-text-secondary mt-0.5">
-                    No date dimension selected — columns show <span className="font-mono">main</span> vs comparison period data.
-                    Select <strong>Transaction Date</strong> (or Year Month / Quarter / Year) as a dimension to pivot on actual date values instead.
+                    Column headers are built from: {' '}
+                    {partitionDimensions.map((k, i) => (
+                      <span key={k}>
+                        <span className="font-mono text-accent-purple bg-accent-purple/10 px-1 rounded">{k}</span>
+                        {i < partitionDimensions.length - 1 && <span className="text-text-muted mx-1">→</span>}
+                      </span>
+                    ))}
                   </p>
+                  <p className="text-[10px] text-text-muted mt-0.5">
+                    Column headers:{' '}
+                    {partitionDimensions.map((k, i) => (
+                      <span key={k}>
+                        <span className="font-mono text-accent-purple bg-accent-purple/10 px-1 rounded">{k}</span>
+                        {i < partitionDimensions.length - 1 && <span className="text-text-muted mx-1">›</span>}
+                      </span>
+                    ))}
+                  </p>
+                  {rowDims.length > 0 && (
+                    <p className="text-[10px] text-text-muted mt-0.5 font-mono">
+                      {partitionbyClause}
+                      <span className="text-text-muted not-italic font-sans ml-1.5">← pagination key</span>
+                    </p>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => { setPartitionDimensions([]); setPage(1); }}
+                  className="flex-shrink-0 text-[10px] font-medium text-accent-red hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-bg-input/40 px-4 py-2 flex items-center gap-2">
+                <span className="text-text-muted text-[11px]">⊞</span>
+                <p className="text-[10.5px] text-text-muted">
+                  <strong className="text-text-secondary">No partition selected</strong> — check{' '}
+                  <span className="font-semibold text-accent-purple">Partition</span> on any selected dimension to pivot the report on its values as column headers.
+                </p>
               </div>
             )}
+
 
             {/* ── Full procedure call preview — all 20 params ──────────────── */}
             <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
@@ -937,25 +1194,11 @@ export default function PivotDashboard() {
               {/* Lines */}
               <div className="px-4 py-3 overflow-x-auto">
                 <pre className="text-[10px] leading-[1.75] font-mono">
-                  {sqlPreviewLines.map((line, i) => {
-                    const cls: Record<string, string> = {
-                      header:      'text-text-primary font-semibold',
-                      select:      'text-accent-blue',
-                      where:       'text-accent-green',
-                      group:       'text-accent-purple',
-                      period:      'text-accent-amber',
-                      eab:         'text-accent-teal',
-                      partition:   'text-accent-purple',
-                      page:        'text-text-muted',
-                      footer:      'text-text-primary font-semibold',
-                      placeholder: 'text-text-muted italic',
-                    };
-                    return (
-                      <span key={i} className={`block ${cls[line.kind] ?? 'text-text-secondary'}`}>
-                        {line.text}
-                      </span>
-                    );
-                  })}
+                  {sqlPreviewLines.map((line, i) => (
+                    <span key={i} className={`block ${KIND_CLS[line.kind] ?? 'text-text-secondary'}`}>
+                      {line.text}
+                    </span>
+                  ))}
                 </pre>
               </div>
 
@@ -969,18 +1212,14 @@ export default function PivotDashboard() {
                 </span>
                 <div className="space-y-1">
                   <p className="text-[10.5px] font-semibold text-accent-purple">partitionby_clause rules</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-text-muted">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-text-muted">
                     <div className="rounded border border-accent-green/20 bg-accent-green/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-green block mb-0.5">{'=> \'\''}</span>
-                      <span className="text-accent-green font-semibold">✓ Correct</span> — Global <code>ROW_NUMBER()</code>. Pagination works. Always use this.
+                      <span className="font-mono text-accent-green block mb-0.5">{"=> ''"}</span>
+                      <span className="text-accent-green font-semibold">✓ No pivot</span> — Global <code>ROW_NUMBER()</code>. Standard paginated table.
                     </div>
-                    <div className="rounded border border-accent-amber/20 bg-accent-amber/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-amber block mb-0.5">{"=> 'gam_branch'"}</span>
-                      <span className="text-accent-amber font-semibold">⚠ Caution</span> — Pass column name only. Procedure adds <code>PARTITION BY</code>. Breaks page count.
-                    </div>
-                    <div className="rounded border border-accent-red/20 bg-accent-red/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-red block mb-0.5">{"=> 'PARTITION BY gam_branch'"}</span>
-                      <span className="text-accent-red font-semibold">✗ Wrong</span> — Doubles the keyword → <code>PARTITION BY PARTITION BY …</code> → syntax error.
+                    <div className="rounded border border-accent-blue/20 bg-accent-blue/8 px-2 py-1.5">
+                      <span className="font-mono text-accent-blue block mb-0.5">{"=> 'PARTITION BY gam_branch, year_month'"}</span>
+                      <span className="text-accent-blue font-semibold">✓ Pivot</span> — Full clause passed verbatim. Field values become column headers.
                     </div>
                   </div>
                   {explorer?.sql_preview?.include_eab && (
@@ -1011,27 +1250,37 @@ export default function PivotDashboard() {
               </div>
             )}
 
-            {/* Result table */}
-            <RecordTable
-              title={`Results — ${dimensionLabels}`}
-              subtitle={
-                isLoading
-                  ? 'Executing get_tran_summary against production…'
-                  : isPivoted
-                    ? `${backendTotal.toLocaleString()} raw rows · page ${page} of ${totalPages} · ${displayRows.length.toLocaleString()} pivoted rows on this page`
+            {/* Result table — PivotTable when partition active, RecordTable otherwise */}
+            {isPivoted && pivotData ? (
+              <PivotTable
+                data={pivotData}
+                title={`Results — ${dimensionLabels}`}
+                subtitle={
+                  isLoading
+                    ? 'Executing get_tran_summary against production…'
+                    : `${backendTotal.toLocaleString()} raw rows · ${pivotData.rows.length.toLocaleString()} pivoted rows on this page · page ${page} of ${totalPages}`
+                }
+              />
+            ) : (
+              <RecordTable
+                title={`Results — ${dimensionLabels}`}
+                subtitle={
+                  isLoading
+                    ? 'Executing get_tran_summary against production…'
                     : `${backendTotal.toLocaleString()} total rows · page ${page} of ${totalPages}`
-              }
-              columns={displayColumns}
-              rows={displayRows}
-            />
+                }
+                columns={flatColumns}
+                rows={flatRows}
+              />
+            )}
 
             {/* Pagination + page size */}
             {backendTotal > 0 && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <p className="text-[11px] text-text-muted">
-                  {isPivoted
-                    ? `${displayRows.length.toLocaleString()} pivoted rows · page ${page} of ${totalPages} (${backendTotal.toLocaleString()} raw)`
+                  {isPivoted && pivotData
+                    ? `${pivotData.rows.length.toLocaleString()} pivoted rows · page ${page} of ${totalPages} (${backendTotal.toLocaleString()} raw)`
                     : `Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, backendTotal).toLocaleString()} of ${backendTotal.toLocaleString()} rows`}
                 </p>
                 <div className="flex items-center gap-1.5">

@@ -318,7 +318,7 @@ export default function CustomerDashboard() {
           filtersOpen={filtersOpen}
         />
         
-        <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-col gap-[14px] px-5 py-4">
           {/* Advanced Filters */}
           <AdvancedFilters
             filters={filters}
@@ -343,12 +343,14 @@ export default function CustomerDashboard() {
               change={6.8}
               changeType="up"
               iconBg="var(--accent-green-dim)"
+              sparkData={segmentData.map(s => s.amount)}
             />
             <KPICard
               label="Avg per Customer"
               value={formatNPR((data?.summary?.total_amount || 0) / (data?.summary?.unique_customers || 1))}
               subtitle="Average"
               iconBg="var(--accent-purple-dim)"
+              sparkData={segmentData.map(s => s.avg)}
             />
             <KPICard
               label="Active Accounts"
@@ -362,6 +364,7 @@ export default function CustomerDashboard() {
               value={riskTierData[2]?.count.toLocaleString()}
               subtitle="Tier 3"
               iconBg="var(--accent-red-dim)"
+              sparkData={riskTierData.map(r => r.count)}
             />
           </div>
           

@@ -81,7 +81,7 @@ export default function UsersPage() {
     <>
       <TopBar title="User Management" subtitle="Roles, permissions & branch access" showFiltersButton={false} showExportButton={false} />
 
-      <div className="p-5 flex flex-col gap-4">
+      <div className="px-5 py-4 flex flex-col gap-[14px]">
 
         {/* Role overview cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
