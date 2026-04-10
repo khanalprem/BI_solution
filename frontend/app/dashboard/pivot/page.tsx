@@ -316,9 +316,18 @@ function renderCell(v: string | number | boolean | null | undefined): string {
   return String(v);
 }
 
+// Approximate pixel width per row-dim column for sticky left offsets.
+// Each row-dim column is ~160px wide (px-4 padding + typical content).
+const ROW_DIM_COL_WIDTH = 160;
+
 function PivotTable({ data, title, subtitle }: { data: PivotData; title: string; subtitle?: string }) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
   const hasMultiMeasure = measureKeys.length > 1;
+
+  // Pre-compute cumulative left offset for each row-dim column (sticky freeze).
+  const stickyLeft = rowDimKeys.map((_, i) => i * ROW_DIM_COL_WIDTH);
+  // The last row-dim column gets a shadow to visually separate frozen from scrolling area.
+  const lastDimIdx = rowDimKeys.length - 1;
 
   return (
     <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
@@ -340,16 +349,24 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
 
       {/* Two-tier pivot header */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[11.5px]">
-          <thead className="sticky top-0 z-[1]" style={{ background: 'var(--bg-base)' }}>
+        <table className="border-separate border-spacing-0 text-[11.5px]" style={{ minWidth: '100%' }}>
+          <thead className="sticky top-0 z-[3]" style={{ background: 'var(--bg-base)' }}>
 
-            {/* Top row — row dim headers (rowspan=2) + pivot value group headers */}
+            {/* Top row — row dim headers (sticky) + pivot value group headers */}
             <tr className="border-b border-border">
-              {rowDimKeys.map((k) => (
+              {rowDimKeys.map((k, i) => (
                 <th
                   key={k}
                   rowSpan={hasMultiMeasure ? 2 : 1}
-                  className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap border-r border-border bg-bg-base"
+                  className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap border-r border-border"
+                  style={{
+                    position: 'sticky',
+                    left: stickyLeft[i],
+                    zIndex: 4,
+                    background: 'var(--bg-base)',
+                    minWidth: ROW_DIM_COL_WIDTH,
+                    boxShadow: i === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                  }}
                 >
                   {k.replaceAll('_', ' ')}
                 </th>
@@ -395,13 +412,24 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
             ) : (
               rows.map((row, i) => (
                 <tr key={i} className="border-b border-border last:border-0 hover:bg-[rgba(255,255,255,0.04)] transition-colors">
-                  {/* Row dimension cells */}
-                  {rowDimKeys.map((k) => (
-                    <td key={k} className="px-4 py-2.5 text-text-primary font-medium whitespace-nowrap border-r border-border/40">
+                  {/* Row dimension cells — sticky frozen columns */}
+                  {rowDimKeys.map((k, di) => (
+                    <td
+                      key={k}
+                      className="px-4 py-2.5 text-text-primary font-medium whitespace-nowrap border-r border-border/40"
+                      style={{
+                        position: 'sticky',
+                        left: stickyLeft[di],
+                        zIndex: 2,
+                        background: 'var(--bg-card)',
+                        minWidth: ROW_DIM_COL_WIDTH,
+                        boxShadow: di === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                      }}
+                    >
                       {renderCell(row[k])}
                     </td>
                   ))}
-                  {/* Pivot value × measure cells */}
+                  {/* Pivot value × measure cells — scrollable */}
                   {pivotValues.map((pv) =>
                     measureKeys.map((mk) => (
                       <td key={`${pv}-${mk}`} className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]">
