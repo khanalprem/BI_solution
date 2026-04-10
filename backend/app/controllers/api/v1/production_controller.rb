@@ -32,9 +32,11 @@ module Api
         raw_dims          = param_value(:dimensions, :dimension)
         dimensions        = Array.wrap(parse_multi_value_param(raw_dims))
         dimensions        = ['gam_branch'] if dimensions.empty?
-        # partitionby_clause: bare column names from the frontend (e.g. "gam_branch, year_month").
-        # The procedure prepends PARTITION BY itself — never send "PARTITION BY col" here.
+        # partitionby_clause: full PARTITION BY clause from the frontend (e.g. "PARTITION BY tran_date").
         partitionby_clause = params[:partitionby_clause].to_s.strip
+        # orderby_clause: full ORDER BY clause from the frontend (e.g. "ORDER BY tran_date, acct_num").
+        # Empty string means fall back to the default measure-based ORDER BY in the service.
+        orderby_clause = params[:orderby_clause].to_s.strip
 
         render json: production_service.tran_summary_explorer(
           start_date:        explicit_start,
@@ -44,6 +46,7 @@ module Api
           filters:           filter_params,
           time_comparisons:  time_comparisons,
           partitionby_clause: partitionby_clause,
+          orderby_clause:    orderby_clause,
           page:              params[:page],
           page_size:         params[:page_size]
         )

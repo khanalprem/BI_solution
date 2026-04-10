@@ -217,6 +217,7 @@ export function useProductionExplorer(
   page = 1,
   pageSize = 10,
   partitionbyClause = '',
+  orderbyClause = '',
 ) {
   const params = useMemo(
     () => ({
@@ -225,11 +226,12 @@ export function useProductionExplorer(
       measures: measures.join(','),
       ...(timeComparisons.length > 0 ? { time_comparisons: timeComparisons.join(',') } : {}),
       ...(partitionbyClause ? { partitionby_clause: partitionbyClause } : {}),
+      ...(orderbyClause     ? { orderby_clause: orderbyClause }         : {}),
       page,
       page_size: pageSize,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, JSON.stringify(dimensions), JSON.stringify(measures), JSON.stringify(timeComparisons), partitionbyClause, page, pageSize],
+    [filters, JSON.stringify(dimensions), JSON.stringify(measures), JSON.stringify(timeComparisons), partitionbyClause, orderbyClause, page, pageSize],
   );
   return useQuery<ProductionExplorerResponse>({
     queryKey: ['production-explorer', params],

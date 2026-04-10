@@ -428,9 +428,12 @@ export default function PivotDashboard() {
 
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>(['gam_branch']);
   const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(['total_amount', 'transaction_count']);
-  // partitionDimensions: ordered list of dimension keys checked for "Include in Partition"
+  // partitionDimensions: ordered list of dimension keys checked for "Pivot Col"
   // Order follows the sequence the user checked them — used as pivot column headers top-to-bottom.
   const [partitionDimensions, setPartitionDimensions] = useState<string[]>([]);
+  // orderFields: ordered list of dimension/measure keys checked for "Order By"
+  // Combines dimension keys and measure keys into a single ORDER BY field1, field2 clause.
+  const [orderFields, setOrderFields]                 = useState<string[]>([]);
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
@@ -444,12 +447,10 @@ export default function PivotDashboard() {
   const { data: filterValues } = useFilterValues();
   const { data: catalog }      = useProductionCatalog();
 
-  // eod_balance lives in the Dimension panel — when selected there, pass it as a measure to the backend.
-  const eodSelected = selectedDimensions.includes('eod_balance');
-
-  // Dimensions sent to the backend — eod_balance is not a real GROUP BY dimension.
+  // All selected dimensions are sent to the backend as true GROUP BY dimensions.
+  // eod_balance and tran_date_bal are now proper dimensions (not measures).
   const backendDimensions = useMemo(
-    () => selectedDimensions.filter((k) => k !== 'eod_balance'),
+    () => selectedDimensions,
     [selectedDimensions],
   );
 
@@ -461,11 +462,11 @@ export default function PivotDashboard() {
     () => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)),
     [selectedMeasures],
   );
-  // Combine standard measures + eod_balance if selected in the dimension panel.
-  const measures = useMemo(() => {
-    const base = standardMeasures.length > 0 ? standardMeasures : ['total_amount'];
-    return eodSelected && !base.includes('eod_balance') ? [...base, 'eod_balance'] : base;
-  }, [standardMeasures, eodSelected]);
+  // Measures come only from the Measures panel — eod_balance/tran_date_bal are now dimensions.
+  const measures = useMemo(
+    () => standardMeasures.length > 0 ? standardMeasures : ['total_amount'],
+    [standardMeasures],
+  );
 
   // rowDims: the dimensions that become the LEFT-SIDE row keys in the pivot table.
   // = all backend dimensions EXCEPT the ones the user chose as pivot (column-header) fields.
@@ -474,22 +475,27 @@ export default function PivotDashboard() {
     [backendDimensions, partitionDimensions],
   );
 
-  // partitionby_clause controls how the stored procedure paginates.
-  // CRITICAL: we partition by the ROW dimensions (not the pivot fields).
-  // This ensures each page contains page_size unique row-key groups, each with
-  // ALL their pivot-field values present — enabling correct cross-tab display.
-  // Example: if acct_num is a row dim and tran_date is the pivot field,
-  //   PARTITION BY acct_num  → page 1 = 10 accounts, every date they have data for.
-  //   PARTITION BY tran_date → page 1 = 10 dates, one row per account (wrong).
+  // partitionby_clause — contains ONLY the fields the user explicitly checked for Pivot Col.
+  // The stored procedure uses this verbatim inside OVER(...) for ROW_NUMBER().
   const partitionbyClause = useMemo(
-    () => partitionDimensions.length > 0 && rowDims.length > 0
-      ? `PARTITION BY ${rowDims.join(', ')}`
+    () => partitionDimensions.length > 0
+      ? `PARTITION BY ${partitionDimensions.join(', ')}`
       : '',
-    [partitionDimensions, rowDims],
+    [partitionDimensions],
+  );
+
+  // orderby_clause — built from ALL fields (dimensions + measures) checked for Order By, in check order.
+  // Example: ORDER BY tran_date, acct_num, total_amount
+  // When empty the backend falls back to its default measure-based ORDER BY.
+  const orderbyClause = useMemo(
+    () => orderFields.length > 0
+      ? `ORDER BY ${orderFields.join(', ')}`
+      : '',
+    [orderFields],
   );
 
   const { data: explorer, isLoading, isFetching } = useProductionExplorer(
-    filters, backendDimensions, measures, timeComparisons, page, pageSize, partitionbyClause,
+    filters, backendDimensions, measures, timeComparisons, page, pageSize, partitionbyClause, orderbyClause,
   );
 
   // ── Date options generated from filter stats ──────────────────────────────
@@ -533,7 +539,7 @@ export default function PivotDashboard() {
     const flatCols = explorer.columns.filter((c) => c !== '_period');
     const flat     = rows.map((r) => { const { _period, ...rest } = r; return rest; });
     return { pivotData: null, flatColumns: flatCols, flatRows: flat, isPivoted: false };
-  }, [explorer, backendDimensions, partitionDimensions, measures]);
+  }, [explorer, rowDims, partitionDimensions, measures]);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -561,6 +567,7 @@ export default function PivotDashboard() {
 
   const getMultiValue = useCallback(
     (field: DimensionFieldDef): string[] => {
+      if (!field.filterKey) return [];
       const v = filters[field.filterKey];
       if (!v) return [];
       return Array.isArray(v) ? v : [v as string];
@@ -607,12 +614,11 @@ export default function PivotDashboard() {
   const toggleDimension = useCallback((key: string) => {
     setSelectedDimensions((prev) => {
       if (prev.includes(key)) {
-        // Also remove from partition if deselected
+        // Also remove from partition and orderFields if deselected
         setPartitionDimensions((pp) => pp.filter((k) => k !== key));
+        setOrderFields((of) => of.filter((k) => k !== key));
         const next = prev.filter((k) => k !== key);
-        // Keep at least one non-eod_balance dimension
-        const hasReal = next.some((k) => k !== 'eod_balance');
-        return hasReal ? next : prev;
+        return next.length > 0 ? next : prev;
       }
       return [...prev, key];
     });
@@ -627,6 +633,17 @@ export default function PivotDashboard() {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
       // Auto-select the dimension too so it appears in GROUP BY
       setSelectedDimensions((dims) => dims.includes(key) ? dims : [...dims, key]);
+      return [...prev, key];
+    });
+    setPage(1);
+  }, []);
+
+  // ── Order By toggle — maintains check order ───────────────────────────────
+
+  const toggleOrderField = useCallback((key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOrderFields((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
       return [...prev, key];
     });
     setPage(1);
@@ -768,6 +785,8 @@ export default function PivotDashboard() {
                   const selected    = selectedDimensions.includes(field.key);
                   const partitioned = partitionDimensions.includes(field.key);
                   const partOrder   = partitionDimensions.indexOf(field.key);
+                  const ordered     = orderFields.includes(field.key);
+                  const orderIdx    = orderFields.indexOf(field.key);
                   const expanded    = expandedField === field.key;
                   const filtered    = fieldHasFilter(field);
                   const badge       = TYPE_BADGE[field.type];
@@ -810,6 +829,11 @@ export default function PivotDashboard() {
                                 pivot #{partOrder + 1}
                               </span>
                             )}
+                            {ordered && (
+                              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
+                                order #{orderIdx + 1}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 truncate">{field.description}</p>
                         </div>
@@ -835,7 +859,27 @@ export default function PivotDashboard() {
                           Partition
                         </button>
 
-                        {/* Expand filter — only for fields that have filters */}
+                        {/* Order By button */}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleOrderField(field.key, e)}
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
+                            ordered
+                              ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
+                              : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
+                          }`}
+                          title="Include this field in ORDER BY"
+                        >
+                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
+                            {ordered && (
+                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="1,4 3,6 7,1.5" />
+                              </svg>
+                            )}
+                          </span>
+                          Order By
+                        </button>
+
                         {hasFilter && (
                           <button
                             type="button"
@@ -856,7 +900,7 @@ export default function PivotDashboard() {
                           {field.type === 'categorical' && (
                             <SearchableMultiSelect
                               value={getMultiValue(field)}
-                              onChange={(vals) => setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined)}
+                              onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)}
                               options={getOptions(field)}
                               placeholder={`Filter by ${field.label.toLowerCase()}…`}
                             />
@@ -866,8 +910,8 @@ export default function PivotDashboard() {
                           {field.type === 'text' && (
                             <input
                               type="text"
-                              value={(filters[field.filterKey] as string) ?? ''}
-                              onChange={(e) => setFieldFilter(field.filterKey, e.target.value.trim() || undefined)}
+                              value={(filters[field.filterKey!] as string) ?? ''}
+                              onChange={(e) => setFieldFilter(field.filterKey!, e.target.value.trim() || undefined)}
                               placeholder={field.key === 'acct_num' ? 'Partial account number (ILIKE)' : 'Partial CIF ID (ILIKE)'}
                               className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
                             />
@@ -898,10 +942,10 @@ export default function PivotDashboard() {
                               {mode === 'single' && (
                                 <input
                                   type="text"
-                                  value={getSingleValue(field.filterKey)}
+                                  value={getSingleValue(field.filterKey!)}
                                   onChange={(e) => {
                                     const v = e.target.value.trim();
-                                    setFieldFilter(field.filterKey, v || undefined);
+                                    setFieldFilter(field.filterKey!, v || undefined);
                                   }}
                                   placeholder={
                                     field.type === 'date'    ? 'YYYY-MM-DD' :
@@ -948,7 +992,7 @@ export default function PivotDashboard() {
                                 ) : (
                                   <SearchableMultiSelect
                                     value={getMultiValue(field)}
-                                    onChange={(vals) => setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined)}
+                                    onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)}
                                     options={getOptions(field)}
                                     placeholder={`Select ${field.label.toLowerCase()} values…`}
                                   />

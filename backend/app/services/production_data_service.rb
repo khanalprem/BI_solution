@@ -126,24 +126,30 @@ class ProductionDataService
   }.freeze
 
   DIMENSIONS = {
-    'gam_branch' => { label: 'Account Branch', sql: 'gam_branch' },
-    'gam_province' => { label: 'Account Province', sql: 'gam_province' },
-    'gam_cluster' => { label: 'Account Cluster', sql: 'gam_cluster' },
-    'gam_solid' => { label: 'Account SOL ID', sql: 'gam_solid' },
-    'tran_source' => { label: 'Channel', sql: 'tran_source' },
-    'part_tran_type' => { label: 'CR / DR', sql: 'part_tran_type' },
-    'product' => { label: 'Product', sql: 'product' },
-    'service' => { label: 'Service', sql: 'service' },
-    'merchant' => { label: 'Merchant', sql: 'merchant' },
-    'gl_sub_head_code' => { label: 'GL Code', sql: 'gl_sub_head_code' },
-    'entry_user' => { label: 'Entry User', sql: 'entry_user' },
-    'vfd_user' => { label: 'Verified User', sql: 'vfd_user' },
-    'acct_num' => { label: 'Account Number', sql: 'acct_num' },
-    'cif_id' => { label: 'CIF ID', sql: 'cif_id' },
-    'tran_date' => { label: 'Transaction Date', sql: 'tran_date' },
-    'year_month' => { label: 'Year Month', sql: 'year_month' },
-    'year_quarter' => { label: 'Year Quarter', sql: 'year_quarter' },
-    'year' => { label: 'Year', sql: 'year' }
+    'gam_branch'     => { label: 'Account Branch',   sql: 'gam_branch' },
+    'gam_province'   => { label: 'Account Province', sql: 'gam_province' },
+    'gam_cluster'    => { label: 'Account Cluster',  sql: 'gam_cluster' },
+    'gam_solid'      => { label: 'Account SOL ID',   sql: 'gam_solid' },
+    'tran_source'    => { label: 'Channel',           sql: 'tran_source' },
+    'part_tran_type' => { label: 'CR / DR',           sql: 'part_tran_type' },
+    'product'        => { label: 'Product',           sql: 'product' },
+    'service'        => { label: 'Service',           sql: 'service' },
+    'merchant'       => { label: 'Merchant',          sql: 'merchant' },
+    'gl_sub_head_code' => { label: 'GL Code',         sql: 'gl_sub_head_code' },
+    'entry_user'     => { label: 'Entry User',        sql: 'entry_user' },
+    'vfd_user'       => { label: 'Verified User',     sql: 'vfd_user' },
+    'acct_num'       => { label: 'Account Number',    sql: 'acct_num' },
+    'cif_id'         => { label: 'CIF ID',            sql: 'cif_id' },
+    'tran_date'      => { label: 'Transaction Date',  sql: 'tran_date' },
+    'year_month'     => { label: 'Year Month',        sql: 'year_month' },
+    'year_quarter'   => { label: 'Year Quarter',      sql: 'year_quarter' },
+    'year'           => { label: 'Year',              sql: 'year' },
+    # eod_balance — a direct column in tran_summary; treated as a dimension (GROUP BY field).
+    'eod_balance'    => { label: 'EOD Balance',   sql: 'eod_balance' },
+    # tran_date_bal — comes from the eab table via the outer EAB join.
+    # outer_join_field: true means it cannot be placed in the inner GROUP BY; it is injected
+    # into select_outer so the column is available in the final result set.
+    'tran_date_bal'  => { label: 'EAB Balance',   sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true }
   }.freeze
 
   MEASURES = {
@@ -181,11 +187,6 @@ class ProductionDataService
       label: 'Net Flow',
       select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) AS net_flow",
       order_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) DESC"
-    },
-    'eod_balance' => {
-      label: 'EOD Balance (EAB)',
-      select_sql: 'MAX(eod_balance) AS eod_balance',
-      order_sql: 'MAX(eod_balance) DESC'
     }
   }.freeze
 
@@ -313,7 +314,7 @@ class ProductionDataService
     end
   end
 
-  def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', page: 1, page_size: 10)
+  def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', orderby_clause: '', page: 1, page_size: 10)
     # Fallback dates used for internal calculations (EAB join, period comparisons).
     # start_date / end_date may be nil when frontend sends no date params (ALL period before
     # filter-stats loads) — in that case we skip the tran_date WHERE clause but still need
@@ -344,12 +345,22 @@ class ProductionDataService
 
     selected_measures = measure_keys.map { |key| MEASURES.fetch(key) }
 
-    # Build multi-dimension SELECT and GROUP BY
-    dim_sqls    = dimension_keys.map { |k| DIMENSIONS.fetch(k).fetch(:sql) }
-    dim_selects = dimension_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
+    # Split dimensions into:
+    #   inner_dim_keys — go into the inner subquery (GROUP BY inside the stored procedure)
+    #   outer_dim_keys — come from the EAB outer join; cannot be in the inner GROUP BY,
+    #                    so they are injected into select_outer instead.
+    inner_dim_keys = dimension_keys.reject { |k| DIMENSIONS.fetch(k)[:outer_join_field] }
+    outer_dim_keys = dimension_keys.select { |k| DIMENSIONS.fetch(k)[:outer_join_field] }
 
-    # Include acid in select/groupby only when EAB balance is needed
-    include_eab = measure_keys.include?('eod_balance')
+    dim_sqls    = inner_dim_keys.map { |k| DIMENSIONS.fetch(k).fetch(:sql) }
+    dim_selects = inner_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
+
+    # Force EAB join when any selected dimension has eab_required: true (e.g. tran_date_bal)
+    eab_dim_required = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:eab_required] }
+
+    # Include acid in select/groupby whenever an EAB-sourced dimension is selected so the
+    # outer query can join eab on acid.
+    include_eab  = eab_dim_required
     acid_select  = include_eab ? ', acid' : ''
     acid_groupby = include_eab ? ', acid' : ''
 
@@ -357,7 +368,9 @@ class ProductionDataService
     where_clause   = explorer_where_clause(filters: filters, start_date: start_date, end_date: end_date)
     groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}"
     having_clause  = ''
-    orderby_clause = "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+    # Use the user-supplied ORDER BY clause if provided; fall back to measure-based default.
+    orderby_clause = orderby_clause.to_s.strip.presence ||
+                     "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
 
     # PARTITION BY: the procedure expects the FULL clause including the 'PARTITION BY' keyword.
     # Frontend sends '' (no pivot) or 'PARTITION BY field1, field2' (pivot mode).
@@ -373,7 +386,14 @@ class ProductionDataService
       ''
     end
 
-    select_outer = include_eab ? 'SELECT tb2.*, e.tran_date_bal AS eab_balance' : 'SELECT tb2.*'
+    # select_outer: always selects tb2.*, then appends any outer_join_field dimensions
+    # (e.g. e.tran_date_bal AS tran_date_bal from the eab join).
+    outer_dim_selects = outer_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
+    select_outer = if include_eab && outer_dim_selects.any?
+      "SELECT tb2.*, #{outer_dim_selects.join(', ')}"
+    else
+      'SELECT tb2.*'
+    end
 
     # Resolve reference date for period comparisons from user-selected filter values
     reference_date = resolve_reference_date(filters: filters, end_date: calc_end_date, dimension_keys: dimension_keys)
