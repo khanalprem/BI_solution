@@ -703,7 +703,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_10_000001) do
     t.string "provider"
     t.string "uid"
     t.string "avatar_url"
-    t.boolean "has_chart_access", default: false
     t.string "role", default: "analyst", null: false
     t.text "assigned_branches", default: [], array: true
     t.text "assigned_provinces", default: [], array: true

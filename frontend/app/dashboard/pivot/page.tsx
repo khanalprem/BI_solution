@@ -8,6 +8,133 @@ import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import { useFilterValues, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse } from '@/types';
 
+// ─── SQL preview — module-level constants (never recreated per render) ─────────
+
+type SqlLineKind =
+  | 'header' | 'select' | 'where' | 'group'
+  | 'period' | 'eab' | 'partition' | 'page' | 'footer' | 'placeholder';
+type SqlLine = { text: string; kind: SqlLineKind };
+
+const KIND_CLS: Record<SqlLineKind, string> = {
+  header:      'text-text-primary font-semibold',
+  select:      'text-accent-blue',
+  where:       'text-accent-green',
+  group:       'text-accent-purple',
+  period:      'text-accent-amber',
+  eab:         'text-accent-teal',
+  partition:   'text-accent-purple',
+  page:        'text-text-muted',
+  footer:      'text-text-primary font-semibold',
+  placeholder: 'text-text-muted italic',
+};
+
+const ALL_PERIOD_PARAMS = [
+  'prevdate_where', 'thismonth_where',  'thisyear_where',
+  'prevmonth_where', 'prevyear_where',  'prevmonthmtd_where',
+  'prevyearytd_where', 'prevmonthsamedate_where', 'prevyearsamedate_where',
+] as const;
+
+// ─── How it Works panel ───────────────────────────────────────────────────────
+
+function StepCard({ num, circleCls, heading, body, tags }: {
+  num: number;
+  circleCls: string;
+  heading: string;
+  body: React.ReactNode;
+  tags?: { label: string; tagCls: string }[];
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${circleCls}`}>{num}</span>
+        <p className="text-[11px] font-semibold text-text-primary">{heading}</p>
+      </div>
+      <p className="text-[10.5px] text-text-secondary leading-relaxed">{body}</p>
+      {tags && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <span key={t.label} className={`text-[9px] px-2 py-0.5 rounded border font-medium ${t.tagCls}`}>{t.label}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HowItWorksPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-accent-blue/20 bg-accent-blue/5 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-accent-blue/8 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="w-5 h-5 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0 text-accent-blue">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M6 5.5v3M6 3.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </span>
+          <span className="text-[11.5px] font-semibold text-accent-blue">How Pivot Analysis Works</span>
+        </div>
+        <svg
+          width="12" height="12" viewBox="0 0 12 12" fill="none"
+          className={`text-accent-blue transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1 border-t border-accent-blue/15 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <StepCard
+            num={1} circleCls="bg-accent-blue" heading="Select Dimensions"
+            body={<>Dimensions are the <strong className="text-text-primary">grouping fields</strong> — e.g. Branch, Channel, Product. Each checked dimension becomes a <span className="font-mono text-accent-amber">GROUP BY</span> column in the stored procedure. You can select multiple dimensions to build cross-tab analyses.</>}
+            tags={[
+              { label: 'Account Branch', tagCls: 'border-accent-blue/25 bg-accent-blue/10 text-accent-blue' },
+              { label: 'Channel',        tagCls: 'border-accent-blue/25 bg-accent-blue/10 text-accent-blue' },
+              { label: 'Product',        tagCls: 'border-accent-blue/25 bg-accent-blue/10 text-accent-blue' },
+              { label: 'Year Month',     tagCls: 'border-accent-blue/25 bg-accent-blue/10 text-accent-blue' },
+            ]}
+          />
+          <StepCard
+            num={2} circleCls="bg-accent-green" heading="Choose Measures"
+            body="Measures are aggregations computed over the grouped rows — Total Amount, Count, Credit/Debit, Net Flow, and EOD Balance (via EAB join). At least one standard measure must remain selected."
+            tags={[
+              { label: 'Total Amount',      tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
+              { label: 'Transaction Count', tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
+              { label: 'Net Flow',          tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
+              { label: 'EOD Balance',       tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
+            ]}
+          />
+          <StepCard
+            num={3} circleCls="bg-accent-amber" heading="Add Period Comparisons"
+            body={<>Period comparisons pass <strong className="text-text-primary">WHERE clauses</strong> as stored-procedure parameters (e.g. <span className="font-mono text-accent-amber">prevmonth_where</span>). The backend computes separate aggregations for each period. Useful for MoM, YoY, and MTD reporting.</>}
+          />
+          <StepCard
+            num={4} circleCls="bg-accent-purple" heading="Pivot Table Logic"
+            body={<>When a <strong className="text-text-primary">date dimension</strong> is selected, results auto-pivot — date values become column headers. Without a date dimension, period comparison rows pivot on the <span className="font-mono text-accent-amber">_period</span> column instead.</>}
+            tags={[
+              { label: 'Date → Column pivot',   tagCls: 'border-accent-amber/25 bg-accent-amber/10 text-accent-amber' },
+              { label: 'Period → Column pivot',  tagCls: 'border-accent-purple/25 bg-accent-purple/10 text-accent-purple' },
+            ]}
+          />
+          <div className="col-span-full mt-1 flex items-start gap-2.5 rounded-lg border border-border bg-bg-input px-3 py-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-live-pulse mt-1 flex-shrink-0" />
+            <p className="text-[10px] text-text-muted leading-relaxed">
+              All results execute against <strong className="text-text-secondary">production PostgreSQL</strong> via the
+              <span className="font-mono"> get_tran_summary</span> stored procedure. Filters, pagination, and field selection
+              are passed as procedure parameters — no data is cached. Results reflect live warehouse data from Nepal banking transactions.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Dimension field definitions ──────────────────────────────────────────────
 
 type FieldType = 'categorical' | 'text' | 'date' | 'month' | 'quarter' | 'year';
@@ -353,32 +480,58 @@ export default function PivotDashboard() {
     [catalog, selectedDimensions],
   );
 
-  const sqlPreview = useMemo(() => {
-    if (!explorer) return 'Select at least one dimension and one measure.';
+  // ── Full procedure-call preview (all 20 params) ──────────────────────────
+  const sqlPreviewLines = useMemo((): SqlLine[] => {
+    if (!explorer) {
+      return [{ text: '-- Select at least one dimension and one measure to generate the call.', kind: 'placeholder' }];
+    }
 
-    const sp = explorer.sql_preview;
-    const pw = sp.period_wheres ?? {};
+    const sp  = explorer.sql_preview;
+    const pw  = sp.period_wheres ?? {};
 
-    // Build period where lines — show '' for inactive periods
-    const periodParams = [
-      'prevdate_where', 'thismonth_where', 'thisyear_where',
-      'prevmonth_where', 'prevyear_where', 'prevmonthmtd_where',
-      'prevyearytd_where', 'prevmonthsamedate_where', 'prevyearsamedate_where',
-    ].map((param) => `  ${param} => '${pw[param] ?? ''}',`).join('\n');
+    const lines: SqlLine[] = [];
+    lines.push({ text: 'CALL public.get_tran_summary(', kind: 'header' });
 
-    const call = [
-      'CALL public.get_tran_summary(',
-      `  select_inner => '${sp.select_inner}',`,
-      `  where_clause => '${sp.where_clause}',`,
-      `  groupby_clause => '${sp.groupby_clause}',`,
-      `  orderby_clause => '${sp.orderby_clause}',`,
-      periodParams,
-      `  page => ${sp.page},`,
-      `  page_size => ${sp.page_size}`,
-      ')',
-    ].join('\n');
+    // ── SELECT ───────────────────────────────────────────────────────────────
+    lines.push({ text: `  select_outer             => '${sp.select_outer ?? 'SELECT tb2.*'}',`, kind: 'select' });
+    lines.push({ text: `  select_inner             => '${sp.select_inner}',`,                   kind: 'select' });
 
-    return call;
+    // ── WHERE ────────────────────────────────────────────────────────────────
+    lines.push({ text: `  where_clause             => '${sp.where_clause}',`,                   kind: 'where' });
+
+    // ── PERIOD WHERE params (9) ───────────────────────────────────────────────
+    ALL_PERIOD_PARAMS.forEach((param) => {
+      const val = pw[param] ?? '';
+      const active = val.length > 0;
+      lines.push({ text: `  ${param.padEnd(28)} => '${val}',${active ? '  -- ✓ active' : ''}`, kind: 'period' });
+    });
+
+    // ── GROUP / HAVING / ORDER / PARTITION ───────────────────────────────────
+    lines.push({ text: `  groupby_clause           => '${sp.groupby_clause}',`,                 kind: 'group' });
+    lines.push({ text: `  having_clause            => '${sp.having_clause ?? ''}',`,            kind: 'group' });
+    lines.push({ text: `  orderby_clause           => '${sp.orderby_clause}',`,                 kind: 'group' });
+
+    // partitionby_clause — always '' for correct pagination
+    const pbVal = sp.partitionby_clause ?? '';
+    lines.push({
+      text: `  partitionby_clause       => '${pbVal}',  -- '' = global ROW_NUMBER (correct pagination)${pbVal ? `  ← pass column name only, not 'PARTITION BY ${pbVal}'` : ''}`,
+      kind: 'partition',
+    });
+
+    // ── EAB join ─────────────────────────────────────────────────────────────
+    const eabVal = sp.eab_join ?? '';
+    lines.push({
+      text: `  eab_join                 => '${eabVal}',${eabVal ? '  -- ✓ eod_balance selected → LEFT JOIN eab' : '  -- empty: eod_balance not selected'}`,
+      kind: 'eab',
+    });
+
+    // ── Security / Pagination ────────────────────────────────────────────────
+    lines.push({ text: `  user_id                  => '',  -- row-level security (empty = no restriction)`, kind: 'page' });
+    lines.push({ text: `  page                     => ${sp.page},`, kind: 'page' });
+    lines.push({ text: `  page_size                => ${sp.page_size}`, kind: 'page' });
+    lines.push({ text: ')', kind: 'footer' });
+
+    return lines;
   }, [explorer]);
 
   // Use main query total_rows from backend for pagination.
@@ -723,6 +876,9 @@ export default function PivotDashboard() {
           {/* ── Right: SQL preview + results ───────────────────────────────── */}
           <div className="flex flex-col gap-4">
 
+            {/* How it works */}
+            <HowItWorksPanel />
+
             {/* Period comparison hint — shown when comparisons active but no date dim selected */}
             {needsPeriodPivot && (
               <div className="rounded-lg border border-accent-amber/30 bg-accent-amber/8 px-4 py-2.5 flex items-start gap-2.5">
@@ -737,24 +893,108 @@ export default function PivotDashboard() {
               </div>
             )}
 
-            {/* SQL / procedure preview */}
-            <div className="rounded-xl border border-border bg-bg-card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-                  Generated Procedure Parameters
-                </p>
-                <div className="flex items-center gap-3">
+            {/* ── Full procedure call preview — all 20 params ──────────────── */}
+            <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-input/50">
+                <div className="flex items-center gap-2.5">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-text-muted">
+                    get_tran_summary — All 20 Parameters
+                  </p>
+                  {explorer?.sql_preview?.include_eab && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-accent-teal/30 bg-accent-teal/10 text-accent-teal uppercase tracking-wider">
+                      EAB join active
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2.5">
                   {isPivoted && (
-                    <span className="text-[9.5px] font-semibold px-2 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber uppercase tracking-wider">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber uppercase tracking-wider">
                       pivoted
                     </span>
                   )}
                   {isFetching && <span className="text-[10px] text-accent-blue animate-pulse">Running…</span>}
                 </div>
               </div>
-              <pre className="overflow-x-auto text-[10px] leading-relaxed text-text-secondary whitespace-pre-wrap">
-                {sqlPreview}
-              </pre>
+
+              {/* Colour legend */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 border-b border-border bg-bg-base/40">
+                {[
+                  { dot: 'bg-accent-blue',   label: 'SELECT' },
+                  { dot: 'bg-accent-green',  label: 'WHERE' },
+                  { dot: 'bg-accent-purple', label: 'GROUP / ORDER / PARTITION' },
+                  { dot: 'bg-accent-amber',  label: 'Period comparisons' },
+                  { dot: 'bg-accent-teal',   label: 'EAB join' },
+                  { dot: 'bg-text-muted',    label: 'Pagination / security' },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${l.dot}`} />
+                    <span className="text-[9px] text-text-muted">{l.label}</span>
+                  </span>
+                ))}
+              </div>
+
+              {/* Lines */}
+              <div className="px-4 py-3 overflow-x-auto">
+                <pre className="text-[10px] leading-[1.75] font-mono">
+                  {sqlPreviewLines.map((line, i) => {
+                    const cls: Record<string, string> = {
+                      header:      'text-text-primary font-semibold',
+                      select:      'text-accent-blue',
+                      where:       'text-accent-green',
+                      group:       'text-accent-purple',
+                      period:      'text-accent-amber',
+                      eab:         'text-accent-teal',
+                      partition:   'text-accent-purple',
+                      page:        'text-text-muted',
+                      footer:      'text-text-primary font-semibold',
+                      placeholder: 'text-text-muted italic',
+                    };
+                    return (
+                      <span key={i} className={`block ${cls[line.kind] ?? 'text-text-secondary'}`}>
+                        {line.text}
+                      </span>
+                    );
+                  })}
+                </pre>
+              </div>
+
+              {/* partitionby explainer */}
+              <div className="border-t border-border px-4 py-3 bg-accent-purple/5 flex items-start gap-2.5">
+                <span className="w-4 h-4 rounded-full bg-accent-purple/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                    <circle cx="5" cy="5" r="4" stroke="#8b5cf6" strokeWidth="1.5"/>
+                    <path d="M5 4.5v3M5 3v.5" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </span>
+                <div className="space-y-1">
+                  <p className="text-[10.5px] font-semibold text-accent-purple">partitionby_clause rules</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-text-muted">
+                    <div className="rounded border border-accent-green/20 bg-accent-green/8 px-2 py-1.5">
+                      <span className="font-mono text-accent-green block mb-0.5">{'=> \'\''}</span>
+                      <span className="text-accent-green font-semibold">✓ Correct</span> — Global <code>ROW_NUMBER()</code>. Pagination works. Always use this.
+                    </div>
+                    <div className="rounded border border-accent-amber/20 bg-accent-amber/8 px-2 py-1.5">
+                      <span className="font-mono text-accent-amber block mb-0.5">{"=> 'gam_branch'"}</span>
+                      <span className="text-accent-amber font-semibold">⚠ Caution</span> — Pass column name only. Procedure adds <code>PARTITION BY</code>. Breaks page count.
+                    </div>
+                    <div className="rounded border border-accent-red/20 bg-accent-red/8 px-2 py-1.5">
+                      <span className="font-mono text-accent-red block mb-0.5">{"=> 'PARTITION BY gam_branch'"}</span>
+                      <span className="text-accent-red font-semibold">✗ Wrong</span> — Doubles the keyword → <code>PARTITION BY PARTITION BY …</code> → syntax error.
+                    </div>
+                  </div>
+                  {explorer?.sql_preview?.include_eab && (
+                    <div className="mt-1.5 rounded border border-accent-teal/20 bg-accent-teal/8 px-2 py-1.5 text-[10px]">
+                      <span className="text-accent-teal font-semibold block mb-0.5">EOD Balance active — EAB join explained</span>
+                      <span className="text-text-muted">
+                        <code className="text-accent-teal">select_inner</code> adds <code>acid</code> to GROUP BY so the outer query can join.{' '}
+                        <code className="text-accent-teal">select_outer</code> pulls <code>e.tran_date_bal</code> from the production eab table (not schema.rb).{' '}
+                        The procedure result contains both <code>eod_balance</code> (aggregated from tran_summary) and <code>eab_balance</code> (real snapshot from eab).
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Empty periods notice */}

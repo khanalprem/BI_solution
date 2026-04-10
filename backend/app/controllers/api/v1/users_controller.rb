@@ -19,7 +19,7 @@ module Api
       def create
         user = User.new(user_params)
         user.is_active = true
-        user.is_staff  = %w[admin manager analyst branch_staff auditor].include?(user.role)
+        user.is_staff     = (User::ROLES - %w[superadmin]).include?(user.role)
         user.is_superuser = user.role == 'superadmin'
 
         if user.save
@@ -31,17 +31,25 @@ module Api
 
       # PATCH /api/v1/users/:id
       def update
+        attrs = update_params
+
+        # Strip blank password — never clear an existing password_digest
+        attrs.delete(:password) if attrs[:password].blank?
+
         # Prevent demoting the last superadmin
-        if @user.role == 'superadmin' && params[:role] && params[:role] != 'superadmin'
+        incoming_role = attrs[:role]
+        if @user.role == 'superadmin' && incoming_role.present? && incoming_role != 'superadmin'
           remaining = User.where(role: 'superadmin').count
           if remaining <= 1
             return render json: { error: 'Cannot demote the last superadmin' }, status: :unprocessable_entity
           end
         end
 
-        attrs = update_params
-        attrs[:is_staff]     = %w[admin manager analyst branch_staff auditor].include?(attrs[:role]) if attrs[:role]
-        attrs[:is_superuser] = attrs[:role] == 'superadmin' if attrs[:role]
+        # Keep is_staff / is_superuser flags in sync with role
+        if incoming_role.present?
+          attrs[:is_staff]     = (User::ROLES - %w[superadmin]).include?(incoming_role)
+          attrs[:is_superuser] = incoming_role == 'superadmin'
+        end
 
         if @user.update(attrs)
           render json: { user: user_detail(@user) }

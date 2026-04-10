@@ -101,6 +101,17 @@ export function Sidebar() {
                 </svg>
               }
             />
+            <NavItem
+              href="/dashboard/skills"
+              label="Platform Guide"
+              active={pathname === '/dashboard/skills'}
+              icon={
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4"/>
+                  <path d="M8 7v4M8 5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              }
+            />
           </SidebarSection>
 
           <SidebarSection label="Financial">

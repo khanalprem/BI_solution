@@ -56,6 +56,8 @@ test:
 #
 production:
   <<: *default
-  database: backend_production
-  username: backend
-  password: <%= ENV["BACKEND_DATABASE_PASSWORD"] %>
+  # Production uses the same env vars as development so both environments
+  # connect to the same nifi warehouse (DB_HOST / DB_NAME / DB_USERNAME / DB_PASSWORD).
+  database: <%= ENV.fetch("DB_NAME") { "backend_production" } %>
+  username: <%= ENV.fetch("DB_USERNAME") { "postgres" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { ENV["BACKEND_DATABASE_PASSWORD"] } %>

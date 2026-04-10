@@ -321,12 +321,17 @@ export interface ProductionExplorerResponse {
   page: number;
   page_size: number;
   sql_preview: {
-    select_inner: string;
-    where_clause: string;
-    groupby_clause: string;
-    orderby_clause: string;
-    period_wheres: Record<string, string>;
-    page: number;
-    page_size: number;
+    select_outer:       string;
+    select_inner:       string;
+    where_clause:       string;
+    groupby_clause:     string;
+    having_clause:      string;
+    orderby_clause:     string;
+    partitionby_clause: string;
+    eab_join:           string;
+    include_eab:        boolean;
+    period_wheres:      Record<string, string>;
+    page:               number;
+    page_size:          number;
   };
 }

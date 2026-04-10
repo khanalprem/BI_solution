@@ -544,13 +544,18 @@ class ProductionDataService
       page:            normalized_page,
       page_size:       normalized_page_size,
       sql_preview: {
-        select_inner:   select_inner,
-        where_clause:   where_clause,
-        groupby_clause: groupby_clause,
-        orderby_clause: orderby_clause,
-        page:           normalized_page,
-        page_size:      normalized_page_size,
-        period_wheres:  period_wheres.reject { |_, v| v.empty? }
+        select_outer:       select_outer,
+        select_inner:       select_inner,
+        where_clause:       where_clause,
+        groupby_clause:     groupby_clause,
+        having_clause:      having_clause,
+        orderby_clause:     orderby_clause,
+        partitionby_clause: partitionby_clause,
+        eab_join:           eab_join,
+        include_eab:        include_eab,
+        page:               normalized_page,
+        page_size:          normalized_page_size,
+        period_wheres:      period_wheres.reject { |_, v| v.empty? }
       }
     }
   end
