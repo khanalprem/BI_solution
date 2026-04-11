@@ -503,8 +503,7 @@ export default function PivotDashboard() {
     [backendDimensions, partitionDimensions],
   );
 
-  // partitionby_clause — contains ONLY the fields the user explicitly checked for Pivot Col.
-  // The stored procedure uses this verbatim inside OVER(...) for ROW_NUMBER().
+  // partitionby_clause — the fields the user explicitly checked for Pivot Col.
   const partitionbyClause = useMemo(
     () => partitionDimensions.length > 0
       ? `PARTITION BY ${partitionDimensions.join(', ')}`
@@ -512,14 +511,30 @@ export default function PivotDashboard() {
     [partitionDimensions],
   );
 
-  // orderby_clause — built from ALL fields (dimensions + measures) checked for Order By, in check order.
-  // Example: ORDER BY tran_date, acct_num, total_amount
-  // When empty the backend falls back to its default measure-based ORDER BY.
+  // autoOrderFields — computed automatically when pivot is active.
+  // Rule: pivot fields first (UI order), then remaining selected dimension fields (row dims).
+  // When no pivot is active this is empty — user controls ORDER BY fully via orderFields.
+  const autoOrderFields = useMemo(() => {
+    if (partitionDimensions.length === 0) return [];
+    // pivot dims first, then row dims (backendDimensions preserves UI selection order)
+    return [...partitionDimensions, ...rowDims];
+  }, [partitionDimensions, rowDims]);
+
+  // effectiveOrderList — the final deduplicated ORDER BY field list.
+  // = autoOrderFields + any user-checked fields not already in autoOrderFields.
+  // When no pivot: only user-checked orderFields apply.
+  const effectiveOrderList = useMemo(() => {
+    const autoSet = new Set(autoOrderFields);
+    const extra   = orderFields.filter((k) => !autoSet.has(k));
+    return [...autoOrderFields, ...extra];
+  }, [autoOrderFields, orderFields]);
+
+  // orderby_clause sent to the backend.
   const orderbyClause = useMemo(
-    () => orderFields.length > 0
-      ? `ORDER BY ${orderFields.join(', ')}`
+    () => effectiveOrderList.length > 0
+      ? `ORDER BY ${effectiveOrderList.join(', ')}`
       : '',
-    [orderFields],
+    [effectiveOrderList],
   );
 
   const { data: explorer, isLoading, isFetching } = useProductionExplorer(
@@ -530,43 +545,53 @@ export default function PivotDashboard() {
 
   const dateOptions = useMemo(() => generateDateOptions(filterStats), [filterStats]);
 
-  // ── Pivot logic ───────────────────────────────────────────────────────────
-  // Case A — date dim selected: pivot on that date column.
-  //   rows without a non-date dim → single summary row per date value.
-  //   rows with non-date dims   → one row per non-date combo, date values = columns.
-  // Case B — no date dim, comparisons active: pivot on the `_period` column injected
-  //   by the backend, so main vs comparison rows appear as separate column groups.
-  // Case C — no date dim, no comparisons: flat table.
-
-  // pivotData is non-null only when user has checked Partition fields.
-  // flatDisplay is used otherwise — always a plain table.
+  // ── Frontend pivot — pandas equivalent: ─────────────────────────────────────
+  //   df.pivot(
+  //     index   = rowDims,             ← dimensions NOT checked for Pivot Col → left-side rows
+  //     columns = partitionDimensions, ← dimensions checked for Pivot Col → column group headers
+  //     values  = measures,            ← selected measures → cell values
+  //   )
+  //
+  // The backend returns flat rows (one per group-by combination).
+  // We re-pivot them here: group by rowDims, spread partitionDimensions values across columns.
+  // Missing intersections stay null (rendered as "—").
   const { pivotData, flatColumns, flatRows, isPivoted } = useMemo(() => {
-    const emptyFlat = { pivotData: null, flatColumns: explorer?.columns ?? [], flatRows: explorer?.rows ?? [], isPivoted: false };
+    const emptyFlat = {
+      pivotData: null,
+      flatColumns: explorer?.columns ?? [],
+      flatRows: (explorer?.rows ?? []) as DataRow[],
+      isPivoted: false,
+    };
     if (!explorer || !explorer.rows.length) return emptyFlat;
 
     const rows = explorer.rows as DataRow[];
 
-    if (partitionDimensions.length > 0) {
-      if (partitionDimensions.length === 1) {
-        // Single pivot field — its distinct values are top-level column groups.
-        const pd = buildPivotData(rows, partitionDimensions[0], rowDims, measures);
-        return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
-      }
-
-      // Multiple pivot fields — composite key becomes the column group header
-      // in the order the user ticked them.
-      const compositeRows = rows.map((r) => ({
-        ...r,
-        _pivot_key: partitionDimensions.map((k) => String(r[k] ?? '')).join(' › '),
-      }));
-      const pd = buildPivotData(compositeRows, '_pivot_key', rowDims, measures);
-      return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
+    if (partitionDimensions.length === 0) {
+      // No pivot fields selected — flat table.
+      const flatCols = explorer.columns.filter((c) => c !== '_period');
+      const flat     = rows.map(({ _period, ...rest }) => rest as DataRow);
+      return { pivotData: null, flatColumns: flatCols, flatRows: flat, isPivoted: false };
     }
 
-    // No partition — flat table, strip internal _period column.
-    const flatCols = explorer.columns.filter((c) => c !== '_period');
-    const flat     = rows.map((r) => { const { _period, ...rest } = r; return rest; });
-    return { pivotData: null, flatColumns: flatCols, flatRows: flat, isPivoted: false };
+    // Build a single pivot-column key from all checked pivot fields (joined with " › ").
+    // Single field → value as-is.  Multiple fields → "val1 › val2".
+    const pivotRows = partitionDimensions.length === 1
+      ? rows
+      : rows.map((r) => ({
+          ...r,
+          _pivot_key: partitionDimensions.map((k) => String(r[k] ?? '')).join(' › '),
+        }));
+
+    const pivotField = partitionDimensions.length === 1
+      ? partitionDimensions[0]
+      : '_pivot_key';
+
+    // Apply pivot:
+    //   index   = rowDims
+    //   columns = pivotField (distinct values become column-group headers)
+    //   values  = measures
+    const pd = buildPivotData(pivotRows, pivotField, rowDims, measures);
+    return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
   }, [explorer, rowDims, partitionDimensions, measures]);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
@@ -684,7 +709,9 @@ export default function PivotDashboard() {
       if (prev.includes(key)) {
         const next = prev.filter((k) => k !== key);
         const hasStandard = next.some((k) => STANDARD_MEASURES.some((m) => m.key === k));
-        return hasStandard ? next : prev;
+        if (!hasStandard) return prev; // keep at least one standard measure
+        setOrderFields((of) => of.filter((k) => k !== key)); // drop from ORDER BY
+        return next;
       }
       return [...prev, key];
     });
@@ -813,8 +840,10 @@ export default function PivotDashboard() {
                   const selected    = selectedDimensions.includes(field.key);
                   const partitioned = partitionDimensions.includes(field.key);
                   const partOrder   = partitionDimensions.indexOf(field.key);
-                  const ordered     = orderFields.includes(field.key);
-                  const orderIdx    = orderFields.indexOf(field.key);
+                  // ordered / orderIdx use effectiveOrderList so auto-included dims show as checked
+                  const ordered     = effectiveOrderList.includes(field.key);
+                  const orderIdx    = effectiveOrderList.indexOf(field.key);
+                  const isAutoOrder = autoOrderFields.includes(field.key);
                   const expanded    = expandedField === field.key;
                   const filtered    = fieldHasFilter(field);
                   const badge       = TYPE_BADGE[field.type];
@@ -858,8 +887,8 @@ export default function PivotDashboard() {
                               </span>
                             )}
                             {ordered && (
-                              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
-                                order #{orderIdx + 1}
+                              <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${isAutoOrder ? 'border-accent-amber/20 bg-accent-amber/8 text-accent-amber/60' : 'border-accent-amber/30 bg-accent-amber/10 text-accent-amber'}`}>
+                                order #{orderIdx + 1}{isAutoOrder ? ' auto' : ''}
                               </span>
                             )}
                           </div>
@@ -887,18 +916,20 @@ export default function PivotDashboard() {
                           Partition
                         </button>
 
-                        {/* Order By button */}
+                        {/* Order By button — amber when active, dimmed when auto (pivot-driven) */}
                         <button
                           type="button"
-                          onClick={(e) => toggleOrderField(field.key, e)}
+                          onClick={(e) => { if (!isAutoOrder) toggleOrderField(field.key, e); }}
                           className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
-                            ordered
+                            ordered && isAutoOrder
+                              ? 'border-accent-amber/25 bg-accent-amber/8 text-accent-amber/60 cursor-default'
+                              : ordered
                               ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
                               : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
                           }`}
-                          title="Include this field in ORDER BY"
+                          title={isAutoOrder ? 'Auto-included in ORDER BY (follows Pivot selection)' : 'Include this field in ORDER BY'}
                         >
-                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
+                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber/70' : 'border-current'}`}>
                             {ordered && (
                               <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <polyline points="1,4 3,6 7,1.5" />
@@ -1072,16 +1103,19 @@ export default function PivotDashboard() {
               </div>
               <ul className="divide-y divide-border">
                 {STANDARD_MEASURES.map((measure) => {
-                  const active = selectedMeasures.includes(measure.key);
-                  const isLast = active && measures.length === 1 && measures[0] === measure.key;
+                  const active   = selectedMeasures.includes(measure.key);
+                  const isLast   = active && measures.length === 1 && measures[0] === measure.key;
+                  const ordered  = orderFields.includes(measure.key);
+                  const orderIdx = orderFields.indexOf(measure.key);
                   return (
-                    <li key={measure.key}>
+                    <li key={measure.key} className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${active ? (ordered ? 'bg-accent-amber/5' : 'bg-accent-blue/5') : 'hover:bg-bg-hover'}`}>
+                      {/* Select checkbox */}
                       <button
                         type="button"
                         disabled={isLast}
                         title={isLast ? 'At least one standard measure is required' : undefined}
                         onClick={() => toggleMeasure(measure.key)}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${active ? 'bg-accent-blue/5' : 'hover:bg-bg-hover'} disabled:cursor-not-allowed`}
+                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left disabled:cursor-not-allowed"
                       >
                         <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${active ? 'border-accent-blue bg-accent-blue' : 'border-border'}`}>
                           {active && (
@@ -1090,10 +1124,40 @@ export default function PivotDashboard() {
                             </svg>
                           )}
                         </span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-[12px] font-medium ${active ? 'text-accent-blue' : 'text-text-primary'}`}>{measure.label}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className={`text-[12px] font-medium ${active ? 'text-accent-blue' : 'text-text-primary'}`}>{measure.label}</p>
+                            {ordered && (
+                              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
+                                order #{orderIdx + 1}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-text-muted mt-0.5 font-mono">{measure.description}</p>
                         </div>
+                      </button>
+                      {/* Order By button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
+                          toggleOrderField(measure.key, e);
+                        }}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
+                          ordered
+                            ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
+                            : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
+                        }`}
+                        title="Include this measure in ORDER BY"
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
+                          {ordered && (
+                            <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="1,4 3,6 7,1.5" />
+                            </svg>
+                          )}
+                        </span>
+                        Order By
                       </button>
                     </li>
                   );
@@ -1133,30 +1197,62 @@ export default function PivotDashboard() {
                       )}
                     </div>
 
-                    <div className="px-4 pb-2.5 flex gap-2">
+                    <div className="px-4 pb-2.5 flex flex-wrap gap-2">
                       {pair.map((m) => {
-                        const on = selectedMeasures.includes(m.key);
+                        const on          = selectedMeasures.includes(m.key);
+                        const ordered     = orderFields.includes(m.key);
+                        const orderIdx    = orderFields.indexOf(m.key);
                         const metricLabel = m.key.endsWith('_amt') ? 'tran_amt' : 'tran_count';
                         return (
-                          <button
-                            key={m.key}
-                            type="button"
-                            onClick={() => toggleMeasure(m.key)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10.5px] font-medium transition-colors ${
-                              on
-                                ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
-                                : 'border-border bg-bg-input text-text-secondary hover:border-border-strong hover:text-text-primary'
-                            }`}
-                          >
-                            <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${on ? 'border-accent-blue bg-accent-blue' : 'border-current'}`}>
-                              {on && (
-                                <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="1,4 3,6 7,1.5" />
-                                </svg>
+                          <div key={m.key} className="flex items-center gap-1">
+                            {/* Select chip */}
+                            <button
+                              type="button"
+                              onClick={() => toggleMeasure(m.key)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10.5px] font-medium transition-colors ${
+                                on
+                                  ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
+                                  : 'border-border bg-bg-input text-text-secondary hover:border-border-strong hover:text-text-primary'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${on ? 'border-accent-blue bg-accent-blue' : 'border-current'}`}>
+                                {on && (
+                                  <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="1,4 3,6 7,1.5" />
+                                  </svg>
+                                )}
+                              </span>
+                              <span className="font-mono">{metricLabel}</span>
+                              {ordered && (
+                                <span className="text-[8px] font-bold px-1 rounded bg-accent-amber/20 text-accent-amber">
+                                  #{orderIdx + 1}
+                                </span>
                               )}
-                            </span>
-                            <span className="font-mono">{metricLabel}</span>
-                          </button>
+                            </button>
+                            {/* Order By button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
+                                toggleOrderField(m.key, e);
+                              }}
+                              className={`flex items-center gap-1 px-1.5 py-1 rounded-md border text-[9px] font-semibold transition-colors ${
+                                ordered
+                                  ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
+                                  : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
+                              }`}
+                              title={`Order by ${m.label}`}
+                            >
+                              <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
+                                {ordered && (
+                                  <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="1,4 3,6 7,1.5" />
+                                  </svg>
+                                )}
+                              </span>
+                              ↕
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1290,8 +1386,8 @@ export default function PivotDashboard() {
                       <span className="text-accent-green font-semibold">✓ No pivot</span> — Global <code>ROW_NUMBER()</code>. Standard paginated table.
                     </div>
                     <div className="rounded border border-accent-blue/20 bg-accent-blue/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-blue block mb-0.5">{"=> 'PARTITION BY gam_branch, year_month'"}</span>
-                      <span className="text-accent-blue font-semibold">✓ Pivot</span> — Full clause passed verbatim. Field values become column headers.
+                      <span className="font-mono text-accent-blue block mb-0.5">{"=> 'PARTITION BY tran_date'"}</span>
+                      <span className="text-accent-blue font-semibold">✓ Pivot active</span> — Full clause passed verbatim. Field values become column headers.
                     </div>
                   </div>
                   {explorer?.sql_preview?.include_eab && (

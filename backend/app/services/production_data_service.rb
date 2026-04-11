@@ -194,8 +194,8 @@ class ProductionDataService
   # Each key maps to the procedure parameter name and a human label.
   PERIOD_COMPARISONS = {
     'prevdate'          => { param: 'prevdate_where',          label: 'Previous Date',          description: '1 day before end date' },
-    'thismonth'         => { param: 'thismonth_where',         label: 'This Month',             description: 'Start of current month → end date' },
-    'thisyear'          => { param: 'thisyear_where',          label: 'This Year',              description: 'Jan 1 of current year → end date' },
+    'thismonth'         => { param: 'thismonth_where',         label: 'This Month',             description: 'Full calendar month of the reference date' },
+    'thisyear'          => { param: 'thisyear_where',          label: 'This Year',              description: 'Full calendar year of the reference date (Jan 1 → Dec 31)' },
     'prevmonth'         => { param: 'prevmonth_where',         label: 'Previous Month',         description: 'Full calendar month before current month' },
     'prevyear'          => { param: 'prevyear_where',          label: 'Previous Year',          description: 'Full calendar year before current year' },
     'prevmonthmtd'      => { param: 'prevmonthmtd_where',      label: 'Prev Month MTD',         description: 'Previous month day 1 → same day-of-month as end date' },
@@ -842,7 +842,8 @@ class ProductionDataService
       when 'thismonth'
         "year_quarter = #{q.call(yq_str.call(yr, qn))}"
       when 'thisyear'
-        "year_quarter BETWEEN #{q.call(yq_str.call(yr, 1))} AND #{q.call(yq_str.call(yr, qn))}"
+        # All 4 quarters of the reference year (full calendar year)
+        "year_quarter BETWEEN #{q.call(yq_str.call(yr, 1))} AND #{q.call(yq_str.call(yr, 4))}"
       when 'prevmonth', 'prevmonthmtd', 'prevmonthsamedate'
         "year_quarter = #{q.call(yq_str.call(prev_mo.year, qtr.call(prev_mo.month)))}"
       when 'prevyear'
@@ -868,7 +869,7 @@ class ProductionDataService
       when 'prevdate'
         "tran_date = #{q.call(end_date - 1)}"
       when 'thismonth'
-        "tran_date BETWEEN #{q.call(end_date.beginning_of_month)} AND #{q.call(end_date)}"
+        "tran_date BETWEEN #{q.call(end_date.beginning_of_month)} AND #{q.call(end_date.end_of_month)}"
       when 'thisyear'
         # Full calendar year: Jan 1 → Dec 31 of the reference year
         "tran_date BETWEEN #{q.call(Date.new(yr, 1, 1))} AND #{q.call(Date.new(yr, 12, 31))}"
