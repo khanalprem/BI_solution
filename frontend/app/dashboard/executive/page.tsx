@@ -459,7 +459,7 @@ export default function ExecutiveDashboard() {
         filtersOpen={filtersOpen}
       />
 
-      <div className="px-5 py-4 flex flex-col gap-[14px]">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
 
         {/* ── Dynamic Filters (Province, Branch, Channel, Product, etc.) ── */}
         <AdvancedFilters
@@ -478,7 +478,7 @@ export default function ExecutiveDashboard() {
         )}
 
         {/* ── KPI Cards (6 — derived from CR/DR data) ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
           {/* 1. Total Volume (= Net Revenue equivalent) */}
           <SparkCard
             label="Total Volume" highlighted
@@ -536,7 +536,7 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Revenue Trend + Channel Breakdown ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4">
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
             <div className="flex justify-between items-start mb-2.5">
               <div>
@@ -586,7 +586,7 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── 4 Derived Stat Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
               title: 'Credit Ratio', sub: 'CR / Total volume',
@@ -630,7 +630,7 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Province Performance — Apache ECharts ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4">
 
           {/* Horizontal bar + line composed */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
@@ -658,7 +658,7 @@ export default function ExecutiveDashboard() {
         />
 
         {/* ── Customer Age Group Demographics ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Age Group Bar Chart */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
             <div className="text-[12px] font-semibold text-text-primary mb-0.5">Customer Age Distribution</div>
@@ -689,7 +689,7 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* ── Bottom Row: Risk Monitor + Alerts + Supplementary KPIs ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Risk Exposure Monitor — placeholder until risk API is connected */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col">
@@ -725,7 +725,7 @@ export default function ExecutiveDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
             <div className="text-[12px] font-semibold text-text-primary mb-1">Supplementary KPIs</div>
             <div className="text-[10px] text-text-muted mb-3.5">Transaction decomposition</div>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Credit (CR)',       value: formatNPR(data?.summary?.credit_amount || 0),         color: 'text-accent-blue',   sub: `${(data?.summary?.credit_count||0).toLocaleString()} txns` },
                 { label: 'Debit (DR)',         value: formatNPR(data?.summary?.debit_amount || 0),          color: 'text-accent-red',    sub: `${(data?.summary?.debit_count||0).toLocaleString()} txns` },

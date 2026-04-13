@@ -113,7 +113,7 @@ export default function FinancialDashboard() {
         subtitle="Credit, debit & net flow analysis"
         {...topBarProps}
       />
-      <div className="flex flex-col gap-[14px] px-5 py-4">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -123,7 +123,7 @@ export default function FinancialDashboard() {
         />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Total Volume" value={formatNPR(totalAmount)} highlighted iconBg="var(--accent-blue-dim)" sparkData={monthlyTrend.map(m => m.credit + m.debit)} />
           <KPICard label="Credit Inflow (CR)" value={formatNPR(creditAmount)} iconBg="var(--accent-green-dim)" sparkData={monthlyTrend.map(m => m.credit)} />
           <KPICard label="Debit Outflow (DR)" value={formatNPR(debitAmount)} iconBg="var(--accent-red-dim)" sparkData={monthlyTrend.map(m => m.debit)} />
@@ -136,7 +136,7 @@ export default function FinancialDashboard() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Credit Ratio" value={formatPercent(creditRatio)} subtitle="% of total volume" iconBg="var(--accent-purple-dim)" />
           <KPICard label="Avg Credit Txn" value={formatNPR(avgCredit)} iconBg="var(--accent-teal-dim)" />
           <KPICard label="Avg Debit Txn" value={formatNPR(avgDebit)} iconBg="var(--accent-amber-dim)" />
@@ -184,7 +184,7 @@ export default function FinancialDashboard() {
         </ChartCard>
 
         {/* GL Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Top GL Codes — Credit (CR)" subtitle="Largest inflow GL sub-heads">
             <PremiumBarChart
               data={glCr}

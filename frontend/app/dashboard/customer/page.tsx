@@ -318,7 +318,7 @@ export default function CustomerDashboard() {
           filtersOpen={filtersOpen}
         />
         
-        <div className="flex flex-col gap-[14px] px-5 py-4">
+        <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
           {/* Advanced Filters */}
           <AdvancedFilters
             filters={filters}
@@ -329,7 +329,7 @@ export default function CustomerDashboard() {
           />
           
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <KPICard
               label="Total Customers"
               value={(data?.summary?.unique_customers || 0).toLocaleString()}
@@ -363,7 +363,7 @@ export default function CustomerDashboard() {
           </div>
           
           {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
               title="Customer Segmentation"
               subtitle="Volume and customer count by segment"

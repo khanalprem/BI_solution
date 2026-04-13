@@ -139,7 +139,7 @@ export default function KPIDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-[14px] px-5 py-4">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -149,7 +149,7 @@ export default function KPIDashboard() {
         />
 
         {/* Primary KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Total Volume" value={formatNPR(data?.total_amount ?? 0)} highlighted iconBg="var(--accent-blue-dim)" sparkData={byQuarter.map(q => q.amount)} />
           <KPICard label="Total Transactions" value={(data?.total_count ?? 0).toLocaleString()} iconBg="var(--accent-green-dim)" sparkData={byQuarter.map(q => q.count)} />
           <KPICard label="Unique Accounts" value={(data?.unique_accounts ?? 0).toLocaleString()} iconBg="var(--accent-purple-dim)" sparkData={byQuarter.map(q => q.accounts)} />
@@ -157,7 +157,7 @@ export default function KPIDashboard() {
         </div>
 
         {/* Secondary KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Avg Transaction" value={formatNPR(data?.avg_transaction ?? 0)} iconBg="var(--accent-amber-dim)" />
           <KPICard label="Credit Ratio" value={formatPercent(data?.credit_ratio ?? 0)} iconBg="var(--accent-green-dim)" />
           <KPICard label="Txns per Account" value={(data?.txn_per_account ?? 0).toFixed(1)} iconBg="var(--accent-blue-dim)" />
@@ -165,7 +165,7 @@ export default function KPIDashboard() {
         </div>
 
         {/* Coverage KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="bg-bg-card border border-border rounded-xl p-4">
             <div className="text-[12px] text-text-muted mb-1">Branch Coverage</div>
             <div className="text-[26px] font-bold tracking-tight text-accent-blue">{(data?.unique_branches ?? 0).toLocaleString()}</div>
@@ -205,7 +205,7 @@ export default function KPIDashboard() {
         )}
 
         {/* Product & Service Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {byProduct.length > 0 && (
             <ChartCard title="Volume by Product" subtitle="Transaction volume per product type">
               <PremiumBarChart

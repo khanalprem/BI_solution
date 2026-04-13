@@ -87,7 +87,7 @@ export default function DigitalDashboard() {
         onToggleFilters={() => setFiltersOpen((current) => !current)}
         filtersOpen={filtersOpen}
       />
-      <div className="flex flex-col gap-[14px] px-5 py-4">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -97,7 +97,7 @@ export default function DigitalDashboard() {
         />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           <KPICard label="Total Volume" value={formatNPR(totalAmount)} iconBg="var(--accent-blue-dim)" sparkData={allChannels.map(c => c.total_amount)} />
           <KPICard label="Digital Volume" value={formatNPR(digitalAmount)} iconBg="var(--accent-green-dim)" sparkData={digitalChannels.map(c => c.total_amount)} />
           <KPICard label="Branch Volume" value={formatNPR(branchAmount)} iconBg="var(--accent-amber-dim)" />
@@ -106,7 +106,7 @@ export default function DigitalDashboard() {
         </div>
 
         {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <ChartCard title="Digital vs Branch Split" subtitle="Volume share">
             <PremiumDonutChart
               data={pieData}
@@ -150,7 +150,7 @@ export default function DigitalDashboard() {
         </ChartCard>
 
         {/* Channel Detail Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {allChannels.map((channel) => {
             const cr = channel.credit_amount;
             const dr = channel.debit_amount;

@@ -145,7 +145,7 @@ export default function RiskDashboard() {
   return (
     <>
       <TopBar title="Risk & Exposure" subtitle="Transaction risk analysis" {...topBarProps} />
-      <div className="flex flex-col gap-[14px] px-5 py-4">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
@@ -155,7 +155,7 @@ export default function RiskDashboard() {
         />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Total Volume" value={formatNPR(totalAmount)} highlighted iconBg="var(--accent-blue-dim)" />
           <KPICard
             label="High-Value Txns"
@@ -177,7 +177,7 @@ export default function RiskDashboard() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KPICard label="Credit Inflow" value={formatNPR(creditAmount)} iconBg="var(--accent-green-dim)" />
           <KPICard label="Debit Outflow" value={formatNPR(debitAmount)} iconBg="var(--accent-red-dim)" />
           <KPICard label="Net Flow" value={formatNPR(netFlow)} iconBg={netFlow >= 0 ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)'} />
@@ -185,7 +185,7 @@ export default function RiskDashboard() {
         </div>
 
         {/* Risk Indicators */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Concentration Risk */}
           <div className="bg-bg-card border border-border rounded-xl p-4">
             <div className="text-[13px] font-semibold mb-1">Branch Concentration Risk</div>
@@ -233,7 +233,7 @@ export default function RiskDashboard() {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="GL Code Risk Exposure" subtitle="Top GL sub-heads by volume">
             <PremiumBarChart
               data={byGl.slice(0, 8)}
