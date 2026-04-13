@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RecordTable } from '@/components/ui/RecordTable';
 import { SearchableMultiSelect } from '@/components/ui/Select';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import { useFilterValues, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
+import { formatNPR } from '@/lib/formatters';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse } from '@/types';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
@@ -354,14 +356,44 @@ function buildPivotData(
     measureKeys.forEach((mk) => { out[`${pv}${PIVOT_SEP}${mk}`] = row[mk] ?? null; });
   }
 
-  return { rowDimKeys, pivotValues, measureKeys, rows: Array.from(grouped.values()) };
+  const dataRows = Array.from(grouped.values());
+
+  // Build grand totals row (sum all numeric pivot cells)
+  if (dataRows.length > 0) {
+    const totalsRow: DataRow = { __isTotal: true };
+    rowDimKeys.forEach((k, i) => { totalsRow[k] = i === 0 ? 'TOTAL' : ''; });
+    for (const pv of pivotValues) {
+      for (const mk of measureKeys) {
+        const cellKey = `${pv}${PIVOT_SEP}${mk}`;
+        let sum = 0;
+        let hasValue = false;
+        for (const row of dataRows) {
+          const v = row[cellKey];
+          if (typeof v === 'number') { sum += v; hasValue = true; }
+        }
+        totalsRow[cellKey] = hasValue ? sum : null;
+      }
+    }
+    dataRows.push(totalsRow);
+  }
+
+  return { rowDimKeys, pivotValues, measureKeys, rows: dataRows };
 }
 
 // ─── Excel-style PivotTable component ────────────────────────────────────────
 
-function renderCell(v: string | number | boolean | null | undefined): string {
+const AMOUNT_MEASURES = new Set([
+  'tran_amt', 'cr_amt', 'dr_amt', 'signed_tranamt',
+  'total_amount', 'credit_amount', 'debit_amount', 'net_flow',
+]);
+
+function renderCell(v: string | number | boolean | null | undefined, measureKey?: string): string {
   if (v === null || v === undefined || v === '') return '—';
-  if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (typeof v === 'number') {
+    // Use NPR formatting for amount measures, plain locale for counts
+    if (measureKey && AMOUNT_MEASURES.has(measureKey)) return formatNPR(v);
+    return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
   return String(v);
 }
 
@@ -582,7 +614,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
               </tr>
             ) : (
               rows.map((row, i) => (
-                <tr key={i} className="border-b border-border last:border-0 hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+                <tr key={i} className={`border-b border-border last:border-0 transition-colors ${row.__isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}>
                   {/* Frozen row-dim cells */}
                   {rowDimKeys.map((k, di) => (
                     <td
@@ -611,7 +643,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                               key={`${fullKey}${PIVOT_SEP}${mk}`}
                               className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
                             >
-                              {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`])}
+                              {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`], mk)}
                             </td>
                           ));
                         })
@@ -622,7 +654,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                             key={`${pv}${PIVOT_SEP}${mk}`}
                             className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
                           >
-                            {renderCell(row[`${pv}${PIVOT_SEP}${mk}`])}
+                            {renderCell(row[`${pv}${PIVOT_SEP}${mk}`], mk)}
                           </td>
                         ))
                       )
@@ -643,9 +675,18 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function PivotDashboard() {
   const { filters, setFilters, topBarProps, handleClearFilters, filterStats } = useDashboardPage();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const [selectedDimensions, setSelectedDimensions] = useState<string[]>(['gam_branch']);
-  const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(['tran_amt', 'tran_count']);
+  // Read initial state from URL search params (enables shareable analysis links)
+  const [selectedDimensions, setSelectedDimensions] = useState<string[]>(() => {
+    const dims = searchParams.get('dims');
+    return dims ? dims.split(',').filter(Boolean) : ['gam_branch'];
+  });
+  const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(() => {
+    const m = searchParams.get('measures');
+    return m ? m.split(',').filter(Boolean) : ['tran_amt', 'tran_count'];
+  });
   const [datePivotEnabled, setDatePivotEnabled] = useState(false);
   const [dateSortEnabled, setDateSortEnabled]   = useState(false);
   const [nonDatePartitions, setNonDatePartitions] = useState<string[]>([]);
@@ -661,6 +702,17 @@ export default function PivotDashboard() {
     year_quarter: 'multi',
     year:         'multi',
   });
+
+  // Sync state to URL for shareable pivot configuration
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedDimensions.join(',') !== 'gam_branch') params.set('dims', selectedDimensions.join(','));
+    if (selectedMeasures.join(',') !== 'tran_amt,tran_count') params.set('measures', selectedMeasures.join(','));
+    if (page > 1) params.set('page', String(page));
+    const qs = params.toString();
+    const newUrl = qs ? `?${qs}` : '/dashboard/pivot';
+    router.replace(newUrl, { scroll: false });
+  }, [selectedDimensions, selectedMeasures, page, router]);
 
   const { data: filterValues } = useFilterValues();
   const { data: catalog }      = useProductionCatalog();

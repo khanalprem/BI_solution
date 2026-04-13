@@ -186,9 +186,16 @@ export interface DigitalChannelsData {
 export interface RiskSummaryData {
   total_amount: number; credit_amount: number; debit_amount: number; net_flow: number;
   high_value_count: number; high_value_threshold: number; top3_branch_share: number;
-  monthly_volatility: number; avg_monthly_volume: number;
+  top3_branches: { branch: string; amount: number }[];
+  monthly_volatility: number; avg_monthly_volume: number; mom_volume_change: number;
+  thresholds: {
+    concentration_warn: number; concentration_high: number;
+    volatility_warn: number; volatility_high: number;
+  };
   by_gl: { gl_code: string; amount: number; count: number; accounts: number }[];
   by_province: { province: string; amount: number; accounts: number; debit_amount: number }[];
+  by_branch: { branch: string; amount: number }[];
+  npa_classification: { classification: string; accounts: number; amount: number }[];
 }
 
 export interface KpiSummaryData {

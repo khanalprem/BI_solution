@@ -471,7 +471,10 @@ export default function ExecutiveDashboard() {
             value={formatNPR(data?.summary?.net_flow || 0)}
             sub={`${(data?.summary?.credit_ratio || 0).toFixed(1)}% credit ratio`}
             color="var(--accent-teal)" dimColor="var(--accent-teal-dim)"
-            sparkData={padSpark(trendAmounts.map((v: number, i: number) => Math.abs(v * 0.004 * Math.sin(i))))}
+            sparkData={padSpark(trendAmounts.map((v: number) => {
+              const cr = (data?.summary?.credit_ratio || 50) / 100;
+              return v * cr - v * (1 - cr);
+            }))}
             icon={<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 10V5a1 1 0 011-1h8a1 1 0 011 1v5" stroke="var(--accent-teal)" strokeWidth="1.4"/><path d="M1 10h12" stroke="var(--accent-teal)" strokeWidth="1.4" strokeLinecap="round"/></svg>}
           />
           {/* 5. Avg Transaction */}

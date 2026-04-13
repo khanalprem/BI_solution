@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
@@ -9,14 +9,12 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { Badge, badgeColor } from '@/components/ui/badge';
-import { useProductionExplorer, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
-import type { DashboardFilters } from '@/types';
+import { useProductionExplorer } from '@/lib/hooks/useDashboardData';
+import { formatChannelLabel, formatNPR } from '@/lib/formatters';
 import { BranchDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { Calendar, Database, LayoutGrid } from 'lucide-react';
-
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
 function fmtDate(d: string) {
   if (!d) return '—';
@@ -28,14 +26,8 @@ export default function BranchDetailPage() {
   const params = useParams<{ branchCode: string }>();
   const branchCode = decodeURIComponent(params.branchCode);
 
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange('ALL'),
-    branchCode,
-  });
-
-  const { data: filterStats } = useFilterStatistics();
+  const extraFilters = useMemo(() => ({ branchCode }), [branchCode]);
+  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, filterStats, topBarProps, period } = useDashboardPage({ extraFilters });
 
   // Core metrics — one row per branch (limit 1 since filtered to this branch)
   const { data: branchSummary, isLoading: loadingSummary } = useProductionExplorer(
@@ -63,45 +55,6 @@ export default function BranchDetailPage() {
 
   const isLoading = loadingSummary || loadingTrend || loadingChannel || loadingGL;
 
-  const referenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.max) || new Date(),
-    [filterStats?.date_range?.max]
-  );
-  const minReferenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.min) ?? undefined,
-    [filterStats?.date_range?.min]
-  );
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dr = getDateRange(period, referenceDate, minReferenceDate);
-    setFilters((prev) => ({ ...prev, ...dr, branchCode }));
-  }, [period, referenceDate, minReferenceDate, branchCode]);
-
-  const handleCustomRangeChange = (range: { startDate: string; endDate: string }) => {
-    setPeriod('CUSTOM');
-    setFilters((prev) => ({ ...prev, ...range, branchCode }));
-  };
-
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') {
-      setFilters((prev) => ({ ...prev, branchCode, startDate: prev.startDate, endDate: prev.endDate }));
-      return;
-    }
-    setFilters({ ...getDateRange(period, referenceDate, minReferenceDate), branchCode });
-  };
-
-  const topBarProps = {
-    period,
-    onPeriodChange: setPeriod as (p: DashboardPeriod) => void,
-    customRange: { startDate: filters.startDate, endDate: filters.endDate },
-    onCustomRangeChange: handleCustomRangeChange,
-    minDate: filterStats?.date_range?.min ?? undefined,
-    maxDate: filterStats?.date_range?.max ?? undefined,
-    onToggleFilters: () => setFiltersOpen((v) => !v),
-    filtersOpen,
-  };
-
   // ── Derived values ────────────────────────────────────────────────────────
   const branchRow    = branchSummary?.rows?.[0];
   const totalAmount  = Number(branchRow?.total_amount       || 0);
@@ -117,18 +70,18 @@ export default function BranchDetailPage() {
   const totalRecords = branchSummary?.total_rows || 0;
 
   const glData = (glBreakdownRaw?.rows || []).map(r => ({
-    gl_code: String(r.dimension),
+    gl_code: String(r.gl_sub_head_code ?? ''),
     credit:  Number(r.credit_amount || 0),
     debit:   Number(r.debit_amount  || 0),
     net:     Number(r.net_flow      || 0),
   }));
 
   const trendData = (trendDataRaw?.rows || [])
-    .map(r => ({ date: String(r.dimension), amount: Number(r.total_amount || 0) }))
+    .map(r => ({ date: String(r.tran_date ?? ''), amount: Number(r.total_amount || 0) }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const channelData = (channelDataRaw?.rows || []).map(r => ({
-    channel: String(r.dimension),
+    channel: String(r.tran_source ?? ''),
     total_amount: Number(r.total_amount || 0),
   }));
 

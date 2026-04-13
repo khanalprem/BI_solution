@@ -1,44 +1,22 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
-import { useKpiSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
-import type { DashboardFilters } from '@/types';
+import { useKpiSummary } from '@/lib/hooks/useDashboardData';
+import { formatNPR, formatPercent } from '@/lib/formatters';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
-
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
 const QUARTER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 export default function KPIDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
-
+  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } = useDashboardPage();
   const { data, isLoading } = useKpiSummary(filters);
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
-  const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min), [filterStats?.date_range?.min]);
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate && prev.endDate === dateRange.endDate ? prev : { ...prev, ...dateRange }
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') { setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate })); return; }
-    setFilters(getDateRange(period, referenceDate, minReferenceDate || undefined));
-  };
 
   const byQuarter = data?.by_quarter ?? [];
   const byProduct = data?.by_product ?? [];
@@ -119,7 +97,7 @@ export default function KPIDashboard() {
   if (isLoading) {
     return (
       <>
-        <TopBar title="KPI Summary" subtitle="Key performance indicators & metrics" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
+        <TopBar title="KPI Summary" subtitle="Key performance indicators & metrics" {...topBarProps} />
         <StandardDashboardSkeleton />
       </>
     );
@@ -127,18 +105,7 @@ export default function KPIDashboard() {
 
   return (
     <>
-      <TopBar
-        title="KPI Summary"
-        subtitle="Key performance indicators & metrics"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
-      />
+      <TopBar title="KPI Summary" subtitle="Key performance indicators & metrics" {...topBarProps} />
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <AdvancedFilters
           filters={filters}

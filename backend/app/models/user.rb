@@ -72,7 +72,8 @@ class User < ApplicationRecord
   end
 
   def allowed_branch_names
-    return nil unless branch_scoped? # nil = no restriction
-    production_branch_access.map { |r| r[:branch_name] }.presence
+    return nil unless branch_scoped? # nil = no restriction (non-branch_staff)
+    names = production_branch_access.map { |r| r[:branch_name] }
+    names.presence || [] # empty = deny all access (failed lookup), not "allow all"
   end
 end

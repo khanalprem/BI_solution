@@ -93,7 +93,9 @@ Rails 7 API  →  ProductionDataService  →  get_tran_summary (stored proc)
 
 **Key ports:** Frontend `localhost:3000` · Backend `localhost:3001/api/v1`
 
-No ETL, no cache — every query hits live PostgreSQL.
+No ETL, no cache — every query hits live PostgreSQL (production DB: `10.1.1.161/nifi`).
+
+**SAFETY:** Both development and production Rails envs connect to the **same production NiFi warehouse**. NEVER run `db:migrate`, `db:schema:load`, or destructive operations without DBA review. Index changes go in `backend/db/scripts/*.sql` for manual DBA execution.
 
 ---
 
@@ -105,31 +107,37 @@ BI_solution/
 ├── backend/
 │   ├── app/
 │   │   ├── controllers/api/v1/     ← REST endpoints (production_data, filters, auth)
+│   │   │   └── production_controller.rb  ← SQL clause sanitizer (whitelist validation)
 │   │   ├── services/
 │   │   │   └── production_data_service.rb  ← THE core service (dimensions, measures,
 │   │   │                                      period WHERE generation, proc call)
 │   │   └── models/                 ← User, Branch, Customer (Rails DB)
-│   └── config/routes.rb
+│   ├── config/routes.rb
+│   └── db/scripts/                 ← SQL scripts for DBA manual execution (NOT migrations)
+│       └── performance_indexes.sql ← Additive indexes for EAB, year_month, etc.
 ├── frontend/
 │   ├── app/
 │   │   ├── dashboard/
-│   │   │   ├── pivot/page.tsx      ← Pivot Analysis (most complex page)
+│   │   │   ├── pivot/page.tsx      ← Pivot Analysis (most complex page, URL state sync)
 │   │   │   ├── executive/page.tsx
 │   │   │   ├── branch/page.tsx
+│   │   │   ├── branch/[branchCode]/page.tsx  ← Branch detail (uses production explorer)
 │   │   │   ├── customer/page.tsx
-│   │   │   └── skills/page.tsx     ← Platform Guide / Data Dictionary (this UI)
+│   │   │   ├── skills/page.tsx     ← Platform Guide / Data Dictionary (this UI)
+│   │   │   └── error.tsx           ← Dashboard-level Next.js error boundary
 │   │   └── signin/page.tsx
 │   ├── components/
 │   │   ├── layout/
-│   │   │   ├── Sidebar.tsx         ← Collapsible rail (220px ↔ 56px), persists to localStorage
+│   │   │   ├── Sidebar.tsx         ← Collapsible rail (220px ↔ 56px), CSS var sync
 │   │   │   └── TopBar.tsx
 │   │   └── ui/                     ← shadcn + custom: Badge, KPICard, ChartCard, etc.
 │   ├── lib/
 │   │   ├── api.ts                  ← Axios client (baseURL = :3001)
 │   │   ├── hooks/
-│   │   │   ├── useDashboardPage.ts ← shared filter/period state hook
+│   │   │   ├── useDashboardPage.ts ← shared filter/period state hook (used by ALL pages)
 │   │   │   └── useDashboardData.ts ← TanStack Query wrappers
-│   │   └── formatters.ts           ← NPR formatting, date helpers
+│   │   ├── formatters.ts           ← NPR formatting, date helpers
+│   │   └── exportCsv.ts            ← CSV export utility
 │   ├── types/index.ts              ← DashboardFilters, FilterValuesResponse, etc.
 │   └── components.json             ← shadcn/ui CLI config
 └── docker-compose.yml
@@ -225,6 +233,13 @@ When ≥2 dimensions are pivoted (e.g. `tran_date` + `part_tran_type`):
 
 ### `buildPivotData(rows, pivotFieldKey, rowDimKeys, measureKeys)`
 Pandas `df.pivot()` equivalent. Stores cells as `${pivotValue}\x00${measureKey}`.
+Appends a **grand totals row** (`__isTotal: true`) that sums all numeric pivot cells.
+
+### `renderCell(v, measureKey?)`
+Amount measures (`tran_amt`, `cr_amt`, `dr_amt`, `signed_tranamt`) use `formatNPR()`. Count/date measures use `toLocaleString()`. The `AMOUNT_MEASURES` set controls which keys get NPR formatting.
+
+### URL state sync
+Pivot state (`dims`, `measures`, `page`) syncs to URL search params via `useSearchParams` + `router.replace()`. Enables shareable analysis links (e.g., `/dashboard/pivot?dims=gam_branch,tran_date&measures=tran_amt`).
 
 ---
 
@@ -349,7 +364,43 @@ Never use `style={{ color: '#6366F1' }}` when a token class exists:
 
 ### Sidebar Collapse
 
-The sidebar supports collapse (220px ↔ 56px icon rail). State persists in `localStorage('bankbi-sidebar-collapsed')`. This is already implemented in `Sidebar.tsx` — do not duplicate this logic.
+The sidebar supports collapse (220px ↔ 56px icon rail). State persists in `localStorage('bankbi-sidebar-collapsed')`. The collapse toggle sets a CSS variable `--sidebar-width` on `document.documentElement` and dispatches a `sidebar-toggle` event. The dashboard `layout.tsx` uses `lg:ml-[var(--sidebar-width,220px)]` for reactive margin. Do not duplicate this logic.
+
+### `useDashboardPage` hook — ALL dashboard pages must use this
+
+Every dashboard page uses `useDashboardPage()` for period/filter state. Do NOT inline period management. Pattern:
+```tsx
+const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } = useDashboardPage();
+// For detail pages with extra filters:
+const extraFilters = useMemo(() => ({ branchCode }), [branchCode]);
+const { filters, ... } = useDashboardPage({ extraFilters });
+// TopBar: always spread topBarProps
+<TopBar title="Page Title" subtitle="..." {...topBarProps} />
+```
+
+### `formatNPR` — null vs zero distinction
+
+`formatNPR(null)` returns `'—'` (em dash), `formatNPR(0)` returns `'Rs. 0'`. This distinguishes missing data from actual zero. All KPI cards should NOT use `?? 0` fallback — let null propagate so the dash shows.
+
+### Pivot URL state
+
+Pivot page syncs `selectedDimensions`, `selectedMeasures`, and `page` to URL search params (`?dims=...&measures=...`). This enables shareable analysis links.
+
+### Pivot grand totals row
+
+`buildPivotData` appends a `__isTotal: true` row that sums all numeric pivot cells. Styled with `bg-bg-surface font-semibold sticky bottom-0`.
+
+### KPICard `drillDownUrl` prop
+
+KPICard accepts an optional `drillDownUrl` string. When provided, an invisible `<Link>` overlay covers the card for navigation to Pivot with pre-set dimensions.
+
+### CSV export utility
+
+`lib/exportCsv.ts` provides `exportTableToCsv(filename, headers, rows)`. Wire into TopBar's `onExport` prop per page.
+
+### Error boundary
+
+`app/dashboard/error.tsx` provides a dashboard-level Next.js error boundary with retry button. Catches runtime errors in any dashboard page.
 
 ---
 
@@ -360,6 +411,21 @@ The sidebar supports collapse (220px ↔ 56px icon rail). State persists in `loc
 2. Add `*_where` param to `ALL_PERIOD_PARAMS` in `pivot/page.tsx`
 3. Add measure entries to `COMPARISON_MEASURES` in `pivot/page.tsx`
 4. Add to `PERIOD_DISPLAY` map and `PERIODS` in `skills/page.tsx`
+
+### SQL clause sanitization
+`production_controller.rb` has `sanitize_sql_clause()` that whitelists tokens in `orderby_clause` and `partitionby_clause` against known DIMENSIONS/MEASURES keys. Unknown tokens reject the entire clause. This prevents SQL injection via the stored procedure.
+
+### ORDER BY tiebreaker
+The service adds `acct_num ASC` as a pagination tiebreaker ONLY when `acct_num` is in the selected dimensions (GROUP BY). Without this guard, the tiebreaker breaks grouped queries like `GROUP BY gam_branch` with a "must appear in GROUP BY" error.
+
+### `build_summary` — single aggregate query
+`dashboards_controller.rb#build_summary` uses a SINGLE `SELECT` with `SUM(CASE WHEN ...)` for all metrics (was 8 separate queries). Returns: `total_amount`, `transaction_count`, `credit_amount`, `debit_amount`, `credit_count`, `debit_count`, `unique_accounts`, `unique_customers`, `avg_transaction_size`, `net_flow`, `credit_ratio`.
+
+### `net_flow` — standardized formula
+**Always `credit_amount - debit_amount`** across all endpoints (executive, financial, risk, KPI). Previously `risk_summary` used `signed_tranamt` column which could diverge. Do not use `signed_tranamt` for net_flow.
+
+### `monthly_volatility` — coefficient of variation
+`risk_summary` returns `monthly_volatility` as **CV percentage** = `(sample_std_dev / mean) × 100`. NOT raw standard deviation. The frontend displays it with `formatPercent()`. Typical values: 10-40%.
 
 ### Quote safety
 Always use `@connection.quote(value)` or `ActiveRecord::Base.sanitize_sql_like()` — never string interpolation with user input.
@@ -461,4 +527,9 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - Legacy measure aliases (`total_amount`, `transaction_count`, `unique_accounts`, `unique_customers`, `credit_amount`, `debit_amount`, `net_flow`) remain in the backend MEASURES hash for backwards compatibility but are no longer shown in the pivot sidebar — canonical data-dictionary keys are used instead (`tran_amt`, `tran_count`, etc.)
 - `AdvancedDataTable.tsx` still uses hand-rolled table primitives — future work to migrate internals to shadcn `Table` components
 - `Select.tsx` / `SearchableMultiSelect` kept as-is (complex search+checkbox multi-select not achievable with shadcn Select); shadcn `select.tsx` is available for new simple single-select usage going forward
-- One pre-existing TS error in `lib/hooks/useDashboardPage.ts` (type mismatch on `DashboardFilters`) — unrelated to UI redesign
+- API auth is optional (`authenticate_user_optional!` in BaseController) — TODO: switch to required auth once frontend auth flow is fully hardened
+- `customer/page.tsx` segment/risk charts derive from top-20 customers only — should use a dedicated backend aggregate
+- `FY` period start date hardcoded to July 16 — Nepal's fiscal year start varies by Bikram Sambat calendar (±1-2 days)
+- `db/scripts/performance_indexes.sql` contains 4 pending indexes for DBA execution (eab composite, year_month, entry_user, gl_sub_head_code)
+- Risk page thresholds now configurable via env vars: `RISK_HIGH_VALUE_THRESHOLD`, `RISK_CONCENTRATION_WARN/HIGH`, `RISK_VOLATILITY_WARN/HIGH`
+- `digital_channels` assumes NULL `tran_source` = branch — verify with data owners

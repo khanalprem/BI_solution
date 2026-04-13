@@ -1,8 +1,8 @@
 module Api
   module V1
     class BaseController < ApplicationController
-      # Dashboard, filter, and production endpoints use optional auth.
-      # Token is validated if present; missing token is allowed for now.
+      # Dashboard/filter/production endpoints use optional auth for now.
+      # TODO: Switch to required auth once all frontend flows include the token.
       # UsersController overrides this with require_admin!
       skip_before_action :authenticate_user!
       before_action :authenticate_user_optional!

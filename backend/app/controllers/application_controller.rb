@@ -47,7 +47,8 @@ class ApplicationController < ActionController::API
   def scoped_branch_filter(filters)
     return filters unless current_user&.branch_scoped?
     allowed = current_user.allowed_branch_names
-    return filters if allowed.nil? || allowed.empty?
+    return filters if allowed.nil? # nil = non-branch_staff, no restriction
+    return filters.merge(branch: ['__NONE__']) if allowed.empty? # empty = deny all (failed lookup)
     filters.merge(branch: allowed)
   end
 

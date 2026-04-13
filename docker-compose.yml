@@ -53,10 +53,10 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_HOST: postgres
-      DATABASE_USERNAME: postgres
-      DATABASE_PASSWORD: postgres
-      DATABASE_NAME: bankbi_development
+      DB_HOST: postgres
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: bankbi_development
       REDIS_URL: redis://redis:6379/0
       RAILS_ENV: development
       RACK_ENV: development
@@ -77,10 +77,10 @@ services:
       - postgres
       - redis
     environment:
-      DATABASE_HOST: postgres
-      DATABASE_USERNAME: postgres
-      DATABASE_PASSWORD: postgres
-      DATABASE_NAME: bankbi_development
+      DB_HOST: postgres
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: bankbi_development
       REDIS_URL: redis://redis:6379/0
       RAILS_ENV: development
 
@@ -101,7 +101,7 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+      NEXT_PUBLIC_API_URL: http://backend:3000/api/v1
       NODE_ENV: development
     stdin_open: true
     tty: true

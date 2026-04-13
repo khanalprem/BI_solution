@@ -46,6 +46,9 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
     setCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem('bankbi-sidebar-collapsed', String(next));
+      // Notify layout to update main content margin
+      document.documentElement.style.setProperty('--sidebar-width', next ? '56px' : '220px');
+      window.dispatchEvent(new Event('sidebar-toggle'));
       return next;
     });
   };
@@ -74,7 +77,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
   const handleSignOut = () => {
     clearAuth();
     document.cookie = 'bankbi-auth=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    window.location.assign('/signout');
+    window.location.assign('/signin');
   };
 
   return (

@@ -33,10 +33,11 @@ module Api
         dimensions        = Array.wrap(parse_multi_value_param(raw_dims))
         dimensions        = ['gam_branch'] if dimensions.empty?
         # partitionby_clause: full PARTITION BY clause from the frontend (e.g. "PARTITION BY tran_date").
-        partitionby_clause = params[:partitionby_clause].to_s.strip
+        # Sanitized to prevent SQL injection — only known dimension/measure keys allowed.
+        partitionby_clause = sanitize_sql_clause(params[:partitionby_clause].to_s.strip, 'PARTITION BY')
         # orderby_clause: full ORDER BY clause from the frontend (e.g. "ORDER BY tran_date, acct_num").
         # Empty string means fall back to the default measure-based ORDER BY in the service.
-        orderby_clause = params[:orderby_clause].to_s.strip
+        orderby_clause = sanitize_sql_clause(params[:orderby_clause].to_s.strip, 'ORDER BY')
 
         render json: production_service.tran_summary_explorer(
           start_date:        explicit_start,
@@ -53,6 +54,33 @@ module Api
       end
 
       private
+
+      # Sanitize ORDER BY / PARTITION BY clauses to only allow known dimension/measure keys
+      # and SQL keywords (ASC, DESC, ORDER BY, PARTITION BY). Prevents SQL injection.
+      ALLOWED_SQL_TOKENS = %w[ORDER BY PARTITION ASC DESC NULLS FIRST LAST].freeze
+
+      def sanitize_sql_clause(raw, clause_type)
+        return '' if raw.blank?
+        valid_fields = ProductionDataService::DIMENSIONS.keys +
+                       ProductionDataService::MEASURES.keys +
+                       ProductionDataService::MEASURES.values.flat_map { |m|
+                         m[:order_sql].to_s.scan(/\b\w+\b/) rescue []
+                       }
+
+        # Tokenize: split on commas, spaces, and parentheses
+        tokens = raw.gsub(/[();]/, ' ').split(/[\s,]+/).reject(&:blank?)
+        tokens.each do |token|
+          next if ALLOWED_SQL_TOKENS.include?(token.upcase)
+          next if valid_fields.include?(token)
+          next if token.match?(/\A(SUM|COUNT|MAX|MIN|AVG|DISTINCT)\z/i)
+          next if token.match?(/\A\d+\z/) # numeric literals (e.g., limit)
+          # Unknown token — reject the entire clause for safety
+          Rails.logger.warn("Rejected #{clause_type} clause due to unknown token: #{token.inspect}")
+          return ''
+        end
+
+        raw
+      end
 
       def production_service
         @production_service ||= ProductionDataService.new

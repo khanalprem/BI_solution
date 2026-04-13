@@ -22,7 +22,7 @@ export function useDashboardPage(options: UseDashboardPageOptions = {}) {
   // Default to production data range until filterStats loads
   const [filters, setFilters] = useState<DashboardFilters>({
     ...options.extraFilters,
-  });
+  } as DashboardFilters);
 
   const { data: filterStats } = useFilterStatistics();
 

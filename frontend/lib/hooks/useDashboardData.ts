@@ -241,6 +241,7 @@ export function useProductionExplorer(
     },
     enabled: dimensions.length > 0 && measures.length > 0,
     staleTime: 60 * 1000,
+    retry: 1, // Limit retries — explorer queries can be expensive stored procedure calls
     placeholderData: (prev) => prev,
   });
 }

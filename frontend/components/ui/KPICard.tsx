@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { SparkLine } from '@/components/ui/PremiumCharts';
 
@@ -12,6 +13,8 @@ interface KPICardProps {
   iconBg?: string;
   highlighted?: boolean;
   onClick?: () => void;
+  /** URL for drill-down — navigates to Pivot with pre-set dimensions/measures */
+  drillDownUrl?: string;
   sparkData?: number[];
   sparkColor?: string;
 }
@@ -112,6 +115,7 @@ export function KPICard({
   iconBg,
   highlighted,
   onClick,
+  drillDownUrl,
   sparkData,
   sparkColor,
 }: KPICardProps) {
@@ -150,7 +154,8 @@ export function KPICard({
         'shadow-[0_2px_8px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.04)]',
         accent.ring,
         // Interaction
-        'cursor-pointer select-none',
+        onClick ? 'cursor-pointer' : '',
+        'select-none',
         'transition-all duration-200',
         'hover:bg-bg-card-hover hover:border-border-strong hover:shadow-[0_6px_24px_rgba(0,0,0,0.24)]',
         'animate-fade-in',
@@ -223,6 +228,9 @@ export function KPICard({
             )}
           />
         </div>
+      )}
+      {drillDownUrl && (
+        <Link href={drillDownUrl} className="absolute inset-0 z-10" aria-label={`Drill down: ${label}`} />
       )}
     </div>
   );

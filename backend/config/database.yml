@@ -19,6 +19,8 @@ default: &default
   host: <%= ENV.fetch("DB_HOST") { "localhost" } %>
   username: <%= ENV.fetch("DB_USERNAME") { "postgres" } %>
   password: <%= ENV.fetch("DB_PASSWORD") { "" } %>
+  variables:
+    statement_timeout: 60000
 
 development:
   <<: *default

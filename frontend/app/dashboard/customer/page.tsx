@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
@@ -8,11 +8,11 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState, ChartLegendItem } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { Badge, badgeColor } from '@/components/ui/badge';
-import { useDashboardData, useFilterStatistics, useTopCustomers } from '@/lib/hooks/useDashboardData';
-import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
-import type { DashboardFilters } from '@/types';
+import { useDashboardData, useTopCustomers } from '@/lib/hooks/useDashboardData';
+import { formatNPR } from '@/lib/formatters';
 import { PremiumBarChart, PremiumComposedChart } from '@/components/ui/PremiumCharts';
 import { CustomerDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
 interface CustomerData {
   cif_id: string;
@@ -32,55 +32,10 @@ interface SegmentData {
   avg: number;
 }
 
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
-
-
 export default function CustomerDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange('ALL'),
-  });
-  
+  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } = useDashboardPage();
   const { data, isLoading } = useDashboardData(filters);
-  const { data: filterStats } = useFilterStatistics();
   const { data: topCustomers } = useTopCustomers(filters, 20);
-
-  const referenceDate = useMemo(() => {
-    return parseISODateToLocal(filterStats?.date_range?.max) || new Date();
-  }, [filterStats?.date_range?.max]);
-
-  const minReferenceDate = useMemo(() => (
-    parseISODateToLocal(filterStats?.date_range?.min)
-  ), [filterStats?.date_range?.min]);
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters((prev) => (
-      prev.startDate === dateRange.startDate && prev.endDate === dateRange.endDate
-        ? prev
-        : { ...prev, ...dateRange }
-    ));
-  }, [period, referenceDate, minReferenceDate]);
-  
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') {
-      setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate }));
-      return;
-    }
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters(dateRange);
-  };
-
-  const handlePeriodChange = (nextPeriod: DashboardPeriod) => {
-    setPeriod(nextPeriod);
-  };
-
-  const handleCustomRangeChange = (range: { startDate: string; endDate: string }) => {
-    setPeriod('CUSTOM');
-    setFilters((prev) => ({ ...prev, ...range }));
-  };
 
   const customerRows = useMemo<CustomerData[]>(() => (
     (topCustomers || []).map((customer) => ({
@@ -287,36 +242,15 @@ export default function CustomerDashboard() {
   if (isLoading) {
     return (
       <>
-        <TopBar
-          title="Customer & Portfolio"
-          period={period}
-          onPeriodChange={handlePeriodChange}
-          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-          onCustomRangeChange={handleCustomRangeChange}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-          onToggleFilters={() => setFiltersOpen((current) => !current)}
-          filtersOpen={filtersOpen}
-        />
+        <TopBar title="Customer & Portfolio" {...topBarProps} />
         <CustomerDashboardSkeleton />
       </>
     );
   }
-  
+
   return (
     <>
-      <TopBar
-          title="Customer & Portfolio"
-          subtitle="Customer segmentation & portfolio analysis"
-          period={period}
-          onPeriodChange={handlePeriodChange}
-          customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-          onCustomRangeChange={handleCustomRangeChange}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-          onToggleFilters={() => setFiltersOpen((current) => !current)}
-          filtersOpen={filtersOpen}
-        />
+      <TopBar title="Customer & Portfolio" subtitle="Customer segmentation & portfolio analysis" {...topBarProps} />
         
         <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
           {/* Advanced Filters */}

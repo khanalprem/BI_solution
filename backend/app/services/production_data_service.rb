@@ -416,6 +416,13 @@ class ProductionDataService
     # Use the user-supplied ORDER BY clause if provided; fall back to measure-based default.
     orderby_clause = orderby_clause.to_s.strip.presence ||
                      "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+    # Add tiebreaker for deterministic pagination (prevents duplicate/missing rows on tied values).
+    # Only add acct_num when it's actually in the GROUP BY (selected dimensions), otherwise
+    # the tiebreaker would break grouped queries with a "must appear in GROUP BY" error.
+    has_acct_num_dim = inner_dim_keys.include?('acct_num')
+    if has_acct_num_dim && !orderby_clause.downcase.include?('acct_num')
+      orderby_clause = "#{orderby_clause}, acct_num ASC"
+    end
 
     # PARTITION BY: the procedure expects the FULL clause including the 'PARTITION BY' keyword.
     # Frontend sends '' (no pivot) or 'PARTITION BY field1, field2' (pivot mode).
@@ -931,12 +938,14 @@ class ProductionDataService
     ym_str   = ->(y, m) { format('%04d-%02d', y, m) }
     yq_str   = ->(y, q) { "#{y}-Q#{q}" }
 
+    prev_day = end_date - 1 # actual previous day (for prevdate period)
+
     case dimension
     # ── year_month comparisons ────────────────────────────────────────────────
     when 'year_month'
       case period
       when 'prevdate'
-        "year_month = #{q.call(ym_str.call(prev_mo.year, prev_mo.month))}"
+        "year_month = #{q.call(ym_str.call(prev_day.year, prev_day.month))}"
       when 'thismonth'
         "year_month = #{q.call(ym_str.call(yr, mo))}"
       when 'thisyear'
@@ -962,7 +971,7 @@ class ProductionDataService
       prev_qn = qtr.call(prev_mo.month)
       case period
       when 'prevdate'
-        "year_quarter = #{q.call(yq_str.call(prev_mo.year, qtr.call(prev_mo.month)))}"
+        "year_quarter = #{q.call(yq_str.call(prev_day.year, qtr.call(prev_day.month)))}"
       when 'thismonth'
         "year_quarter = #{q.call(yq_str.call(yr, qn))}"
       when 'thisyear'
@@ -979,7 +988,9 @@ class ProductionDataService
     # ── year comparisons ──────────────────────────────────────────────────────
     when 'year'
       case period
-      when 'prevdate', 'thismonth', 'thisyear'
+      when 'prevdate'
+        "year = #{q.call(prev_day.year.to_s)}"
+      when 'thismonth', 'thisyear'
         "year = #{q.call(yr.to_s)}"
       when 'prevmonth', 'prevmonthmtd', 'prevmonthsamedate'
         "year = #{q.call(prev_mo.year.to_s)}"

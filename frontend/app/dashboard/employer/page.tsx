@@ -1,43 +1,21 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
-import { useEmployerSummary, useFilterStatistics } from '@/lib/hooks/useDashboardData';
-import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
-import type { DashboardFilters } from '@/types';
+import { useEmployerSummary } from '@/lib/hooks/useDashboardData';
+import { formatNPR, formatPercent } from '@/lib/formatters';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
-
-type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
+import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
 export default function EmployerDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
-
+  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } = useDashboardPage();
   const { data, isLoading } = useEmployerSummary(filters);
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.max) || new Date(), [filterStats?.date_range?.max]);
-  const minReferenceDate = useMemo(() => parseISODateToLocal(filterStats?.date_range?.min), [filterStats?.date_range?.min]);
-
-  useEffect(() => {
-    if (period === 'CUSTOM') return;
-    const dateRange = getDateRange(period, referenceDate, minReferenceDate || undefined);
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate && prev.endDate === dateRange.endDate ? prev : { ...prev, ...dateRange }
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handleClearFilters = () => {
-    if (period === 'CUSTOM') { setFilters((prev) => ({ startDate: prev.startDate, endDate: prev.endDate })); return; }
-    setFilters(getDateRange(period, referenceDate, minReferenceDate || undefined));
-  };
 
   const byUser = data?.by_user ?? [];
   const byBranch = data?.by_branch ?? [];
@@ -221,7 +199,7 @@ export default function EmployerDashboard() {
   if (isLoading) {
     return (
       <>
-        <TopBar title="Staff & Operations" subtitle="Employee activity and branch operations" period={period} onPeriodChange={(p) => setPeriod(p as DashboardPeriod)} customRange={{ startDate: filters.startDate, endDate: filters.endDate }} onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }} minDate={filterStats?.date_range?.min || undefined} maxDate={filterStats?.date_range?.max || undefined} />
+        <TopBar title="Staff & Operations" subtitle="Employee activity and branch operations" {...topBarProps} />
         <StandardDashboardSkeleton />
       </>
     );
@@ -229,18 +207,7 @@ export default function EmployerDashboard() {
 
   return (
     <>
-      <TopBar
-        title="Staff & Operations"
-        subtitle="Employee activity and branch operations"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => { setPeriod('CUSTOM'); setFilters((prev) => ({ ...prev, ...r })); }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
-      />
+      <TopBar title="Staff & Operations" subtitle="Employee activity and branch operations" {...topBarProps} />
       <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters
           filters={filters}

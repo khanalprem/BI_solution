@@ -48,10 +48,14 @@ describe('formatNPR', () => {
     expect(formatNPR(-500)).toBe('-Rs. 500');
   });
 
-  it('returns Rs. 0 for NaN / null / undefined', () => {
-    expect(formatNPR(NaN)).toBe('Rs. 0');
-    expect(formatNPR(null as unknown as number)).toBe('Rs. 0');
-    expect(formatNPR(undefined as unknown as number)).toBe('Rs. 0');
+  it('returns dash for NaN / null / undefined (distinguishes missing data from zero)', () => {
+    expect(formatNPR(NaN)).toBe('—');
+    expect(formatNPR(null as unknown as number)).toBe('—');
+    expect(formatNPR(undefined as unknown as number)).toBe('—');
+  });
+
+  it('returns Rs. 0 for actual zero', () => {
+    expect(formatNPR(0)).toBe('Rs. 0');
   });
 
   it('shows decimals when showDecimals=true and decimal is non-zero', () => {
@@ -66,9 +70,9 @@ describe('formatNPR', () => {
 // ─── formatNumber ─────────────────────────────────────────────────────────────
 
 describe('formatNumber', () => {
-  it('returns 0 for invalid input', () => {
-    expect(formatNumber(NaN)).toBe('0');
-    expect(formatNumber(null as unknown as number)).toBe('0');
+  it('returns dash for invalid input (distinguishes missing data from zero)', () => {
+    expect(formatNumber(NaN)).toBe('—');
+    expect(formatNumber(null as unknown as number)).toBe('—');
   });
 
   it('formats thousands as K', () => {

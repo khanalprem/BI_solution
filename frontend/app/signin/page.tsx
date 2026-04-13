@@ -53,8 +53,12 @@ export default function SignInPage() {
 
     setIsSubmitting(true);
     try {
-      // Clear existing auth data before new login
-      localStorage.clear();
+      // Clear only auth-related data (keep sidebar/theme preferences)
+      localStorage.removeItem('token');
+      localStorage.removeItem('bankbi-user');
+      localStorage.removeItem('bankbi-user-name');
+      localStorage.removeItem('bankbi-user-email');
+      localStorage.removeItem('bankbi-auth-token');
       document.cookie = 'bankbi-auth=; Path=/; Max-Age=0';
 
       const { data } = await apiClient.post<{ token: string; user: AuthUser }>('/auth/signin', {

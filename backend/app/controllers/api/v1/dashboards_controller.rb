@@ -265,7 +265,8 @@ module Api
         data = cached('risk_summary') do
           scope = TranSummary.apply_filters(filters)
           total = scope.sum(:tran_amt).to_f
-          high_value_threshold = 5_000_000
+          # Configurable via env var (default Rs. 50 Lakh = 5,000,000)
+          high_value_threshold = ENV.fetch('RISK_HIGH_VALUE_THRESHOLD', '5000000').to_i
 
           by_gl = scope.group(:gl_sub_head_code)
                        .select('gl_sub_head_code, SUM(tran_amt) AS amount, SUM(tran_count) AS count, COUNT(DISTINCT acct_num) AS accounts')
@@ -278,23 +279,77 @@ module Api
                              .order('SUM(tran_amt) DESC')
                              .map { |r| { province: r.province, amount: r.amount.to_f, accounts: r.accounts.to_i, debit_amount: r.debit_amount.to_f } }
 
-          top3_amount = by_province.first(3).sum { |p| p[:amount] }
-          monthly_amounts = scope.group(:year_month).sum(:tran_amt).values.map(&:to_f)
+          # Branch concentration — top 3 BRANCHES by volume (not provinces)
+          by_branch = scope.group(:gam_branch)
+                           .select('gam_branch AS branch, SUM(tran_amt) AS amount')
+                           .order('SUM(tran_amt) DESC')
+                           .limit(10)
+                           .map { |r| { branch: r.branch, amount: r.amount.to_f } }
+          top3_branch_amount = by_branch.first(3).sum { |b| b[:amount] }
+
+          # Monthly volatility — CV% with MoM comparison
+          monthly_amounts = scope.group(:year_month).sum(:tran_amt).sort.map { |_, v| v.to_f }
           avg_monthly = monthly_amounts.sum / [monthly_amounts.size, 1].max
-          volatility = monthly_amounts.size > 1 ? Math.sqrt(monthly_amounts.map { |v| (v - avg_monthly)**2 }.sum / monthly_amounts.size) : 0
+          std_dev = monthly_amounts.size > 1 ? Math.sqrt(monthly_amounts.map { |v| (v - avg_monthly)**2 }.sum / (monthly_amounts.size - 1)) : 0
+          cv_percent = avg_monthly > 0 ? (std_dev / avg_monthly) * 100 : 0
+
+          # MoM trend: compare last month vs previous month
+          last_month_amt   = monthly_amounts.length >= 1 ? monthly_amounts[-1] : 0
+          prev_month_amt   = monthly_amounts.length >= 2 ? monthly_amounts[-2] : 0
+          mom_volume_change = prev_month_amt > 0 ? ((last_month_amt - prev_month_amt) / prev_month_amt * 100).round(1) : 0
+
+          credit_amount = scope.where(part_tran_type: 'CR').sum(:tran_amt).to_f
+          debit_amount = scope.where(part_tran_type: 'DR').sum(:tran_amt).to_f
+
+          # NPA proxy: accounts with acct_cls_flg in GAM (if available)
+          npa_data = begin
+            conn = ActiveRecord::Base.connection
+            npa_rows = conn.exec_query(<<~SQL.squish).to_a
+              SELECT g.acct_cls_flg,
+                     COUNT(DISTINCT g.acid) AS accounts,
+                     COALESCE(SUM(ts.tran_amt), 0) AS amount
+              FROM gam g
+              LEFT JOIN tran_summary ts ON ts.acct_num = g.foracid
+              WHERE g.acct_cls_flg IS NOT NULL AND g.acct_cls_flg != ''
+              GROUP BY g.acct_cls_flg
+              ORDER BY SUM(ts.tran_amt) DESC NULLS LAST
+            SQL
+            npa_rows.map { |r| { classification: r['acct_cls_flg']&.strip, accounts: r['accounts'].to_i, amount: r['amount'].to_f } }
+          rescue StandardError => e
+            Rails.logger.warn("NPA query failed (non-critical): #{e.message}")
+            []
+          end
+
+          # Configurable thresholds via env vars
+          concentration_warn  = ENV.fetch('RISK_CONCENTRATION_WARN', '40').to_f
+          concentration_high  = ENV.fetch('RISK_CONCENTRATION_HIGH', '60').to_f
+          volatility_warn     = ENV.fetch('RISK_VOLATILITY_WARN', '25').to_f
+          volatility_high     = ENV.fetch('RISK_VOLATILITY_HIGH', '50').to_f
 
           {
             total_amount: total,
-            credit_amount: scope.where(part_tran_type: 'CR').sum(:tran_amt).to_f,
-            debit_amount: scope.where(part_tran_type: 'DR').sum(:tran_amt).to_f,
-            net_flow: scope.sum(:signed_tranamt).to_f,
+            credit_amount: credit_amount,
+            debit_amount: debit_amount,
+            net_flow: credit_amount - debit_amount,
             high_value_count: scope.where('tran_amt >= ?', high_value_threshold).count,
             high_value_threshold: high_value_threshold,
-            top3_branch_share: safe_divide(top3_amount * 100, total),
-            monthly_volatility: volatility.round(2),
+            # Branch concentration (was incorrectly using provinces)
+            top3_branch_share: safe_divide(top3_branch_amount * 100, total),
+            top3_branches: by_branch.first(3),
+            monthly_volatility: cv_percent.round(1),
             avg_monthly_volume: avg_monthly.round(2),
+            mom_volume_change: mom_volume_change,
+            # Configurable thresholds
+            thresholds: {
+              concentration_warn: concentration_warn,
+              concentration_high: concentration_high,
+              volatility_warn: volatility_warn,
+              volatility_high: volatility_high,
+            },
             by_gl: by_gl,
-            by_province: by_province
+            by_province: by_province,
+            by_branch: by_branch,
+            npa_classification: npa_data
           }
         end
 
@@ -495,25 +550,35 @@ module Api
         Rails.cache.fetch(cache_key, expires_in: expires_in, &block)
       end
 
+      # Single aggregate query (was 8 separate queries — 8x fewer DB round-trips)
       def build_summary(scope)
-        total_amount  = scope.sum(:tran_amt).to_f
-        total_count   = scope.sum(:tran_count).to_i
-        credit_amount = scope.where(part_tran_type: 'CR').sum(:tran_amt).to_f
-        debit_amount  = scope.where(part_tran_type: 'DR').sum(:tran_amt).to_f
-        credit_count  = scope.where(part_tran_type: 'CR').sum(:tran_count).to_i
-        debit_count   = scope.where(part_tran_type: 'DR').sum(:tran_count).to_i
+        result = scope.select(
+          'SUM(tran_amt) AS total_amount',
+          'SUM(tran_count) AS total_count',
+          "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS credit_amount",
+          "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) AS debit_amount",
+          "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_count ELSE 0 END) AS credit_count",
+          "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_count ELSE 0 END) AS debit_count",
+          'COUNT(DISTINCT acct_num) AS unique_accounts',
+          'COUNT(DISTINCT cif_id) AS unique_customers'
+        ).take
+
+        total_amount  = result&.total_amount.to_f
+        total_count   = result&.total_count.to_i
+        credit_amount = result&.credit_amount.to_f
+        debit_amount  = result&.debit_amount.to_f
 
         {
           total_amount: total_amount,
           total_count: total_count,
-          unique_accounts: scope.distinct.count(:acct_num),
-          unique_customers: scope.distinct.count(:cif_id),
+          unique_accounts: result&.unique_accounts.to_i,
+          unique_customers: result&.unique_customers.to_i,
           avg_transaction_size: safe_divide(total_amount, total_count),
           credit_amount: credit_amount,
           debit_amount: debit_amount,
           net_flow: credit_amount - debit_amount,
-          credit_count: credit_count,
-          debit_count: debit_count,
+          credit_count: result&.credit_count.to_i,
+          debit_count: result&.debit_count.to_i,
           credit_ratio: safe_divide(credit_amount * 100, total_amount)
         }
       end

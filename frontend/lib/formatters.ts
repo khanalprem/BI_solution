@@ -1,6 +1,7 @@
 // NPR Currency Formatter (Indian numbering system)
-export function formatNPR(amount: number, showDecimals: boolean = false): string {
-  if (amount === null || amount === undefined || isNaN(amount)) return 'Rs. 0';
+export function formatNPR(amount: number | null | undefined, showDecimals: boolean = false): string {
+  if (amount === null || amount === undefined || isNaN(Number(amount))) return '—';
+  if (amount === 0) return 'Rs. 0';
   
   const isNegative = amount < 0;
   const absAmount = Math.abs(amount);
@@ -56,8 +57,8 @@ export function parseISODateToLocal(dateString?: string | null): Date | null {
 }
 
 // Format large numbers with K, M, B suffixes
-export function formatNumber(num: number): string {
-  if (num === null || num === undefined || isNaN(num)) return '0';
+export function formatNumber(num: number | null | undefined): string {
+  if (num === null || num === undefined || isNaN(Number(num))) return '—';
   
   const absNum = Math.abs(num);
   const isNegative = num < 0;
