@@ -421,13 +421,17 @@ Invoke with the `Skill` tool before any significant task:
 | `/dashboard/customer` | ✅ Live | Customer portfolio |
 | `/dashboard/customer/[cifId]` | ✅ Live | Customer detail |
 | `/dashboard/skills` | ✅ Live | Platform Guide / Data Dictionary |
-| `/dashboard/financial` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/digital` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/kpi` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/risk` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/employer` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/board` | 🔧 Scaffold | UI only, no API |
-| `/dashboard/scheduled` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/financial` | ✅ Live | Financial summary — CR/DR/net, monthly trend, GL breakdown |
+| `/dashboard/digital` | ✅ Live | Digital channels — `digital_channels` endpoint |
+| `/dashboard/kpi` | ✅ Live | KPI tree — `kpi_summary` endpoint |
+| `/dashboard/risk` | ✅ Live | Risk summary — `risk_summary` endpoint |
+| `/dashboard/employer` | ✅ Live | Employer/payroll — `employer_summary` endpoint |
+| `/dashboard/employer/[userId]` | ✅ Live | Employee detail — `employee_detail` endpoint |
+| `/dashboard/config` | ✅ Live | DB browser — `production/catalog` + `production/table` |
+| `/dashboard/users` | ✅ Live | User management — `GET/POST/PATCH/DELETE /users` |
+| `/dashboard/profile` | ✅ Live | Profile page — reads/writes localStorage only |
+| `/dashboard/scheduled` | ✅ Live | Data dictionary — `production/catalog` + `production/table` |
+| `/dashboard/board` | 🔧 Scaffold | Imports executive API but renders no data — board UI not built |
 
 ---
 
