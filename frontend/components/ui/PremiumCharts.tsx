@@ -76,7 +76,7 @@ function theme() {
 
 // ─── Shared ECharts config builders ───────────────────────────────────────────
 function axisLabel(t: ReturnType<typeof theme>) {
-  return { color: t.textMuted, fontSize: 10, fontFamily: 'Inter, system-ui, sans-serif' };
+  return { color: t.textMuted, fontSize: 10, fontFamily: "var(--font-sans, 'Inter', system-ui, sans-serif)" };
 }
 function splitLine(t: ReturnType<typeof theme>) {
   return { lineStyle: { color: t.chartGrid, type: 'dashed' as const } };
@@ -90,7 +90,7 @@ function tooltipBase(t: ReturnType<typeof theme>) {
     borderColor: t.tooltipBorder,
     borderWidth: 1,
     padding: [8, 12] as [number, number],
-    textStyle: { color: t.textPrimary, fontSize: 11, fontFamily: 'Inter, system-ui, sans-serif' },
+    textStyle: { color: t.textPrimary, fontSize: 11, fontFamily: "var(--font-sans, 'Inter', system-ui, sans-serif)" },
     extraCssText: 'border-radius:10px;box-shadow:0 18px 40px rgba(0,0,0,0.35);backdrop-filter:blur(8px);',
   };
 }
@@ -122,7 +122,7 @@ function tooltipFormatter(
       return `<div style="display:flex;align-items:center;gap:8px;padding:2px 0">
         <span style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0;box-shadow:0 0 5px ${col}40"></span>
         <span style="color:var(--text-secondary);flex:1;font-size:10px">${name}</span>
-        <span style="color:var(--text-primary);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:10px">${formatValue(val)}</span>
+        <span style="color:var(--text-primary);font-weight:600;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:10px">${formatValue(val)}</span>
       </div>`;
     }).join('');
 
@@ -598,7 +598,7 @@ export function PremiumDonutChart({
               <span style="width:7px;height:7px;border-radius:50%;background:${param.color};flex-shrink:0;box-shadow:0 0 5px ${param.color}40"></span>
               <span style="color:var(--text-secondary);font-size:10px">${param.name}</span>
             </div>
-            <div style="color:var(--text-primary);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:4px">
+            <div style="color:var(--text-primary);font-weight:600;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:11px;margin-top:4px">
               ${formatValue(param.value)} <span style="color:var(--text-muted);font-size:9px">(${param.percent.toFixed(1)}%)</span>
             </div>
           </div>`;
@@ -612,7 +612,7 @@ export function PremiumDonutChart({
             text: centerValue,
             textAlign: 'center',
             fill: t.textPrimary,
-            font: 'bold 14px Inter, system-ui, sans-serif',
+            font: "bold 14px var(--font-sans, 'Inter', system-ui, sans-serif)",
           },
         },
         ...(centerLabel ? [{
@@ -623,7 +623,7 @@ export function PremiumDonutChart({
             text: centerLabel,
             textAlign: 'center',
             fill: t.textMuted,
-            font: '10px Inter, system-ui, sans-serif',
+            font: "10px var(--font-sans, 'Inter', system-ui, sans-serif)",
           },
         }] : []),
       ] : [],
@@ -708,8 +708,8 @@ export function PremiumScatterChart({
           return `<div>
             ${param.name ? `<div style="color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid var(--border)">${param.name}</div>` : ''}
             <div style="display:flex;flex-direction:column;gap:3px">
-              <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--text-secondary);font-size:10px">${xLabel || xKey}</span><span style="color:var(--text-primary);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:10px">${formatX(param.value[0])}</span></div>
-              <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--text-secondary);font-size:10px">${yLabel || yKey}</span><span style="color:var(--text-primary);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:10px">${formatY(param.value[1])}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--text-secondary);font-size:10px">${xLabel || xKey}</span><span style="color:var(--text-primary);font-weight:600;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:10px">${formatX(param.value[0])}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--text-secondary);font-size:10px">${yLabel || yKey}</span><span style="color:var(--text-primary);font-weight:600;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:10px">${formatY(param.value[1])}</span></div>
             </div>
           </div>`;
         },

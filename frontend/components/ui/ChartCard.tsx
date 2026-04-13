@@ -53,7 +53,7 @@ export function ChartCard({
       {/* ── Header row ── */}
       <div className="relative z-10 flex items-start justify-between mb-2.5">
         <div>
-          <div className="text-[12px] font-semibold text-text-primary">{title}</div>
+          <div className="text-xs font-display font-semibold text-text-primary">{title}</div>
           {subtitle && (
             <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>
           )}
@@ -179,7 +179,7 @@ export function ChartEmptyState({
           <div className="w-[5px] h-[14px] rounded-[2px] bg-text-secondary" />
           <div className="w-[5px] h-[6px]  rounded-[2px] bg-text-secondary" />
         </div>
-        <p className="text-[11px] font-semibold text-text-secondary">{title}</p>
+        <p className="text-xs font-sans font-semibold text-text-secondary">{title}</p>
         <p className="mt-1 text-[10px] text-text-muted max-w-[150px] leading-relaxed">
           {subtitle}
         </p>

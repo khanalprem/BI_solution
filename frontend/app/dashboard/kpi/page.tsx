@@ -10,6 +10,7 @@ import { formatNPR, formatPercent } from '@/lib/formatters';
 import { PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { StandardDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
 const QUARTER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
@@ -38,7 +39,7 @@ export default function KPIDashboard() {
       header: 'Volume',
       enableSorting: true, sortDescFirst: true,
       enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
-      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+      cell: ({ row }) => <strong className="font-mono text-xs">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
@@ -59,7 +60,7 @@ export default function KPIDashboard() {
       header: 'Avg Txn',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
-      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
     {
       id: 'txn_per_account',
@@ -73,7 +74,7 @@ export default function KPIDashboard() {
       header: 'Vol / Account',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.accounts > 0 ? a.original.amount / a.original.accounts : 0) - (b.original.accounts > 0 ? b.original.amount / b.original.accounts : 0),
-      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.accounts > 0 ? formatNPR(row.original.amount / row.original.accounts) : '—'}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.accounts > 0 ? formatNPR(row.original.amount / row.original.accounts) : '—'}</span>,
     },
     {
       id: 'share',
@@ -134,25 +135,25 @@ export default function KPIDashboard() {
         {/* Coverage KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Branch Coverage</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-blue">{(data?.unique_branches ?? 0).toLocaleString()}</div>
+            <div className="text-xs font-display text-text-muted mb-1">Branch Coverage</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-blue">{(data?.unique_branches ?? 0).toLocaleString()}</div>
             <div className="text-[11px] text-text-secondary mt-1">Active branches</div>
           </div>
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Province Coverage</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-green">{data?.unique_provinces ?? 0} / 7</div>
+            <div className="text-xs font-display text-text-muted mb-1">Province Coverage</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-green">{data?.unique_provinces ?? 0} / 7</div>
             <div className="text-[11px] text-text-secondary mt-1">Provinces active</div>
           </div>
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Net Flow</div>
-            <div className={`text-[26px] font-bold tracking-tight ${(data?.net_flow ?? 0) >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            <div className="text-xs font-display text-text-muted mb-1">Net Flow</div>
+            <div className={`text-2xl font-mono font-bold tracking-tight ${(data?.net_flow ?? 0) >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
               {formatNPR(data?.net_flow ?? 0)}
             </div>
             <div className="text-[11px] text-text-secondary mt-1">CR minus DR</div>
           </div>
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Credit Amount</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-green">{formatNPR(data?.credit_amount ?? 0)}</div>
+            <div className="text-xs font-display text-text-muted mb-1">Credit Amount</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-green">{formatNPR(data?.credit_amount ?? 0)}</div>
             <div className="text-[11px] text-text-secondary mt-1">{formatNPR(data?.debit_amount ?? 0)} debit</div>
           </div>
         </div>
@@ -201,6 +202,87 @@ export default function KPIDashboard() {
             </ChartCard>
           )}
         </div>
+
+        {/* ── Banking Intelligence Section ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* CASA Ratio */}
+          <div className="bg-bg-card border border-border rounded-xl p-5">
+            <div className="text-xs font-display font-semibold text-text-primary mb-1">CASA Ratio</div>
+            <div className="text-[10px] text-text-muted mb-4">Current + Savings / Total Deposits</div>
+            {(data?.casa?.by_gl?.length ?? 0) > 0 ? (
+              <>
+                <div className="text-2xl font-mono font-bold tracking-tight text-accent-blue mb-2">
+                  {formatNPR(data?.casa?.total_deposits)}
+                </div>
+                <div className="text-[10px] text-text-muted">Total deposits by GL code (configure CASA GL codes)</div>
+                <div className="mt-3 space-y-1.5">
+                  {data?.casa?.by_gl?.slice(0, 5).map((g) => (
+                    <div key={g.gl_code} className="flex items-center justify-between text-[10px]">
+                      <span className="font-mono text-text-secondary">GL {g.gl_code}</span>
+                      <span className="font-mono text-text-primary">{formatNPR(g.deposit_amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-2xl font-mono font-bold tracking-tight text-text-muted mb-2">—</div>
+            )}
+            <Badge className={badgeColor.blue}>Regulatory KPI</Badge>
+          </div>
+
+          {/* Transaction Velocity */}
+          <div className="bg-bg-card border border-border rounded-xl p-5">
+            <div className="text-xs font-display font-semibold text-text-primary mb-1">Transaction Velocity</div>
+            <div className="text-[10px] text-text-muted mb-4">Avg txns per account per active day</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-green mb-2">
+              {(data?.txn_velocity ?? 0).toFixed(3)}
+            </div>
+            <div className="text-[10px] text-text-muted mb-3">
+              {(data?.active_days ?? 0).toLocaleString()} active trading days
+            </div>
+            <Badge className={badgeColor.green}>Activity Monitor</Badge>
+          </div>
+
+          {/* MoM Growth Summary */}
+          <div className="bg-bg-card border border-border rounded-xl p-5">
+            <div className="text-xs font-display font-semibold text-text-primary mb-1">MoM Growth Trend</div>
+            <div className="text-[10px] text-text-muted mb-4">Month-over-month volume change</div>
+            {(data?.mom_trends?.length ?? 0) >= 2 ? (() => {
+              const last = data!.mom_trends[data!.mom_trends.length - 1];
+              const prev = data!.mom_trends[data!.mom_trends.length - 2];
+              const change = last.mom_change;
+              return (
+                <>
+                  <div className={`text-2xl font-mono font-bold tracking-tight mb-1 ${(change ?? 0) >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    {change !== null ? `${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%` : '—'}
+                  </div>
+                  <div className="text-[10px] text-text-muted mb-1">
+                    {last.month}: {formatNPR(last.amount)}
+                  </div>
+                  <div className="text-[10px] text-text-muted mb-3">
+                    {prev.month}: {formatNPR(prev.amount)}
+                  </div>
+                </>
+              );
+            })() : (
+              <div className="text-2xl font-mono font-bold tracking-tight text-text-muted mb-2">—</div>
+            )}
+            <Badge className={badgeColor.amber}>Decision Metric</Badge>
+          </div>
+        </div>
+
+        {/* MoM Trends Chart */}
+        {(data?.mom_trends?.length ?? 0) > 1 && (
+          <ChartCard title="Month-over-Month Growth" subtitle="Transaction volume with MoM % change">
+            <PremiumBarChart
+              data={data!.mom_trends}
+              xAxisKey="month"
+              series={[{ dataKey: 'amount', name: 'Volume', color: '#6366F1' }]}
+              formatValue={formatNPR}
+              height={260}
+            />
+          </ChartCard>
+        )}
 
         {/* Quarterly detail table */}
         {byQuarter.length > 0 && (

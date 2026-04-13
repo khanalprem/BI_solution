@@ -164,7 +164,7 @@ export function KPICard({
     >
       {/* ── Top row: label + icon ── */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.35px] truncate">
+        <span className="text-[10px] font-display font-semibold text-text-muted uppercase tracking-[0.35px] truncate">
           {label}
         </span>
         {icon && (
@@ -182,7 +182,7 @@ export function KPICard({
       {/* ── Value — key remount triggers CSS pop-in animation on change ── */}
       <div
         key={String(value)}
-        className="text-[20px] font-semibold leading-none tracking-tight text-text-primary animate-kpi-value"
+        className="text-xl font-mono font-semibold leading-none tracking-tight text-text-primary animate-kpi-value"
       >
         {value}
       </div>

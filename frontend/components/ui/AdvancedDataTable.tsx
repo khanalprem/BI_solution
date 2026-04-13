@@ -261,10 +261,10 @@ export function AdvancedDataTable<TData>({
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
+      <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] bg-bg-card">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border" style={{ background: 'var(--bg-surface)' }}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-bg-surface">
           <div className="min-w-0">
             <h3 className="font-display text-[13px] font-bold text-text-primary tracking-tight truncate">{title}</h3>
             {subtitle && <p className="text-[10.5px] text-text-muted mt-0.5 leading-none">{subtitle}</p>}
@@ -310,7 +310,7 @@ export function AdvancedDataTable<TData>({
 
         {/* ── Active filter chips ── */}
         {hasAnyFilter && (
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2" style={{ background: 'var(--bg-card-hover)' }}>
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2 bg-bg-card-hover">
             {globalFilter && (
               <button
                 type="button"
@@ -345,7 +345,7 @@ export function AdvancedDataTable<TData>({
         {/* ── Table ── */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-[1] border-b border-border" style={{ background: 'var(--bg-base)' }}>
+            <thead className="sticky top-0 z-[1] border-b border-border bg-bg-base">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
@@ -413,7 +413,7 @@ export function AdvancedDataTable<TData>({
 
         {/* ── Pagination ── */}
         {enablePagination && pageCount > 0 && (
-          <div className="flex items-center justify-between gap-4 px-4 py-2.5 border-t border-border" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex items-center justify-between gap-4 px-4 py-2.5 border-t border-border bg-bg-surface">
             <span className="text-[10.5px] text-text-muted">
               <span className="text-text-primary font-semibold">{from}–{to}</span> of{' '}
               <span className="text-text-primary font-semibold">{totalRows.toLocaleString()}</span>

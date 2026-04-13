@@ -320,6 +320,81 @@ module Api
             []
           end
 
+          # ── Dormancy Analysis ──
+          # Classify accounts by last transaction date
+          dormancy_data = begin
+            conn = ActiveRecord::Base.connection
+            today = end_date || Date.today
+            dormancy_rows = conn.exec_query(<<~SQL.squish).to_a
+              SELECT
+                CASE
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 90).to_s)}' THEN 'Active (< 90 days)'
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 365).to_s)}' THEN 'Dormant (90-365 days)'
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 730).to_s)}' THEN 'Inactive (1-2 years)'
+                  ELSE 'Inoperative (> 2 years)'
+                END AS status,
+                COUNT(DISTINCT acct_num) AS accounts,
+                COALESCE(SUM(tran_amt), 0) AS total_amount
+              FROM tran_summary
+              GROUP BY 1
+              ORDER BY MIN(
+                CASE
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 90).to_s)}' THEN 1
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 365).to_s)}' THEN 2
+                  WHEN MAX(tran_date) >= '#{conn.quote_string((today - 730).to_s)}' THEN 3
+                  ELSE 4
+                END
+              )
+            SQL
+            dormancy_rows.map { |r| { status: r['status'], accounts: r['accounts'].to_i, amount: r['total_amount'].to_f } }
+          rescue StandardError => e
+            Rails.logger.warn("Dormancy query failed (non-critical): #{e.message}")
+            []
+          end
+
+          # ── Deposit Concentration (HHI) ──
+          # Herfindahl-Hirschman Index = sum(share_i^2) where share_i = branch_amount / total
+          hhi = if by_branch.any? && total > 0
+            by_branch.sum { |b| ((b[:amount] / total) * 100) ** 2 }.round(1)
+          else
+            0
+          end
+          # HHI interpretation: <1500 = competitive, 1500-2500 = moderate, >2500 = concentrated
+
+          # ── Anomaly Detection (3-sigma) ──
+          # Flag accounts with unusually high transaction amounts
+          anomaly_data = begin
+            conn = ActiveRecord::Base.connection
+            anomaly_rows = conn.exec_query(<<~SQL.squish).to_a
+              WITH acct_stats AS (
+                SELECT acct_num,
+                       SUM(tran_amt) AS total_amt,
+                       COUNT(*) AS txn_count,
+                       MAX(tran_date) AS last_txn
+                FROM tran_summary
+                GROUP BY acct_num
+              ),
+              portfolio_stats AS (
+                SELECT AVG(total_amt) AS mean_amt,
+                       STDDEV_SAMP(total_amt) AS stddev_amt
+                FROM acct_stats
+              )
+              SELECT a.acct_num, a.total_amt, a.txn_count, a.last_txn,
+                     ROUND(((a.total_amt - p.mean_amt) / NULLIF(p.stddev_amt, 0))::numeric, 2) AS z_score
+              FROM acct_stats a, portfolio_stats p
+              WHERE a.total_amt > (p.mean_amt + 3 * p.stddev_amt)
+              ORDER BY a.total_amt DESC
+              LIMIT 20
+            SQL
+            anomaly_rows.map do |r|
+              { acct_num: r['acct_num'], total_amt: r['total_amt'].to_f, txn_count: r['txn_count'].to_i,
+                last_txn: r['last_txn']&.to_s, z_score: r['z_score'].to_f }
+            end
+          rescue StandardError => e
+            Rails.logger.warn("Anomaly detection query failed (non-critical): #{e.message}")
+            []
+          end
+
           # Configurable thresholds via env vars
           concentration_warn  = ENV.fetch('RISK_CONCENTRATION_WARN', '40').to_f
           concentration_high  = ENV.fetch('RISK_CONCENTRATION_HIGH', '60').to_f
@@ -349,7 +424,11 @@ module Api
             by_gl: by_gl,
             by_province: by_province,
             by_branch: by_branch,
-            npa_classification: npa_data
+            npa_classification: npa_data,
+            # New banking intelligence
+            dormancy: dormancy_data,
+            hhi_index: hhi,
+            anomaly_alerts: anomaly_data
           }
         end
 
@@ -388,6 +467,42 @@ module Api
                             .order('SUM(tran_amt) DESC').limit(10)
                             .map { |r| { service: r.service, amount: r.amount.to_f, count: r.count.to_i } }
 
+          # ── CASA Ratio (Current + Savings / Total Deposits) ──
+          # Uses gl_sub_head_code to identify CASA accounts.
+          # GL codes for CASA vary by bank — common: 10-19 (Current), 20-29 (Savings).
+          # This returns the breakdown so the frontend can compute the ratio.
+          casa_data = begin
+            casa_rows = scope.group(:gl_sub_head_code)
+                             .select("gl_sub_head_code, SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END) AS deposit_amount")
+                             .where("part_tran_type = 'CR'")
+                             .order('deposit_amount DESC')
+                             .limit(20)
+                             .map { |r| { gl_code: r.gl_sub_head_code, deposit_amount: r.deposit_amount.to_f } }
+            total_deposits = casa_rows.sum { |r| r[:deposit_amount] }
+            { by_gl: casa_rows, total_deposits: total_deposits }
+          rescue StandardError => e
+            Rails.logger.warn("CASA query failed (non-critical): #{e.message}")
+            { by_gl: [], total_deposits: 0 }
+          end
+
+          # ── Transaction Velocity ──
+          # avg transactions per account per active day
+          active_days = scope.distinct.count(:tran_date)
+          txn_velocity = (unique_accounts > 0 && active_days > 0) ?
+            safe_divide(total_count.to_f, unique_accounts * active_days) : 0
+
+          # ── MoM Growth Trends ──
+          monthly_data = scope.group(:year_month)
+                              .select('year_month, SUM(tran_amt) AS amount, SUM(tran_count) AS count')
+                              .order(:year_month)
+                              .map { |r| { month: r.year_month, amount: r.amount.to_f, count: r.count.to_i } }
+          # Compute MoM % change for each month
+          mom_trends = monthly_data.each_with_index.map do |m, i|
+            prev_amt = i > 0 ? monthly_data[i - 1][:amount] : nil
+            mom_pct = prev_amt && prev_amt > 0 ? ((m[:amount] - prev_amt) / prev_amt * 100).round(1) : nil
+            m.merge(mom_change: mom_pct)
+          end
+
           {
             total_amount: total_amount,
             total_count: total_count,
@@ -402,6 +517,11 @@ module Api
             unique_provinces: unique_provinces,
             txn_per_account: safe_divide(total_count, unique_accounts),
             vol_per_account: safe_divide(total_amount, unique_accounts),
+            # New banking intelligence
+            txn_velocity: txn_velocity,
+            active_days: active_days,
+            casa: casa_data,
+            mom_trends: mom_trends,
             by_quarter: by_quarter,
             by_product: by_product,
             by_service: by_service

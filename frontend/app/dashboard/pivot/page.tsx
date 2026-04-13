@@ -641,7 +641,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                           return measureKeys.map((mk) => (
                             <td
                               key={`${fullKey}${PIVOT_SEP}${mk}`}
-                              className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
+                              className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
                             >
                               {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`], mk)}
                             </td>
@@ -652,7 +652,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                         measureKeys.map((mk) => (
                           <td
                             key={`${pv}${PIVOT_SEP}${mk}`}
-                            className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
+                            className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
                           >
                             {renderCell(row[`${pv}${PIVOT_SEP}${mk}`], mk)}
                           </td>

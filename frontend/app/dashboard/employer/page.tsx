@@ -41,7 +41,7 @@ export default function EmployerDashboard() {
       header: 'Total Volume',
       enableSorting: true, sortDescFirst: true,
       enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
-      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+      cell: ({ row }) => <strong className="font-mono text-xs">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
@@ -61,14 +61,14 @@ export default function EmployerDashboard() {
       accessorKey: 'credit',
       header: 'Credit (CR)',
       enableSorting: true, sortDescFirst: true,
-      cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.credit)}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs text-accent-green">{formatNPR(row.original.credit)}</span>,
     },
     {
       id: 'debit',
       header: 'Debit (DR)',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.amount - a.original.credit) - (b.original.amount - b.original.credit),
-      cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.amount - row.original.credit)}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs text-accent-red">{formatNPR(row.original.amount - row.original.credit)}</span>,
     },
     {
       id: 'credit_ratio',
@@ -85,7 +85,7 @@ export default function EmployerDashboard() {
       header: 'Avg Txn',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
-      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
     {
       id: 'share',
@@ -147,7 +147,7 @@ export default function EmployerDashboard() {
       header: 'Total Volume',
       enableSorting: true, sortDescFirst: true,
       enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
-      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+      cell: ({ row }) => <strong className="font-mono text-xs">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
@@ -161,14 +161,14 @@ export default function EmployerDashboard() {
       header: 'Avg Txn',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.count > 0 ? a.original.amount / a.original.count : 0) - (b.original.count > 0 ? b.original.amount / b.original.count : 0),
-      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.count > 0 ? formatNPR(row.original.amount / row.original.count) : '—'}</span>,
     },
     {
       id: 'vol_per_user',
       header: 'Vol / User',
       enableSorting: true,
       sortingFn: (a, b) => (a.original.users > 0 ? a.original.amount / a.original.users : 0) - (b.original.users > 0 ? b.original.amount / b.original.users : 0),
-      cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.users > 0 ? formatNPR(row.original.amount / row.original.users) : '—'}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.users > 0 ? formatNPR(row.original.amount / row.original.users) : '—'}</span>,
     },
     {
       id: 'txn_per_user',
@@ -227,18 +227,18 @@ export default function EmployerDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Total Transactions</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-blue">{(data?.total_count ?? 0).toLocaleString()}</div>
+            <div className="text-xs font-display text-text-muted mb-1">Total Transactions</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-blue">{(data?.total_count ?? 0).toLocaleString()}</div>
           </div>
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Avg per Entry User</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-green">
+            <div className="text-xs font-display text-text-muted mb-1">Avg per Entry User</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-green">
               {data?.total_entry_users ? formatNPR((data.total_amount ?? 0) / data.total_entry_users) : '-'}
             </div>
           </div>
           <div className="bg-bg-card border border-border rounded-xl p-4">
-            <div className="text-[12px] text-text-muted mb-1">Avg per Branch</div>
-            <div className="text-[26px] font-bold tracking-tight text-accent-amber">
+            <div className="text-xs font-display text-text-muted mb-1">Avg per Branch</div>
+            <div className="text-2xl font-mono font-bold tracking-tight text-accent-amber">
               {data?.total_branches ? formatNPR((data.total_amount ?? 0) / data.total_branches) : '-'}
             </div>
           </div>

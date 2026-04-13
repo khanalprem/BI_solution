@@ -503,17 +503,21 @@ Invoke with the `Skill` tool before any significant task:
 
 ## Comparison Period Architecture (important)
 
-The comparison query is a **second call** to `get_tran_summary` with the period's WHERE clause. Key design decision:
+The comparison query is a **second call** to `get_tran_summary` with the period's WHERE clause. Key design decisions:
 
+- **Reference date split by period type**:
+  - **"THIS" periods** (`thismonth`, `thisyear`) → use **end_date** (max of user's range) as reference
+  - **"PREV" periods** (`prevdate`, `prevmonth`, `prevyear`, `prevmonthmtd`, `prevyearytd`, `prevmonthsamedate`, `prevyearsamedate`) → use **start_date** (min of user's range) as reference
+  - Example: range `2024-02-01 → 2024-03-15` with "This Month" → `WHERE tran_date BETWEEN '2024-03-01' AND '2024-03-31'` (full March, based on end_date). With "Prev Date" → `WHERE tran_date = '2024-01-31'` (day before start_date).
 - **Comparison GROUP BY excludes date dimensions** — If we kept `GROUP BY acct_num, tran_date` for "this month", the comparison would return 28 separate rows (one per day in Feb), and pagination would cut most off. The first row is often the same date as the main filter, making comparison values look identical to main values.
 - **Fix (implemented)**: `comparison_inner_dim_keys` excludes date dims. Comparison returns **one aggregated row per account** summing the whole period.
 - **Date dim is stamped with period-natural label**: After the comparison query, `sanitized[date_dim] = "#{period_label}:#{stamp_date}"` where `stamp_date` is computed by `period_stamp_date(period:, reference_date:)`:
-  - `thismonth` → `"2024-02"` (YYYY-MM)
-  - `thisyear` → `"2024"` (YYYY)
-  - `prevmonth` → `"2024-01"` (YYYY-MM)
-  - `prevyear` → `"2023"` (YYYY)
-  - `prevdate` → `"2024-01-31"` (YYYY-MM-DD)
-  - So the pivot column is `"this_month:2024-02"`, displayed as `THIS MONTH / 2024-02`.
+  - `thismonth` → `"2024-03"` (YYYY-MM, from end_date)
+  - `thisyear` → `"2024"` (YYYY, from end_date)
+  - `prevmonth` → `"2024-01"` (YYYY-MM, from start_date)
+  - `prevyear` → `"2023"` (YYYY, from start_date)
+  - `prevdate` → `"2024-01-31"` (YYYY-MM-DD, from start_date)
+  - So the pivot column is `"this_month:2024-03"`, displayed as `THIS MONTH / 2024-03`.
 - **Comparison restricted to current page**: `dim_value_clauses` restricts comparison query to `acct_num IN (...)` values from the current main page, so comparison columns never show data for different accounts.
 - **ORDER BY**: comparison uses measure-based ORDER BY (`SUM(tran_amt) DESC`), never the date-based ORDER BY from the main query.
 

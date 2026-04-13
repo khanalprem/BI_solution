@@ -130,9 +130,9 @@ export default function DigitalDashboard() {
                     className="w-3 h-3 rounded-full flex-shrink-0"
                     style={{ background: getChannelColor(channel.channel) }}
                   />
-                  <div className="text-[13px] font-semibold capitalize">{channel.channel}</div>
+                  <div className="text-sm font-display font-semibold capitalize text-text-primary">{channel.channel}</div>
                 </div>
-                <div className="text-[22px] font-bold tracking-tight mb-1">{formatNPR(channel.total_amount)}</div>
+                <div className="text-2xl font-mono font-bold tracking-tight mb-1">{formatNPR(channel.total_amount)}</div>
                 <div className="text-[11px] text-text-muted mb-3">{channel.transaction_count.toLocaleString()} transactions · {channel.unique_accounts.toLocaleString()} accounts</div>
                 <div className="space-y-1 text-[11px]">
                   <div className="flex justify-between"><span className="text-text-muted">Credit (CR)</span><span className="text-accent-green">{formatNPR(cr)}</span></div>
@@ -168,7 +168,7 @@ export default function DigitalDashboard() {
               header: 'Total Amount',
               enableSorting: true, sortDescFirst: true,
               enableColumnFilter: true, filterFn: 'numberRange', meta: { filterType: 'number-range' },
-              cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.total_amount)}</strong>,
+              cell: ({ row }) => <strong className="font-mono text-xs">{formatNPR(row.original.total_amount)}</strong>,
             },
             {
               accessorKey: 'transaction_count',
@@ -188,13 +188,13 @@ export default function DigitalDashboard() {
               accessorKey: 'credit_amount',
               header: 'Credit (CR)',
               enableSorting: true, sortDescFirst: true,
-              cell: ({ row }) => <span className="font-mono text-[11px] text-accent-green">{formatNPR(row.original.credit_amount)}</span>,
+              cell: ({ row }) => <span className="font-mono text-xs text-accent-green">{formatNPR(row.original.credit_amount)}</span>,
             },
             {
               accessorKey: 'debit_amount',
               header: 'Debit (DR)',
               enableSorting: true, sortDescFirst: true,
-              cell: ({ row }) => <span className="font-mono text-[11px] text-accent-red">{formatNPR(row.original.debit_amount)}</span>,
+              cell: ({ row }) => <span className="font-mono text-xs text-accent-red">{formatNPR(row.original.debit_amount)}</span>,
             },
             {
               id: 'net_flow',
@@ -203,7 +203,7 @@ export default function DigitalDashboard() {
               sortingFn: (a, b) => (a.original.credit_amount - a.original.debit_amount) - (b.original.credit_amount - b.original.debit_amount),
               cell: ({ row }) => {
                 const net = row.original.credit_amount - row.original.debit_amount;
-                return <span className={`font-mono text-[11px] ${net >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatNPR(net)}</span>;
+                return <span className={`font-mono text-xs ${net >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatNPR(net)}</span>;
               },
             },
             {

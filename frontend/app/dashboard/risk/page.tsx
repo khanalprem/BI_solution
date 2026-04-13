@@ -206,7 +206,7 @@ export default function RiskDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-5">
             <div className="text-[13px] font-display font-semibold mb-1">Branch Concentration Risk</div>
             <div className="text-[11px] text-text-muted mb-4">Top 3 branches share of total volume</div>
-            <div className={`text-[32px] font-bold tracking-tight mb-2 text-accent-${concentrationColor}`}>
+            <div className={`text-3xl font-mono font-bold tracking-tight mb-2 text-accent-${concentrationColor}`}>
               {formatPercent(top3BranchShare)}
             </div>
             <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-3">
@@ -238,11 +238,11 @@ export default function RiskDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-5">
             <div className="text-[13px] font-display font-semibold mb-1">Volume Volatility</div>
             <div className="text-[11px] text-text-muted mb-4">Coefficient of variation (monthly)</div>
-            <div className={`text-[32px] font-bold tracking-tight mb-1 text-accent-${volatilityColor}`}>
+            <div className={`text-3xl font-mono font-bold tracking-tight mb-1 text-accent-${volatilityColor}`}>
               {formatPercent(monthlyVolatility)}
             </div>
             <div className="flex items-center gap-2 mb-3">
-              <span className={`text-[13px] font-semibold ${momChange >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              <span className={`text-sm font-mono font-semibold ${momChange >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {momChange >= 0 ? '▲' : '▼'} {Math.abs(momChange).toFixed(1)}%
               </span>
               <span className="text-[10px] text-text-muted">MoM volume change</span>
@@ -262,7 +262,7 @@ export default function RiskDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-5">
             <div className="text-[13px] font-display font-semibold mb-1">High-Value Transaction Exposure</div>
             <div className="text-[11px] text-text-muted mb-4">Transactions above threshold</div>
-            <div className="text-[32px] font-bold tracking-tight mb-2 text-accent-amber">
+            <div className="text-3xl font-mono font-bold tracking-tight mb-2 text-accent-amber">
               {highValueCount.toLocaleString()}
             </div>
             <div className="text-[12px] text-text-secondary mb-3">
@@ -283,7 +283,7 @@ export default function RiskDashboard() {
               {npaData.map((item: { classification: string; accounts: number; amount: number }) => (
                 <div key={item.classification} className="bg-bg-surface border border-border/50 rounded-lg p-3">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1">{item.classification || 'Unclassified'}</div>
-                  <div className="text-[18px] font-bold tracking-tight text-text-primary">{item.accounts.toLocaleString()}</div>
+                  <div className="text-lg font-mono font-bold tracking-tight text-text-primary">{item.accounts.toLocaleString()}</div>
                   <div className="text-[10px] text-text-muted">accounts</div>
                   <div className="text-[11px] font-mono text-text-secondary mt-1">{formatNPR(item.amount)}</div>
                 </div>
@@ -335,6 +335,99 @@ export default function RiskDashboard() {
             />
           </ChartCard>
         )}
+
+        {/* ── Banking Intelligence: Dormancy Analysis ── */}
+        {(data?.dormancy?.length ?? 0) > 0 && (
+          <div className="bg-bg-card border border-border rounded-xl p-5">
+            <div className="text-sm font-display font-semibold text-text-primary mb-1">Dormancy Analysis</div>
+            <div className="text-[10px] text-text-muted mb-4">Account activity classification — regulatory compliance (NRB)</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {data!.dormancy.map((d) => {
+                const isActive = d.status.includes('Active');
+                const isDormant = d.status.includes('Dormant');
+                const color = isActive ? 'green' : isDormant ? 'amber' : 'red';
+                return (
+                  <div key={d.status} className="bg-bg-surface border border-border/50 rounded-lg p-4">
+                    <div className="text-[10px] font-display font-semibold uppercase tracking-wider text-text-muted mb-2">{d.status}</div>
+                    <div className={`text-2xl font-mono font-bold tracking-tight text-accent-${color}`}>{d.accounts.toLocaleString()}</div>
+                    <div className="text-[10px] text-text-muted mt-1">accounts</div>
+                    <div className="text-xs font-mono text-text-secondary mt-1">{formatNPR(d.amount)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Banking Intelligence: Deposit Concentration (HHI) ── */}
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="text-sm font-display font-semibold text-text-primary mb-1">Deposit Concentration Index (HHI)</div>
+          <div className="text-[10px] text-text-muted mb-4">Herfindahl-Hirschman Index — measures branch portfolio concentration</div>
+          <div className={`text-3xl font-mono font-bold tracking-tight mb-2 ${(data?.hhi_index ?? 0) > 2500 ? 'text-accent-red' : (data?.hhi_index ?? 0) > 1500 ? 'text-accent-amber' : 'text-accent-green'}`}>
+            {(data?.hhi_index ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+          <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-3 max-w-xs">
+            <div
+              className={`h-full rounded-full transition-all ${(data?.hhi_index ?? 0) > 2500 ? 'bg-accent-red' : (data?.hhi_index ?? 0) > 1500 ? 'bg-accent-amber' : 'bg-accent-green'}`}
+              style={{ width: `${Math.min(((data?.hhi_index ?? 0) / 10000) * 100, 100)}%` }}
+            />
+          </div>
+          <div className="flex gap-4 text-[10px] text-text-muted mb-3">
+            <span>&lt; 1,500 = Competitive</span>
+            <span>1,500–2,500 = Moderate</span>
+            <span>&gt; 2,500 = Concentrated</span>
+          </div>
+          <Badge className={(data?.hhi_index ?? 0) > 2500 ? badgeColor.red : (data?.hhi_index ?? 0) > 1500 ? badgeColor.amber : badgeColor.green}>
+            {(data?.hhi_index ?? 0) > 2500 ? 'Highly Concentrated' : (data?.hhi_index ?? 0) > 1500 ? 'Moderately Concentrated' : 'Competitive'}
+          </Badge>
+        </div>
+
+        {/* ── Banking Intelligence: Anomaly Detection (3σ) ── */}
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-sm font-display font-semibold text-text-primary">Anomaly Detection</div>
+            <Badge className={badgeColor.red}>AML / Fraud</Badge>
+          </div>
+          <div className="text-[10px] text-text-muted mb-4">Accounts exceeding 3σ threshold — flagged for review</div>
+          {(data?.anomaly_alerts?.length ?? 0) > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Account</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Total Amount</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Txn Count</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Z-Score</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Last Txn</th>
+                    <th className="text-center py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data!.anomaly_alerts.map((a) => (
+                    <tr key={a.acct_num} className="border-b border-border/30 hover:bg-bg-card-hover transition-colors">
+                      <td className="py-2 px-3 font-mono text-text-primary">{a.acct_num}</td>
+                      <td className="py-2 px-3 font-mono text-right text-accent-red">{formatNPR(a.total_amt)}</td>
+                      <td className="py-2 px-3 font-mono text-right text-text-secondary">{a.txn_count.toLocaleString()}</td>
+                      <td className="py-2 px-3 font-mono text-right text-accent-amber">{a.z_score.toFixed(2)}σ</td>
+                      <td className="py-2 px-3 text-right text-text-muted">{a.last_txn || '—'}</td>
+                      <td className="py-2 px-3 text-center">
+                        <Badge className={a.z_score > 5 ? badgeColor.red : badgeColor.amber}>
+                          {a.z_score > 5 ? 'Critical' : 'Warning'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="text-2xl font-mono font-bold text-accent-green mb-2">0</div>
+              <div className="text-[10px] text-text-muted">No anomalies detected — all accounts within normal range</div>
+              <Badge className={badgeColor.green}>All Clear</Badge>
+            </div>
+          )}
+        </div>
 
         {/* Province Risk Table */}
         {byProvince.length > 0 && (

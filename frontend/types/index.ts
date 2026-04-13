@@ -196,6 +196,9 @@ export interface RiskSummaryData {
   by_province: { province: string; amount: number; accounts: number; debit_amount: number }[];
   by_branch: { branch: string; amount: number }[];
   npa_classification: { classification: string; accounts: number; amount: number }[];
+  dormancy: { status: string; accounts: number; amount: number }[];
+  hhi_index: number;
+  anomaly_alerts: { acct_num: string; total_amt: number; txn_count: number; last_txn: string; z_score: number }[];
 }
 
 export interface KpiSummaryData {
@@ -203,6 +206,9 @@ export interface KpiSummaryData {
   net_flow: number; avg_transaction: number; credit_ratio: number;
   unique_accounts: number; unique_customers: number; unique_branches: number; unique_provinces: number;
   txn_per_account: number; vol_per_account: number;
+  txn_velocity: number; active_days: number;
+  casa: { by_gl: { gl_code: string; deposit_amount: number }[]; total_deposits: number };
+  mom_trends: { month: string; amount: number; count: number; mom_change: number | null }[];
   by_quarter: { period: string; amount: number; count: number; accounts: number }[];
   by_product: { product: string; amount: number; count: number }[];
   by_service: { service: string; amount: number; count: number }[];

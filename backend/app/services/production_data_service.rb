@@ -364,7 +364,8 @@ class ProductionDataService
     # start_date / end_date may be nil when frontend sends no date params (ALL period before
     # filter-stats loads) — in that case we skip the tran_date WHERE clause but still need
     # valid dates for everything else.
-    calc_end_date = end_date || Date.today
+    calc_end_date   = end_date   || Date.today
+    calc_start_date = start_date || calc_end_date
 
     dimension_keys = Array(dimensions).filter_map do |d|
       key = d.to_s
@@ -447,9 +448,6 @@ class ProductionDataService
       'SELECT tb2.*'
     end
 
-    # Resolve reference date for period comparisons from user-selected filter values
-    reference_date = resolve_reference_date(filters: filters, end_date: calc_end_date, dimension_keys: dimension_keys)
-
     # Primary date dimension drives period clause SQL.
     # First check selected GROUP BY dimensions, then fall back to whichever date filter is active,
     # then default to tran_date. This ensures that setting tran_date as a filter (not a dimension)
@@ -469,9 +467,21 @@ class ProductionDataService
       meta[:period] if meta
     end.uniq
 
+    # "THIS" periods use max of range (end_date) as reference.
+    # "PREV" periods use min of range (start_date) as reference.
+    # This ensures: "This Month" = month of latest date in analysis window,
+    #               "Prev Date"  = day before the start of analysis window.
+    this_periods = %w[thismonth thisyear].freeze
+    ref_for_this = resolve_reference_date(filters: filters, end_date: calc_end_date, dimension_keys: dimension_keys)
+    # For PREV periods, resolve the MIN (earliest) date from dimension filters or start_date.
+    # This ensures: tran_date range 2024-02-02→2024-02-03 with global ALL period
+    # correctly uses 2024-02-02 (not 2021-02-18 from ALL) as the PREV reference.
+    ref_for_prev = resolve_min_reference_date(filters: filters, start_date: calc_start_date, dimension_keys: dimension_keys)
+
     period_wheres = PERIOD_COMPARISONS.each_with_object({}) do |(period_key, meta), acc|
       acc[meta[:param]] = if requested_periods.include?(period_key)
-        build_period_where(period: period_key, end_date: reference_date, filters: filters, dimension: period_dimension)
+        ref = this_periods.include?(period_key) ? ref_for_this : ref_for_prev
+        build_period_where(period: period_key, end_date: ref, filters: filters, dimension: period_dimension)
       else
         ''
       end
@@ -592,17 +602,19 @@ class ProductionDataService
       empty_periods = []
 
       requested_periods.each do |period_key|
-        period_where = build_period_where(period: period_key, end_date: reference_date, filters: filters, dimension: period_dimension)
+        # "THIS" periods use max of range, "PREV" periods use min of range
+        period_ref = this_periods.include?(period_key) ? ref_for_this : ref_for_prev
+        period_where = build_period_where(period: period_key, end_date: period_ref, filters: filters, dimension: period_dimension)
         next if period_where.blank?
 
         period_label = PERIOD_COMPARISONS[period_key][:label].downcase.gsub(' ', '_')
 
         # Compute the natural date label for this comparison period's column header.
         # e.g. "thismonth" → "2024-02", "prevyear" → "2023", "prevdate" → "2024-01-31"
-        # Falls back to reference_date string when no date dimension is active.
+        # Falls back to period_ref string when no date dimension is active.
         stamp_date = date_dim \
-          ? period_stamp_date(period: period_key, reference_date: reference_date)
-          : reference_date.to_s
+          ? period_stamp_date(period: period_key, reference_date: period_ref)
+          : period_ref.to_s
 
         # Restrict to the dimension values visible on this page (non-date dims only —
         # date dim gets a new time range from period_where, that's the point)
@@ -640,9 +652,13 @@ class ProductionDataService
 
         comp_rows = conn.exec_query('SELECT * FROM result').to_a
         if comp_rows.empty? || comp_rows.all? { |r| r.except('rn', 'pivoted_totalrows', 'total_rows', 'RN').values.all?(&:nil?) }
-          # Period returned no data — record it so frontend can show "(no data)" instead of
-          # silently missing columns
-          empty_periods << period_label
+          # Period returned no data — still add a placeholder row so the column appears
+          # in the pivot table (with '—' values) instead of silently disappearing.
+          placeholder = {}
+          non_date_dims.each { |k| placeholder[k] = main_sanitized.first&.[](k) }
+          placeholder['_period'] = period_label
+          placeholder[date_dim] = "#{period_label}:#{stamp_date}" if date_dim
+          comparison_sanitized << placeholder
           next
         end
 
@@ -871,6 +887,45 @@ class ProductionDataService
       ref_yr ? (Date.new(ref_yr.to_s.to_i, 12, 31) rescue end_date) : end_date
     else
       end_date
+    end
+  end
+
+  # Like resolve_reference_date but picks the MINIMUM (earliest) date from filters.
+  # Used for PREV period comparisons where the reference should be the start of the analysis window.
+  def resolve_min_reference_date(filters:, start_date:, dimension_keys:)
+    date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+    date_dim ||= %w[tran_date year_month year_quarter year].find do |k|
+      sym = k.to_sym
+      filters[sym].present? || filters[:"#{k}_from"].present? || filters[:"#{k}_to"].present?
+    end
+
+    case date_dim
+    when 'tran_date'
+      ref = filters[:tran_date_from].presence ||
+            Array.wrap(filters[:tran_date]).filter_map { |v| Date.parse(v.to_s) rescue nil }.min
+      ref.is_a?(Date) ? ref : (Date.parse(ref.to_s) rescue start_date)
+    when 'year_month'
+      ref_ym = filters[:year_month_from].presence || Array.wrap(filters[:year_month]).min
+      if ref_ym
+        year, month = ref_ym.to_s.split('-').map(&:to_i)
+        Date.new(year, month, 1) rescue start_date
+      else
+        start_date
+      end
+    when 'year_quarter'
+      ref_yq = filters[:year_quarter_from].presence || Array.wrap(filters[:year_quarter]).min
+      if ref_yq && ref_yq.to_s.match(/(\d{4})-Q(\d)/)
+        year, qtr = ::Regexp.last_match(1).to_i, ::Regexp.last_match(2).to_i
+        first_month = (qtr - 1) * 3 + 1
+        Date.new(year, first_month, 1) rescue start_date
+      else
+        start_date
+      end
+    when 'year'
+      ref_yr = filters[:year_from].presence || Array.wrap(filters[:year]).min
+      ref_yr ? (Date.new(ref_yr.to_s.to_i, 1, 1) rescue start_date) : start_date
+    else
+      start_date
     end
   end
 

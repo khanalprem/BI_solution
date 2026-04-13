@@ -41,7 +41,7 @@ export default function FinancialDashboard() {
       accessorKey: 'gl_code',
       header: 'GL Code',
       enableColumnFilter: true,
-      cell: ({ row }) => <span className="font-mono text-[11px] text-text-primary">{row.original.gl_code}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs text-text-primary">{row.original.gl_code}</span>,
     },
     {
       accessorKey: 'gl_desc',
@@ -69,7 +69,7 @@ export default function FinancialDashboard() {
       enableColumnFilter: true,
       filterFn: 'numberRange',
       meta: { filterType: 'number-range' },
-      cell: ({ row }) => <strong className="font-mono text-[11px]">{formatNPR(row.original.amount)}</strong>,
+      cell: ({ row }) => <strong className="font-mono text-xs">{formatNPR(row.original.amount)}</strong>,
     },
     {
       accessorKey: 'count',
