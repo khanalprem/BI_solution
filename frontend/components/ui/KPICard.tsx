@@ -75,12 +75,12 @@ const FALLBACK_ACCENT: AccentBundle = {
 
 // Map dim CSS variable to its full accent hex for sparkline rendering
 const ACCENT_SPARK_COLOR_MAP: Record<string, string> = {
-  'var(--accent-blue-dim)':   '#3b82f6',
-  'var(--accent-green-dim)':  '#10b981',
-  'var(--accent-red-dim)':    '#ef4444',
-  'var(--accent-amber-dim)':  '#f59e0b',
-  'var(--accent-purple-dim)': '#8b5cf6',
-  'var(--accent-teal-dim)':   '#06b6d4',
+  'var(--accent-blue-dim)':   '#6366F1',
+  'var(--accent-green-dim)':  '#10B981',
+  'var(--accent-red-dim)':    '#F43F5E',
+  'var(--accent-amber-dim)':  '#F59E0B',
+  'var(--accent-purple-dim)': '#8B5CF6',
+  'var(--accent-teal-dim)':   '#14B8A6',
 };
 
 // Change-indicator classes
@@ -147,14 +147,14 @@ export function KPICard({
         accent.border,
         // Surface — glassmorphism-lite
         'bg-bg-card/95 backdrop-blur-sm',
-        'shadow-[0_4px_16px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.04)]',
+        'shadow-[0_2px_8px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.04)]',
         accent.ring,
         // Interaction
         'cursor-pointer select-none',
         'transition-all duration-200',
         'hover:bg-bg-card-hover hover:border-border-strong hover:shadow-[0_6px_24px_rgba(0,0,0,0.24)]',
         'animate-fade-in',
-        highlighted && 'border-accent-blue/40 shadow-[0_4px_20px_rgba(59,130,246,0.10),inset_0_1px_0_rgba(255,255,255,0.05)]'
+        highlighted && 'border-accent-blue/40 shadow-[0_4px_20px_rgba(99,102,241,0.10),inset_0_1px_0_rgba(255,255,255,0.05)]'
       )}
     >
       {/* ── Top row: label + icon ── */}
