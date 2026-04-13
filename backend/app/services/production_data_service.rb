@@ -21,16 +21,6 @@ class ProductionDataService
       description: 'Balance snapshots by ACID and effective date range (150,000 rows).',
       category: 'fact'
     },
-    'accounts' => {
-      label: 'Accounts',
-      description: 'Rails-managed account table linked to customers (20,000 rows).',
-      category: 'master'
-    },
-    'transactions' => {
-      label: 'Transactions',
-      description: 'Rails-managed transaction table linked to accounts (14,000 rows).',
-      category: 'fact'
-    },
     'dates' => {
       label: 'Date Dimension',
       description: 'Calendar, month, quarter, and year attributes (7,306 rows).',

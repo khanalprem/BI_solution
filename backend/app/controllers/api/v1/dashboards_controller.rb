@@ -563,16 +563,14 @@ module Api
       end
 
       # Lookup personal info from customers table via:
-      # tran_summary.cif_id → accounts.account_number = tran_summary.acct_num → customers.customer_id
+      # customers.customer_id = cif_id directly — no accounts join needed
       def fetch_personal_info(cif_id)
         result = ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'PersonalInfo', [cif_id]).first
           SELECT c.customer_id AS cif_id, c.first_name, c.last_name, c.email,
                  c.phone_number, c.address, c.date_of_birth, c.status AS account_status,
                  EXTRACT(YEAR FROM AGE(c.date_of_birth))::integer AS age
           FROM customers c
-          JOIN accounts a ON a.customer_id = c.id
-          JOIN tran_summary ts ON ts.acct_num = a.account_number
-          WHERE ts.cif_id = $1
+          WHERE c.customer_id = $1
           LIMIT 1
         SQL
 

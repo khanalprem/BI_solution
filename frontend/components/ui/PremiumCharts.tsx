@@ -16,6 +16,7 @@ import {
   MarkLineComponent,
   DataZoomComponent,
   RadarComponent,
+  GraphicComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { ECharts, EChartsCoreOption as EChartsOption } from 'echarts/core';
@@ -26,6 +27,7 @@ echarts.use([
   EBar, ELine, EScatter, EPie, ERadar,
   GridComponent, TooltipComponent, LegendComponent,
   MarkLineComponent, DataZoomComponent, RadarComponent,
+  GraphicComponent,
   CanvasRenderer,
 ]);
 
