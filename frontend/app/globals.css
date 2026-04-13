@@ -66,7 +66,7 @@
   --bg-base:        #F8FAFC;
   --bg-surface:     #FFFFFF;
   --bg-card:        #FFFFFF;
-  --bg-card-hover:  #F1F5F9;
+  --bg-card-hover:  #E2E8F0;
   --bg-input:       #F1F5F9;
 
   --border:         rgba(15,23,42,0.08);
@@ -83,6 +83,9 @@
   --accent-amber-dim:  rgba(245,158,11,0.08);
   --accent-purple-dim: rgba(139,92,246,0.08);
   --accent-teal-dim:   rgba(20,184,166,0.08);
+
+  --accent-red: #E11D48;
+  --noise: none;
 
   --chart-grid:           rgba(15,23,42,0.06);
   --chart-axis:           #94A3B8;
@@ -239,7 +242,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 0%, rgba(59, 130, 246, 0.02) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(99,102,241,0.02) 100%);
   pointer-events: none;
   border-radius: 10px;
 }
@@ -260,7 +263,7 @@ body {
 
 /* ===== Chart Glow Effects ===== */
 .chart-glow-blue {
-  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.25));
+  filter: drop-shadow(0 4px 12px rgba(99,102,241,0.25));
 }
 
 .chart-glow-green {
