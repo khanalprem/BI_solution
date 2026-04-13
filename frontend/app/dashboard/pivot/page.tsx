@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RecordTable } from '@/components/ui/RecordTable';
 import { SearchableMultiSelect } from '@/components/ui/Select';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
@@ -151,10 +152,7 @@ interface DimensionFieldDef {
   description: string;
 }
 
-const DATE_DIM_KEYS = new Set(['tran_date', 'year_month', 'year_quarter', 'year']);
-
 const DATE_FIELD_ORDER = ['year', 'year_quarter', 'year_month', 'tran_date'] as const;
-type DateFieldKey = typeof DATE_FIELD_ORDER[number];
 
 // Fields (besides date container) that get a Pivot button
 const PIVOT_CAPABLE_NON_DATE = new Set(['part_tran_type', 'tran_type', 'gl_sub_head_code']);
@@ -165,7 +163,7 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'gam_province',     label: 'GAM Province',     type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch (GAM)' },
   { key: 'gam_cluster',      label: 'GAM Cluster',      type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Account branch cluster (GAM)' },
   { key: 'gam_solid',        label: 'Account SOL ID',   type: 'categorical', filterKey: 'solid',         optionsKey: 'solids',            description: 'SOL identifier for account routing' },
-  { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Full or partial account number (ILIKE search)' },
+  { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Account number (exact match)' },
   { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name' },
   { key: 'cif_id',           label: 'CIF Id',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
   // ── Transaction dimensions ────────────────────────────────────────────────
@@ -1176,13 +1174,12 @@ export default function PivotDashboard() {
                           className="flex items-center gap-3 px-4 py-2 cursor-pointer select-none"
                           onClick={() => toggleDimension(field.key)}
                         >
-                          <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-accent-amber bg-accent-amber' : 'border-border'}`}>
-                            {selected && (
-                              <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="1.5,5 4,7.5 8.5,2" />
-                              </svg>
-                            )}
-                          </span>
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={() => {}}
+                            tabIndex={-1}
+                            className="pointer-events-none data-[state=checked]:bg-accent-amber data-[state=checked]:border-accent-amber"
+                          />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center flex-wrap gap-1.5">
                               <span className={`text-[12px] font-medium ${selected ? 'text-accent-amber' : 'text-text-primary'}`}>
@@ -1285,13 +1282,12 @@ export default function PivotDashboard() {
                         onClick={() => toggleDimension(field.key)}
                       >
                         {/* Dimension checkbox */}
-                        <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-accent-blue bg-accent-blue' : 'border-border'}`}>
-                          {selected && (
-                            <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="1.5,5 4,7.5 8.5,2" />
-                            </svg>
-                          )}
-                        </span>
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => {}}
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center flex-wrap gap-1.5">
@@ -1386,7 +1382,13 @@ export default function PivotDashboard() {
                           {field.type === 'categorical' && (
                             <SearchableMultiSelect
                               value={getMultiValue(field)}
-                              onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)}
+                              onChange={(vals) => {
+                                setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined);
+                                // Auto-add as dimension so filtered rows are immediately visible
+                                if (vals.length > 0 && !selectedDimensions.includes(field.key)) {
+                                  setSelectedDimensions((prev) => [...prev, field.key]);
+                                }
+                              }}
                               options={getOptions(field)}
                               placeholder={`Filter by ${field.label.toLowerCase()}…`}
                             />
@@ -1394,13 +1396,27 @@ export default function PivotDashboard() {
 
                           {/* Text → ILIKE search */}
                           {field.type === 'text' && (
-                            <input
-                              type="text"
-                              value={(filters[field.filterKey!] as string) ?? ''}
-                              onChange={(e) => setFieldFilter(field.filterKey!, e.target.value.trim() || undefined)}
-                              placeholder={field.key === 'acct_num' ? 'Partial account number (ILIKE)' : 'Partial CIF ID (ILIKE)'}
-                              className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                            />
+                            <>
+                              <input
+                                type="text"
+                                value={(filters[field.filterKey!] as string) ?? ''}
+                                onChange={(e) => {
+                                  const value = e.target.value.trim() || undefined;
+                                  setFieldFilter(field.filterKey!, value);
+                                  // Auto-add as dimension so filtered rows are immediately visible
+                                  if (value && !selectedDimensions.includes(field.key)) {
+                                    setSelectedDimensions((prev) => [...prev, field.key]);
+                                  }
+                                }}
+                                placeholder={field.key === 'acct_num' ? 'Account number (exact match)' : 'Partial CIF ID (ILIKE)'}
+                                className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+                              />
+                              {!selectedDimensions.includes(field.key) && (
+                                <p className="text-[9.5px] text-text-muted mt-1">
+                                  Typing will also add <span className="font-semibold text-text-secondary">{field.label}</span> as a GROUP BY dimension.
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1452,21 +1468,22 @@ export default function PivotDashboard() {
                   const orderIdx = orderFields.indexOf(measure.key);
                   return (
                     <li key={measure.key} className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${active ? (ordered ? 'bg-accent-amber/5' : 'bg-accent-blue/5') : 'hover:bg-bg-hover'}`}>
-                      {/* Select checkbox */}
-                      <button
-                        type="button"
-                        disabled={isLast}
+                      {/* Select checkbox — div wrapper avoids button-in-button (Radix Checkbox renders as button) */}
+                      <div
+                        role="button"
+                        tabIndex={isLast ? -1 : 0}
+                        aria-disabled={isLast}
                         title={isLast ? 'At least one standard measure is required' : undefined}
-                        onClick={() => toggleMeasure(measure.key)}
-                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left disabled:cursor-not-allowed"
+                        onClick={isLast ? undefined : () => toggleMeasure(measure.key)}
+                        onKeyDown={isLast ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMeasure(measure.key); }}
+                        className={`flex items-center gap-2.5 flex-1 min-w-0 text-left ${isLast ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                       >
-                        <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${active ? 'border-accent-blue bg-accent-blue' : 'border-border'}`}>
-                          {active && (
-                            <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="1.5,5 4,7.5 8.5,2" />
-                            </svg>
-                          )}
-                        </span>
+                        <Checkbox
+                          checked={active}
+                          onCheckedChange={() => {}}
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className={`text-[12px] font-medium ${active ? 'text-accent-blue' : 'text-text-primary'}`}>{measure.label}</p>
@@ -1478,7 +1495,7 @@ export default function PivotDashboard() {
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 font-mono">{measure.description}</p>
                         </div>
-                      </button>
+                      </div>
                       {/* Sort button */}
                       <button
                         type="button"

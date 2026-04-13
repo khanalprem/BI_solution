@@ -471,7 +471,7 @@ function NavItem({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
+        <TooltipContent side="right" className="z-[200] text-xs">
           {label}
           {badge && <span className="ml-1 text-accent-red">({badge})</span>}
         </TooltipContent>

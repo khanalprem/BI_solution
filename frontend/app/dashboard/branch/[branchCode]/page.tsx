@@ -39,26 +39,26 @@ export default function BranchDetailPage() {
 
   // Core metrics — one row per branch (limit 1 since filtered to this branch)
   const { data: branchSummary, isLoading: loadingSummary } = useProductionExplorer(
-    filters, 'gam_branch',
+    filters, ['gam_branch'],
     ['total_amount', 'transaction_count', 'unique_accounts', 'unique_customers', 'credit_amount', 'debit_amount', 'net_flow'],
-    1, 1
+    [], 1, 1
   );
 
   // GL codes active in this period
   const { data: glBreakdownRaw, isLoading: loadingGL } = useProductionExplorer(
-    filters, 'gl_sub_head_code',
+    filters, ['gl_sub_head_code'],
     ['credit_amount', 'debit_amount', 'net_flow'],
-    1, 100
+    [], 1, 100
   );
 
   // Daily trend
   const { data: trendDataRaw, isLoading: loadingTrend } = useProductionExplorer(
-    filters, 'tran_date', ['total_amount'], 1, 100
+    filters, ['tran_date'], ['total_amount'], [], 1, 100
   );
 
   // Channel distribution
   const { data: channelDataRaw, isLoading: loadingChannel } = useProductionExplorer(
-    filters, 'tran_source', ['total_amount'], 1, 20
+    filters, ['tran_source'], ['total_amount'], [], 1, 20
   );
 
   const isLoading = loadingSummary || loadingTrend || loadingChannel || loadingGL;

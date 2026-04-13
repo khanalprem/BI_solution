@@ -141,7 +141,7 @@ module Api
               type: t.part_tran_type == 'CR' ? 'income' : 'expense',
               part_tran_type: t.part_tran_type,
               amount: t.tran_amt.to_f,
-              balance_after: t.eod_balance.to_f,
+              balance_after: t[:eod_balance].to_f,
               account_number: t.acct_num.to_s,
               acid: t.acid.to_s
             }

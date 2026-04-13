@@ -11,142 +11,100 @@ import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable'
 import Link from 'next/link';
 import type { ProvinceMetrics as PM } from '@/types';
 
-// ── Apache ECharts: Province horizontal bar + transaction count line ──
+// ── Apache ECharts: Province horizontal bar ──
 function ProvinceBarChart({ data }: { data: PM[] }) {
-  const sorted = [...data].sort((a, b) => a.total_amount - b.total_amount);
+  // Sort ascending so the highest-volume province sits at the top of the chart
+  const sorted  = [...data].sort((a, b) => a.total_amount - b.total_amount);
   const labels  = sorted.map(p => formatProvinceLabel(p.province));
-  const amounts = sorted.map(p => +(p.total_amount / 1e7).toFixed(2));
+  const amounts = sorted.map(p => +(p.total_amount / 1e7).toFixed(1));  // Crores
   const counts  = sorted.map(p => p.transaction_count);
-  const maxAmt  = Math.max(...amounts, 1);
 
   const chartRef = useEChart(() => {
     const t = {
-      bg:        'transparent',
       tooltipBg: css('--chart-tooltip-bg',     '#1a1e2e'),
       tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
       textPri:   css('--text-primary',  '#f0f2f8'),
       textMuted: css('--text-muted',    '#555d75'),
       textSec:   css('--text-secondary','#8b92a9'),
-      grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
-      axisLine:  css('--border',        'rgba(255,255,255,0.07)'),
+      grid:      css('--chart-grid',    'rgba(255,255,255,0.06)'),
     };
 
     return {
-      backgroundColor: t.bg,
-      grid: { left: 90, right: 60, top: 10, bottom: 30 },
+      backgroundColor: 'transparent',
+      grid: { left: 100, right: 110, top: 8, bottom: 24 },
       tooltip: {
         trigger: 'axis',
+        axisPointer: { type: 'shadow' },
         backgroundColor: t.tooltipBg,
         borderColor: t.tooltipBd,
         textStyle: { color: t.textPri, fontSize: 11 },
-        formatter: (params: { seriesName: string; value: number }[]) =>
-          params.map(p =>
-            `<span style="color:${p.seriesName === 'Volume' ? '#3b82f6' : '#10b981'}">${p.seriesName}</span>: ${
-              p.seriesName === 'Volume' ? `Rs. ${p.value}Cr` : p.value.toLocaleString()
-            }`
-          ).join('<br/>'),
-      },
-      legend: {
-        data: ['Volume', 'Transactions'],
-        textStyle: { color: t.textSec, fontSize: 10 },
-        top: 0, right: 0,
-      },
-      xAxis: [
-        {
-          type: 'value',
-          name: 'Rs. Cr',
-          nameTextStyle: { color: t.textMuted, fontSize: 9 },
-          axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${v}Cr` },
-          splitLine: { lineStyle: { color: t.grid } },
-          axisLine: { show: false },
-          max: Math.ceil(maxAmt * 1.1),
+        formatter: (params: { name: string; value: number; dataIndex: number }[]) => {
+          const i = params[0].dataIndex;
+          return `<b style="color:${t.textPri}">${params[0].name}</b><br/>` +
+            `<span style="color:#6366f1">Volume</span>: Rs. ${amounts[i]}Cr<br/>` +
+            `<span style="color:#10b981">Transactions</span>: ${counts[i].toLocaleString()}`;
         },
-        {
-          type: 'value',
-          name: 'Txns',
-          nameTextStyle: { color: t.textMuted, fontSize: 9 },
-          axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${(v/1000).toFixed(0)}K` },
-          splitLine: { show: false },
-          axisLine: { show: false },
-        },
-      ],
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: { color: t.textMuted, fontSize: 9, formatter: (v: number) => `${v}Cr` },
+        splitLine: { lineStyle: { color: t.grid } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
       yAxis: {
         type: 'category',
         data: labels,
-        axisLabel: { color: t.textSec, fontSize: 10 },
-        axisLine: { lineStyle: { color: t.axisLine } },
+        axisLabel: { color: t.textSec, fontSize: 10.5 },
+        axisLine: { show: false },
         axisTick: { show: false },
       },
-      series: [
-        {
-          name: 'Volume',
-          type: 'bar',
-          xAxisIndex: 0,
-          data: amounts.map((v, i) => ({
-            value: v,
-            itemStyle: {
-              color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
-                colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.5)' }, { offset: 1, color: '#3b82f6' }] },
-              borderRadius: [0, 4, 4, 0],
+      series: [{
+        name: 'Volume',
+        type: 'bar',
+        data: amounts.map((v, i) => ({
+          value: v,
+          itemStyle: {
+            color: {
+              type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+              colorStops: [
+                { offset: 0, color: 'rgba(99,102,241,0.25)' },
+                { offset: 1, color: '#6366F1' },
+              ],
             },
-            label: {
-              show: i === amounts.length - 1,
-              position: 'right',
-              formatter: `Rs. ${v}Cr`,
-              color: t.textMuted,
-              fontSize: 9,
+            borderRadius: [0, 5, 5, 0],
+          },
+          label: {
+            show: true,
+            position: 'right',
+            formatter: () => `${amounts[i]}Cr  ·  ${(counts[i]/1000).toFixed(1)}K txns`,
+            color: t.textMuted,
+            fontSize: 9,
+          },
+        })),
+        barMaxWidth: 22,
+        emphasis: {
+          itemStyle: {
+            color: {
+              type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+              colorStops: [
+                { offset: 0, color: 'rgba(99,102,241,0.4)' },
+                { offset: 1, color: '#818cf8' },
+              ],
             },
-          })),
-          barMaxWidth: 18,
-          emphasis: { itemStyle: { color: '#60a5fa' } },
+          },
         },
-        {
-          name: 'Transactions',
-          type: 'line',
-          xAxisIndex: 1,
-          data: counts,
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 5,
-          lineStyle: { color: '#10b981', width: 2 },
-          itemStyle: { color: '#10b981' },
-          areaStyle: { color: 'rgba(16,185,129,0.08)' },
-        },
-      ],
+      }],
     };
   }, [data]);
 
   return <div ref={chartRef} className="h-[240px] w-full" />;
 }
 
-// ── Apache ECharts: Province radar ──
-function ProvinceRadarChart({ data }: { data: PM[] }) {
-  if (!data.length) return null;
-  const maxAmt    = Math.max(...data.map(p => p.total_amount), 1);
-  const maxCount  = Math.max(...data.map(p => p.transaction_count), 1);
-  const maxAccts  = Math.max(...data.map(p => p.unique_accounts), 1);
-  const maxBranch = Math.max(...data.map(p => p.branch_count), 1);
-
-  const indicators = [
-    { name: 'Volume',     max: 100 },
-    { name: 'Txns',       max: 100 },
-    { name: 'Accounts',   max: 100 },
-    { name: 'Branches',   max: 100 },
-    { name: 'Avg/Branch', max: 100 },
-  ];
-
-  const seriesData = data.map(p => ({
-    name: formatProvinceLabel(p.province),
-    value: [
-      +((p.total_amount / maxAmt) * 100).toFixed(1),
-      +((p.transaction_count / maxCount) * 100).toFixed(1),
-      +((p.unique_accounts / maxAccts) * 100).toFixed(1),
-      +((p.branch_count / maxBranch) * 100).toFixed(1),
-      +((p.avg_per_branch / (maxAmt / maxBranch)) * 100).toFixed(1),
-    ],
-  }));
-
-  const PALETTE = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ef4444','#ec4899'];
+// ── Apache ECharts: Province donut (volume share) ──
+function ProvinceDonutChart({ data }: { data: PM[] }) {
+  const sorted = [...data].sort((a, b) => b.total_amount - a.total_amount);
+  const PALETTE = ['#6366F1','#10b981','#f59e0b','#8b5cf6','#14b8a6','#f43f5e','#ec4899'];
 
   const chartRef = useEChart(() => {
     const t = {
@@ -154,46 +112,47 @@ function ProvinceRadarChart({ data }: { data: PM[] }) {
       tooltipBd: css('--chart-tooltip-border', 'rgba(255,255,255,0.14)'),
       textPri:   css('--text-primary',  '#f0f2f8'),
       textSec:   css('--text-secondary','#8b92a9'),
-      grid:      css('--chart-grid',    'rgba(255,255,255,0.08)'),
     };
 
     return {
       backgroundColor: 'transparent',
       tooltip: {
+        trigger: 'item',
         backgroundColor: t.tooltipBg,
         borderColor: t.tooltipBd,
         textStyle: { color: t.textPri, fontSize: 11 },
+        formatter: (p: { name: string; value: number; percent: number }) =>
+          `<b>${p.name}</b><br/>Rs. ${(p.value / 1e7).toFixed(1)} Cr &nbsp;·&nbsp; ${p.percent.toFixed(1)}%`,
       },
       legend: {
-        data: seriesData.map(s => s.name),
-        textStyle: { color: t.textSec, fontSize: 9 },
-        bottom: 0, itemWidth: 8, itemHeight: 8,
-      },
-      radar: {
-        indicator: indicators,
-        shape: 'polygon',
-        splitNumber: 4,
-        center: ['50%', '46%'],
-        radius: '62%',
-        axisName: { color: t.textSec, fontSize: 10 },
-        splitLine: { lineStyle: { color: t.grid } },
-        splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'] } },
-        axisLine: { lineStyle: { color: t.grid } },
+        orient: 'vertical',
+        right: 4,
+        top: 'middle',
+        textStyle: { color: t.textSec, fontSize: 9.5 },
+        itemWidth: 8, itemHeight: 8,
+        itemGap: 8,
       },
       series: [{
-        type: 'radar',
-        data: seriesData.map((s, i) => ({
-          name: s.name,
-          value: s.value,
-          lineStyle: { color: PALETTE[i % PALETTE.length], width: 1.5 },
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['34%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 5, borderColor: 'rgba(0,0,0,0.25)', borderWidth: 2 },
+        label: { show: false },
+        emphasis: {
+          label: { show: true, fontSize: 11, fontWeight: 'bold', color: t.textPri },
+          scale: true, scaleSize: 6,
+        },
+        data: sorted.map((p, i) => ({
+          name: formatProvinceLabel(p.province),
+          value: p.total_amount,
           itemStyle: { color: PALETTE[i % PALETTE.length] },
-          areaStyle: { color: `${PALETTE[i % PALETTE.length]}18` },
-          symbol: 'circle', symbolSize: 4,
         })),
       }],
     };
   }, [data]);
 
+  if (!data.length) return null;
   return <div ref={chartRef} className="h-[260px] w-full" />;
 }
 
@@ -639,11 +598,11 @@ export default function ExecutiveDashboard() {
             <ProvinceBarChart data={data?.by_province || []} />
           </div>
 
-          {/* Radar */}
+          {/* Donut */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-            <div className="text-[12px] font-semibold text-text-primary mb-0.5">Province Radar</div>
-            <div className="text-[10px] text-text-muted mb-3">Multi-metric comparison</div>
-            <ProvinceRadarChart data={data?.by_province || []} />
+            <div className="text-[12px] font-semibold text-text-primary mb-0.5">Province Volume Share</div>
+            <div className="text-[10px] text-text-muted mb-3">Share of total transaction volume</div>
+            <ProvinceDonutChart data={data?.by_province || []} />
           </div>
         </div>
 

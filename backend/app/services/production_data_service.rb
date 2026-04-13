@@ -814,8 +814,7 @@ class ProductionDataService
     end
 
     if filters[:acct_num].present?
-      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:acct_num].to_s.strip)}%"
-      clauses << "acct_num::text ILIKE #{conn.quote(pattern)}"
+      clauses << "acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
     end
 
     if filters[:cif_id].present?
@@ -1065,8 +1064,7 @@ class ProductionDataService
     clauses = categorical_filter_clauses(filters)
 
     if filters[:acct_num].present?
-      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:acct_num].to_s.strip)}%"
-      clauses << "acct_num::text ILIKE #{conn.quote(pattern)}"
+      clauses << "acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
     end
     if filters[:cif_id].present?
       pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
