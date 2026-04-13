@@ -240,3 +240,8 @@ UI_IMPROVEMENTS_COMPLETE.md
 # ----------------------------------------------------------
 .cursor/skills/bankbi-data-integration/
 .cursor/skills/bankbi-ui-styleguide/
+
+# ----------------------------------------------------------
+# Claude Code internal directories (worktrees, temp agents)
+# ----------------------------------------------------------
+.claude/worktrees/
