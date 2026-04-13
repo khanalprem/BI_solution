@@ -1,0 +1,361 @@
+# BankBI — Claude Code Guide
+
+Nepal Banking Intelligence Platform · Rails 7 API + Next.js 15 + PostgreSQL
+
+---
+
+## Quick Start
+
+```bash
+# Backend (port 3001)
+cd backend && bundle install && rails s -p 3001
+
+# Frontend (port 3000)
+cd frontend && npm install && npm run dev
+
+# TypeScript check (run after every edit)
+cd frontend && npx tsc --noEmit
+```
+
+---
+
+## ⚠️ Golden Rules — Non-Negotiable for Every Change
+
+These rules apply to **every fix, every feature, every refactor** — no exceptions.
+
+### Rule 1 — Run tests BEFORE making any fix
+```bash
+# Frontend (vitest)
+cd frontend && npm test
+
+# Backend (RSpec)
+cd backend && bundle exec rspec
+```
+- If tests are already failing → fix them first before touching anything else
+- If no tests exist for the area you're changing → write one before the fix
+
+### Rule 2 — Update `skills/page.tsx` for EVERY data model change
+
+| What changed | What to update in skills/page.tsx |
+|---|---|
+| New dimension added | `DIMENSIONS` array + count in stat pill + section header |
+| Dimension removed/renamed | Same |
+| New measure added | `MEASURES` array + count in stat pill + section header |
+| Measure removed/renamed | Same |
+| New period comparison | `PERIODS` array |
+| New page added | Page Status table |
+| Stored procedure param changed | Procedure Params section |
+
+### Rule 3 — Update `CLAUDE.md` for EVERY architectural change
+
+| What changed | What to update in CLAUDE.md |
+|---|---|
+| New dimension | DIMENSIONS hash example |
+| New measure | MEASURES hash + "Adding a new measure" checklist |
+| Comparison period logic change | Comparison Period Architecture section |
+| New file/component | Project Structure tree |
+| New convention | Relevant convention section |
+| New known issue / tech debt | Known Issues section |
+
+### Rule 4 — TypeScript check after every frontend edit
+```bash
+cd frontend && npx tsc --noEmit 2>&1 | grep "pivot/page\|skills/page"
+```
+Pre-existing errors in `board/`, `branch/`, `customer/`, `executive/` — ignore those.
+
+### Rule 5 — Run tests AFTER your fix to confirm nothing broke
+```bash
+cd frontend && npm test
+cd backend && bundle exec rspec
+```
+
+### Change Completion Checklist
+Before declaring any task done, verify:
+- [ ] `npm test` passes (frontend)
+- [ ] `bundle exec rspec` passes (backend)
+- [ ] `npx tsc --noEmit` has no new errors
+- [ ] `skills/page.tsx` updated if data model changed
+- [ ] `CLAUDE.md` updated if architecture changed
+
+---
+
+## Architecture
+
+```
+Browser (Next.js 15, TanStack Query, Recharts)
+    ↓ REST/JSON
+Rails 7 API  →  ProductionDataService  →  get_tran_summary (stored proc)
+                                                ↓
+                                    tran_summary (partitioned fact)
+                                    eab (balance table, optional LEFT JOIN)
+```
+
+**Key ports:** Frontend `localhost:3000` · Backend `localhost:3001/api/v1`
+
+No ETL, no cache — every query hits live PostgreSQL.
+
+---
+
+## Project Structure
+
+```
+BI_solution/
+├── CLAUDE.md                       ← you are here
+├── backend/
+│   ├── app/
+│   │   ├── controllers/api/v1/     ← REST endpoints (production_data, filters, auth)
+│   │   ├── services/
+│   │   │   └── production_data_service.rb  ← THE core service (dimensions, measures,
+│   │   │                                      period WHERE generation, proc call)
+│   │   └── models/                 ← User, Branch, Customer (Rails DB)
+│   └── config/routes.rb
+├── frontend/
+│   ├── app/
+│   │   ├── dashboard/
+│   │   │   ├── pivot/page.tsx      ← Pivot Analysis (most complex page)
+│   │   │   ├── executive/page.tsx
+│   │   │   ├── branch/page.tsx
+│   │   │   ├── customer/page.tsx
+│   │   │   └── skills/page.tsx     ← Platform Guide / Data Dictionary (this UI)
+│   │   └── signin/page.tsx
+│   ├── components/
+│   │   ├── layout/TopBar.tsx
+│   │   └── ui/                     ← RecordTable, Select, charts, etc.
+│   ├── lib/
+│   │   ├── api.ts                  ← Axios client (baseURL = :3001)
+│   │   ├── hooks/
+│   │   │   ├── useDashboardPage.ts ← shared filter/period state hook
+│   │   │   └── useDashboardData.ts ← TanStack Query wrappers
+│   │   └── formatters.ts           ← NPR formatting, date helpers
+│   └── types/index.ts              ← DashboardFilters, FilterValuesResponse, etc.
+└── docker-compose.yml
+```
+
+---
+
+## Key Service: ProductionDataService
+
+`backend/app/services/production_data_service.rb` — **read this first before touching any data logic.**
+
+### DIMENSIONS hash
+
+Every available GROUP BY field. Adding a new field = add to this hash.
+```ruby
+DIMENSIONS = {
+  'gam_branch'     => { label: 'GAM Branch',    sql: 'gam_branch' },
+  'tran_date_bal'  => { label: 'TRAN Date Balance', sql: 'e.tran_date_bal',
+                         eab_required: true, outer_join_field: true },
+  # ... see service file for full list
+}
+```
+
+- `eab_required: true` → adds `LEFT JOIN eab ON ...` to the query
+- `outer_join_field: true` → field lives in outer SELECT only (cannot be in GROUP BY)
+
+### MEASURES hash
+
+Every selectable aggregation. Keys must match frontend `STANDARD_MEASURES` keys exactly.
+```ruby
+MEASURES = {
+  'tran_amt'        => { label: 'TRAN Amount',        select_sql: 'SUM(tran_amt) AS tran_amt',           order_sql: 'SUM(tran_amt) DESC' },
+  'tran_count'      => { label: 'TRAN Count',         select_sql: 'SUM(tran_count) AS tran_count',        order_sql: 'SUM(tran_count) DESC' },
+  'signed_tranamt'  => { label: 'Signed TRAN Amount', select_sql: 'SUM(signed_tranamt) AS signed_tranamt', order_sql: 'SUM(signed_tranamt) DESC' },
+  'cr_amt'          => { label: 'CR Amount',          select_sql: "SUM(CASE WHEN part_tran_type='CR' ...) AS cr_amt",   ... },
+  'cr_count'        => { label: 'CR Count',           ... },
+  'dr_amt'          => { label: 'DR Amount',          ... },
+  'dr_count'        => { label: 'DR Count',           ... },
+  'tran_acct_count' => { label: 'TRAN Acct Count',   select_sql: 'COUNT(DISTINCT acct_num) AS tran_acct_count', ... },
+  'tran_maxdate'    => { label: 'TRAN Max Date',      select_sql: 'MAX(tran_date) AS tran_maxdate',       ... },
+  # Legacy aliases kept for backwards compatibility:
+  # 'total_amount', 'transaction_count', 'unique_accounts', 'unique_customers',
+  # 'credit_amount', 'debit_amount', 'net_flow'
+}
+```
+
+All 9 canonical keys exist as columns in `tran_summary` (confirmed from `information_schema`).
+`tran_date_bal` is a DIMENSION (EAB join), not a MEASURE — do not add it to MEASURES.
+
+### Period WHERE generation
+
+`build_period_where(period_key, filters)` builds the comparison-period WHERE clause.
+- `thismonth` = full calendar month (1st → last day)
+- `thisyear` = full calendar year (Jan 1 → Dec 31)
+- Comparison rows get their date-dim value prefixed: `"this_month:2024-02-01"` — parsed in frontend by `parsePivotHeader()`
+
+### `non_date_filter_clauses(filters)` 
+
+Used by period WHERE to include all non-date filters (categorical, ILIKE text, amount range).
+
+---
+
+## Pivot Analysis Architecture (`pivot/page.tsx`)
+
+The most sophisticated page. Key concepts:
+
+### Separator constants
+```typescript
+const PIVOT_SEP     = '\x00';  // pivotValue + SEP + measureKey  → cell lookup key
+const PIVOT_DIM_SEP = '\x01';  // dim1Value  + SEP + dim2Value   → composite pivot column key
+```
+
+### State model
+| State | Purpose |
+|-------|---------|
+| `selectedDimensions` | All active GROUP BY fields |
+| `datePivotEnabled` | Whether date fields pivot to columns |
+| `dateSortEnabled` | Whether date fields control ORDER BY |
+| `nonDatePartitions` | Non-date fields pivoted to columns (`part_tran_type`, `tran_type`, `gl_sub_head_code`) |
+| `orderFields` | Manual ORDER BY additions |
+
+### Derived memos
+- `partitionDimensions` = datePivotFields + nonDatePartitions (in `DATE_FIELD_ORDER`)
+- `rowDims` = selectedDimensions − partitionDimensions (these become left-side rows)
+- `partitionbyClause` → sent to backend as `PARTITION BY ...`
+
+### Multi-level pivot headers (Excel-style)
+When ≥2 dimensions are pivoted (e.g. `tran_date` + `part_tran_type`):
+- `_pivot_key` = `"2024-02-01\x01CR"` (joined with `PIVOT_DIM_SEP`)
+- `PivotTable` detects `PIVOT_DIM_SEP` in `pivotValues`, builds `level1Groups`
+- Renders **3 header rows**: date (spanning) → CR/DR → measures (if multi)
+- Cell lookup: `row["2024-02-01\x01CR\x00tran_amt"]`
+
+### `buildPivotData(rows, pivotFieldKey, rowDimKeys, measureKeys)`
+Pandas `df.pivot()` equivalent. Stores cells as `${pivotValue}\x00${measureKey}`.
+
+---
+
+## Frontend Conventions
+
+### Component patterns
+- No `useMemo`/`useCallback` inside nested components
+- Module-level helper components defined **before** their parent (avoids new component type on re-render)
+- `useCallback` dep arrays must include all referenced state/props
+
+### Adding a new dimension (checklist)
+1. Add to `DIMENSIONS` hash in `production_data_service.rb`
+2. Add to `DIMENSION_FIELDS` array in `pivot/page.tsx`
+3. If date-like → add to `DATE_DIM_KEYS` set and `DATE_FIELD_ORDER`
+4. If pivot-capable (non-date) → add to `PIVOT_CAPABLE_NON_DATE` set
+5. Update `skills/page.tsx` `DIMENSIONS` constant
+
+### Adding a new measure (checklist)
+1. Add to `MEASURES` hash in `production_data_service.rb` (key = column alias returned to frontend)
+2. Add to `STANDARD_MEASURES` array in `pivot/page.tsx` (same key)
+3. Update `skills/page.tsx` `MEASURES` constant and count (stat pill + section header)
+4. Update `CLAUDE.md` MEASURES hash summary above
+
+### TypeScript check
+```bash
+cd frontend && npx tsc --noEmit 2>&1 | grep "pivot/page"
+```
+Pre-existing errors exist in `board/`, `branch/`, `customer/`, `executive/` pages — ignore those.
+
+### Styling
+- Design tokens: `text-text-primary`, `text-accent-blue`, `bg-bg-card`, etc. (CSS vars)
+- Color palette: blue (categorical), green (text/measures), amber (date/periods), purple (pivot), teal (EAB/special), red (critical)
+- `font-mono text-[11px]` for numeric cells in tables
+
+---
+
+## Backend Conventions
+
+### Adding a new period comparison
+1. Add entry to `PERIOD_COMPARISONS` hash in `production_data_service.rb`
+2. Add `*_where` param to `ALL_PERIOD_PARAMS` in `pivot/page.tsx`
+3. Add measure entries to `COMPARISON_MEASURES` in `pivot/page.tsx`
+4. Add to `PERIOD_DISPLAY` map and `PERIODS` in `skills/page.tsx`
+
+### Quote safety
+Always use `@connection.quote(value)` or `ActiveRecord::Base.sanitize_sql_like()` — never string interpolation with user input.
+
+### Running Rails commands
+```bash
+cd backend
+bundle exec rails c        # console
+bundle exec rails routes   # route list
+bundle exec rails db:migrate
+```
+
+---
+
+## Data Model Quick Reference
+
+| Table | Rows | Role |
+|-------|------|------|
+| `tran_summary` | 164 K | Primary partitioned fact (yearly: 2021–2025) |
+| `eab` | 150 K | EOD balance snapshots (acid + balance_date) |
+| `htd` | 20 M+ | Raw ledger detail — always filter by tran_date |
+| `gam` | 50 K | Account master (acid PK, cif_id FK) |
+| `branch` / `branch_cdc` | ~100 | Branch dimension (sol_id PK) |
+| `cluster` | ~10 | Cluster hierarchy above branches |
+| `dates` | 7 306 | Calendar dimension (pre-computed period boundaries) |
+| `gsh` | 101 | GL sub-head code → description |
+| `user_branch_cluster` | — | Row-level security: user ↔ branch/cluster |
+
+**Join pattern:** `tran_summary` ← `acid` → `eab` (LEFT JOIN, only when `tran_date_bal` selected)
+
+---
+
+## Available Skills (Superpowers v5.0.7)
+
+Invoke with the `Skill` tool before any significant task:
+
+| Skill | When to use |
+|-------|------------|
+| `brainstorming` | Before starting any new feature |
+| `systematic-debugging` | When a bug isn't obvious |
+| `writing-plans` | Before complex multi-file changes |
+| `executing-plans` | While working through a plan |
+| `test-driven-development` | When adding testable backend logic |
+| `requesting-code-review` | After completing a feature |
+| `finishing-a-development-branch` | Before merging |
+| `subagent-driven-development` | For large parallel tasks |
+| `verification-before-completion` | Final check before declaring done |
+
+---
+
+## Page Status
+
+| Route | Status | Notes |
+|-------|--------|-------|
+| `/dashboard/pivot` | ✅ Live | Full pivot analysis, two-tier Excel-style headers |
+| `/dashboard/executive` | ✅ Live | KPIs, trend charts |
+| `/dashboard/branch` | ✅ Live | Branch performance |
+| `/dashboard/branch/[code]` | ✅ Live | Branch detail |
+| `/dashboard/customer` | ✅ Live | Customer portfolio |
+| `/dashboard/customer/[cifId]` | ✅ Live | Customer detail |
+| `/dashboard/skills` | ✅ Live | Platform Guide / Data Dictionary |
+| `/dashboard/financial` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/digital` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/kpi` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/risk` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/employer` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/board` | 🔧 Scaffold | UI only, no API |
+| `/dashboard/scheduled` | 🔧 Scaffold | UI only, no API |
+
+---
+
+## Comparison Period Architecture (important)
+
+The comparison query is a **second call** to `get_tran_summary` with the period's WHERE clause. Key design decision:
+
+- **Comparison GROUP BY excludes date dimensions** — If we kept `GROUP BY acct_num, tran_date` for "this month", the comparison would return 28 separate rows (one per day in Feb), and pagination would cut most off. The first row is often the same date as the main filter, making comparison values look identical to main values.
+- **Fix (implemented)**: `comparison_inner_dim_keys` excludes date dims. Comparison returns **one aggregated row per account** summing the whole period.
+- **Date dim is stamped with period-natural label**: After the comparison query, `sanitized[date_dim] = "#{period_label}:#{stamp_date}"` where `stamp_date` is computed by `period_stamp_date(period:, reference_date:)`:
+  - `thismonth` → `"2024-02"` (YYYY-MM)
+  - `thisyear` → `"2024"` (YYYY)
+  - `prevmonth` → `"2024-01"` (YYYY-MM)
+  - `prevyear` → `"2023"` (YYYY)
+  - `prevdate` → `"2024-01-31"` (YYYY-MM-DD)
+  - So the pivot column is `"this_month:2024-02"`, displayed as `THIS MONTH / 2024-02`.
+- **Comparison restricted to current page**: `dim_value_clauses` restricts comparison query to `acct_num IN (...)` values from the current main page, so comparison columns never show data for different accounts.
+- **ORDER BY**: comparison uses measure-based ORDER BY (`SUM(tran_amt) DESC`), never the date-based ORDER BY from the main query.
+
+---
+
+## Known Issues / Tech Debt
+
+- Pre-existing TypeScript errors in `board/`, `branch/`, `customer/`, `executive/` pages (unrelated to pivot work)
+- `eod_balance` was removed from `DIMENSIONS` in the service and pivot page — it does not exist in `tran_summary` directly; use `tran_date_bal` (from EAB outer join) instead
+- `DATE_FIELD_ORDER` enforces fixed date ordering: `year → year_quarter → year_month → tran_date`
+- Legacy measure aliases (`total_amount`, `transaction_count`, `unique_accounts`, `unique_customers`, `credit_amount`, `debit_amount`, `net_flow`) remain in the backend MEASURES hash for backwards compatibility but are no longer shown in the pivot sidebar — canonical data-dictionary keys are used instead (`tran_amt`, `tran_count`, etc.)

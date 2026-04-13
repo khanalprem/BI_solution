@@ -21,7 +21,7 @@ export default function EmployeeDetailPage() {
   const userId = decodeURIComponent((params?.userId as string) ?? '');
 
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
+  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
   const { data: filterStats } = useFilterStatistics();
 
   const referenceDate = useMemo(

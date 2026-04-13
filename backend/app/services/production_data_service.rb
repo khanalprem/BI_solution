@@ -126,67 +126,122 @@ class ProductionDataService
   }.freeze
 
   DIMENSIONS = {
-    'gam_branch'     => { label: 'Account Branch',   sql: 'gam_branch' },
-    'gam_province'   => { label: 'Account Province', sql: 'gam_province' },
-    'gam_cluster'    => { label: 'Account Cluster',  sql: 'gam_cluster' },
-    'gam_solid'      => { label: 'Account SOL ID',   sql: 'gam_solid' },
-    'tran_source'    => { label: 'Channel',           sql: 'tran_source' },
-    'part_tran_type' => { label: 'CR / DR',           sql: 'part_tran_type' },
-    'product'        => { label: 'Product',           sql: 'product' },
-    'service'        => { label: 'Service',           sql: 'service' },
-    'merchant'       => { label: 'Merchant',          sql: 'merchant' },
-    'gl_sub_head_code' => { label: 'GL Code',         sql: 'gl_sub_head_code' },
-    'entry_user'     => { label: 'Entry User',        sql: 'entry_user' },
-    'vfd_user'       => { label: 'Verified User',     sql: 'vfd_user' },
-    'acct_num'       => { label: 'Account Number',    sql: 'acct_num' },
-    'cif_id'         => { label: 'CIF ID',            sql: 'cif_id' },
-    'tran_date'      => { label: 'Transaction Date',  sql: 'tran_date' },
-    'year_month'     => { label: 'Year Month',        sql: 'year_month' },
-    'year_quarter'   => { label: 'Year Quarter',      sql: 'year_quarter' },
-    'year'           => { label: 'Year',              sql: 'year' },
-    # eod_balance — a direct column in tran_summary; treated as a dimension (GROUP BY field).
-    'eod_balance'    => { label: 'EOD Balance',   sql: 'eod_balance' },
-    # tran_date_bal — comes from the eab table via the outer EAB join.
-    # outer_join_field: true means it cannot be placed in the inner GROUP BY; it is injected
+    # ── Account / customer dimensions ─────────────────────────────────────────
+    'gam_branch'       => { label: 'GAM Branch',        sql: 'gam_branch' },
+    'gam_province'     => { label: 'GAM Province',       sql: 'gam_province' },
+    'gam_cluster'      => { label: 'GAM Cluster',        sql: 'gam_cluster' },
+    'gam_solid'        => { label: 'Account SOL ID',     sql: 'gam_solid' },
+    'acct_num'         => { label: 'ACCT Num',           sql: 'acct_num' },
+    'acct_name'        => { label: 'ACCT Name',          sql: 'acct_name' },
+    'cif_id'           => { label: 'CIF Id',             sql: 'cif_id' },
+    # ── Transaction dimensions ────────────────────────────────────────────────
+    'tran_source'      => { label: 'TRAN Source',        sql: 'tran_source' },
+    'tran_branch'      => { label: 'TRAN Branch',        sql: 'tran_branch' },
+    'tran_cluster'     => { label: 'TRAN Cluster',       sql: 'tran_cluster' },
+    'tran_province'    => { label: 'TRAN Province',      sql: 'tran_province' },
+    'tran_type'        => { label: 'TRAN Type',          sql: 'tran_type' },
+    'part_tran_type'   => { label: 'PART Tran Type',     sql: 'part_tran_type' },
+    'gl_sub_head_code' => { label: 'GL Sub Head',        sql: 'gl_sub_head_code' },
+    'product'          => { label: 'Product',            sql: 'product' },
+    'service'          => { label: 'Service',            sql: 'service' },
+    'merchant'         => { label: 'Merchant',           sql: 'merchant' },
+    # ── User dimensions ───────────────────────────────────────────────────────
+    'entry_user'       => { label: 'ENTRY User',         sql: 'entry_user' },
+    'vfd_user'         => { label: 'VFD User',           sql: 'vfd_user' },
+    # ── Date dimensions ───────────────────────────────────────────────────────
+    'tran_date'        => { label: 'Tran Date',          sql: 'tran_date' },
+    'year_month'       => { label: 'Year Month',         sql: 'year_month' },
+    'year_quarter'     => { label: 'Year Quarter',       sql: 'year_quarter' },
+    'year'             => { label: 'Year',               sql: 'year' },
+    # ── EAB outer-join dimension ──────────────────────────────────────────────
+    # tran_date_bal comes from the eab table via the outer LEFT JOIN.
+    # outer_join_field: true means it cannot be in the inner GROUP BY; it is injected
     # into select_outer so the column is available in the final result set.
-    'tran_date_bal'  => { label: 'EAB Balance',   sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true }
+    'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true }
   }.freeze
 
   MEASURES = {
+    # ── Data-dictionary measures (canonical keys, match tran_summary columns) ──
+    'tran_amt' => {
+      label: 'TRAN Amount',
+      select_sql: 'SUM(tran_amt) AS tran_amt',
+      order_sql:  'SUM(tran_amt) DESC'
+    },
+    'tran_count' => {
+      label: 'TRAN Count',
+      select_sql: 'SUM(tran_count) AS tran_count',
+      order_sql:  'SUM(tran_count) DESC'
+    },
+    'signed_tranamt' => {
+      label: 'Signed TRAN Amount',
+      select_sql: 'SUM(signed_tranamt) AS signed_tranamt',
+      order_sql:  'SUM(signed_tranamt) DESC'
+    },
+    'cr_amt' => {
+      label: 'CR Amount',
+      select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS cr_amt",
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) DESC"
+    },
+    'cr_count' => {
+      label: 'CR Count',
+      select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_count ELSE 0 END) AS cr_count",
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_count ELSE 0 END) DESC"
+    },
+    'dr_amt' => {
+      label: 'DR Amount',
+      select_sql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) AS dr_amt",
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) DESC"
+    },
+    'dr_count' => {
+      label: 'DR Count',
+      select_sql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_count ELSE 0 END) AS dr_count",
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_count ELSE 0 END) DESC"
+    },
+    'tran_acct_count' => {
+      label: 'TRAN Acct Count',
+      select_sql: 'COUNT(DISTINCT acct_num) AS tran_acct_count',
+      order_sql:  'COUNT(DISTINCT acct_num) DESC'
+    },
+    'tran_maxdate' => {
+      label: 'TRAN Max Date',
+      select_sql: 'MAX(tran_date) AS tran_maxdate',
+      order_sql:  'MAX(tran_date) DESC'
+    },
+    # ── Legacy aliases — kept for backwards compatibility ──────────────────────
     'total_amount' => {
       label: 'Total Amount',
       select_sql: 'SUM(tran_amt) AS total_amount',
-      order_sql: 'SUM(tran_amt) DESC'
+      order_sql:  'SUM(tran_amt) DESC'
     },
     'transaction_count' => {
       label: 'Transaction Count',
       select_sql: 'SUM(tran_count) AS transaction_count',
-      order_sql: 'SUM(tran_count) DESC'
+      order_sql:  'SUM(tran_count) DESC'
     },
     'unique_accounts' => {
       label: 'Unique Accounts',
       select_sql: 'COUNT(DISTINCT acct_num) AS unique_accounts',
-      order_sql: 'COUNT(DISTINCT acct_num) DESC'
+      order_sql:  'COUNT(DISTINCT acct_num) DESC'
     },
     'unique_customers' => {
       label: 'Unique Customers',
       select_sql: 'COUNT(DISTINCT cif_id) AS unique_customers',
-      order_sql: 'COUNT(DISTINCT cif_id) DESC'
+      order_sql:  'COUNT(DISTINCT cif_id) DESC'
     },
     'credit_amount' => {
       label: 'Credit Amount',
       select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS credit_amount",
-      order_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) DESC"
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) DESC"
     },
     'debit_amount' => {
       label: 'Debit Amount',
       select_sql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) AS debit_amount",
-      order_sql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) DESC"
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) DESC"
     },
     'net_flow' => {
       label: 'Net Flow',
       select_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) AS net_flow",
-      order_sql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) DESC"
+      order_sql:  "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) DESC"
     }
   }.freeze
 
@@ -477,23 +532,52 @@ class ProductionDataService
     # This keeps memory bounded: only page_size * num_periods rows.
     comparison_sanitized = []
     if has_comparisons && main_sanitized.any?
-      non_date_dims = dimension_keys.reject { |k| %w[tran_date year_month year_quarter year].include?(k) }
+      date_dim_keys = %w[tran_date year_month year_quarter year]
+      non_date_dims = dimension_keys.reject { |k| date_dim_keys.include?(k) }
 
-      # Only restrict comparison queries by LOW-CARDINALITY dimensions.
-      # High-cardinality dims (acct_num, cif_id, entry_user, vfd_user) would filter out
-      # accounts that had no transactions in the comparison period, returning empty results.
-      low_cardinality_dims = %w[gam_branch gam_province gam_cluster gam_solid tran_source part_tran_type product service merchant gl_sub_head_code]
-      restrictable_dims = non_date_dims.select { |k| low_cardinality_dims.include?(k) }
-
-      dim_value_clauses = restrictable_dims.filter_map do |dim_key|
+      # Restrict the comparison query to EXACTLY the non-date dimension values visible on
+      # the current main page. This is safe for ALL cardinalities because:
+      #   • The comparison GROUP BY no longer includes the date dim, so one row is returned
+      #     per (acct_num, …) combination — never a "per-date" explosion.
+      #   • If an account had zero transactions in the comparison period the column
+      #     correctly shows "—" rather than silently carrying the wrong account's data.
+      # Without this restriction the comparison would return the top-N accounts globally
+      # (by amount) for the comparison period — completely different accounts from those
+      # on the current page — making every comparison column show "—".
+      dim_value_clauses = non_date_dims.filter_map do |dim_key|
         values = main_sanitized.map { |r| r[dim_key] }.compact.uniq
         next if values.empty?
         "#{DIMENSIONS.fetch(dim_key).fetch(:sql)} IN (#{values.map { |v| conn.quote(v) }.join(', ')})"
       end
 
-      # For each active comparison period, call the procedure with the period's WHERE.
-      # Each call is scoped to the dimension values on this page — bounded to page_size rows.
-      date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
+      # ── Comparison SELECT / GROUP BY / ORDER BY ────────────────────────────────
+      # The comparison call must NOT group by the date dimension.
+      # Reason: if we keep "GROUP BY acct_num, tran_date" the comparison returns one row
+      # per (account, date) combination inside the period — e.g. 28 daily rows for
+      # "this month". The first of these rows often has the same date as the main query
+      # (e.g. 2024-02-01), making the comparison column display identical values to the
+      # main column. Removing the date dim collapses all period days into a SINGLE row
+      # per account with the true full-period total.
+      date_dim = dimension_keys.find { |k| date_dim_keys.include?(k) }
+      comparison_inner_dim_keys = inner_dim_keys.reject { |k| date_dim_keys.include?(k) }
+      comparison_dim_sqls       = comparison_inner_dim_keys.map { |k| DIMENSIONS.fetch(k).fetch(:sql) }
+      comparison_dim_selects    = comparison_inner_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
+
+      comparison_select_inner = if comparison_dim_selects.any?
+        "SELECT #{comparison_dim_selects.join(', ')}#{acid_select}, #{selected_measures.map { |m| m[:select_sql] }.join(', ')}"
+      else
+        # Only measures, no non-date dims — returns one total row for the period
+        "SELECT #{selected_measures.map { |m| m[:select_sql] }.join(', ')}"
+      end
+
+      comparison_groupby_clause = begin
+        parts = [comparison_dim_sqls.join(', '), acid_groupby.strip].reject(&:empty?).join(', ')
+        parts.present? ? "GROUP BY #{parts}" : ''
+      end
+
+      # ORDER BY must not reference the date dim (no longer in SELECT/GROUP BY for comparison)
+      comparison_orderby_clause = "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+
       empty_periods = []
 
       requested_periods.each do |period_key|
@@ -501,6 +585,13 @@ class ProductionDataService
         next if period_where.blank?
 
         period_label = PERIOD_COMPARISONS[period_key][:label].downcase.gsub(' ', '_')
+
+        # Compute the natural date label for this comparison period's column header.
+        # e.g. "thismonth" → "2024-02", "prevyear" → "2023", "prevdate" → "2024-01-31"
+        # Falls back to reference_date string when no date dimension is active.
+        stamp_date = date_dim \
+          ? period_stamp_date(period: period_key, reference_date: reference_date)
+          : reference_date.to_s
 
         # Restrict to the dimension values visible on this page (non-date dims only —
         # date dim gets a new time range from period_where, that's the point)
@@ -514,7 +605,7 @@ class ProductionDataService
         conn.execute(<<~SQL.squish)
           CALL public.get_tran_summary(
             select_outer => #{conn.quote(select_outer)},
-            select_inner => #{conn.quote(select_inner)},
+            select_inner => #{conn.quote(comparison_select_inner)},
             where_clause => #{conn.quote(restricted_where)},
             prevdate_where => '',
             thismonth_where => '',
@@ -525,9 +616,9 @@ class ProductionDataService
             prevyearytd_where => '',
             prevmonthsamedate_where => '',
             prevyearsamedate_where => '',
-            groupby_clause => #{conn.quote(groupby_clause)},
+            groupby_clause => #{conn.quote(comparison_groupby_clause)},
             having_clause => '',
-            orderby_clause => #{conn.quote(orderby_clause)},
+            orderby_clause => #{conn.quote(comparison_orderby_clause)},
             partitionby_clause => '',
             eab_join => #{conn.quote(eab_join)},
             user_id => '',
@@ -547,11 +638,11 @@ class ProductionDataService
         comp_rows.each do |row|
           sanitized = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
           sanitized['_period'] = period_label
-          # Prefix date dim value so pivot creates distinct columns per period
-          # e.g. "previous_date:2022-02-17" vs "main:2022-02-18"
-          if date_dim && sanitized[date_dim]
-            sanitized[date_dim] = "#{period_label}:#{sanitized[date_dim]}"
-          end
+          # Stamp the date dimension so the frontend pivot creates exactly ONE distinct
+          # column per comparison period. The date portion is the natural period label
+          # (e.g. "2024-02" for thismonth, "2023" for prevyear) so column headers read
+          # naturally: "THIS MONTH / 2024-02", "PREV YEAR / 2023", etc.
+          sanitized[date_dim] = "#{period_label}:#{stamp_date}" if date_dim
           comparison_sanitized << sanitized
         end
       end
@@ -776,13 +867,43 @@ class ProductionDataService
   # ─── Period-comparison WHERE builders ────────────────────────────────────────
 
   # Build a complete WHERE clause for a single comparison period.
+  # Returns the natural date label for a comparison period, used as the date portion
+  # of comparison pivot column headers (e.g. "this_month:2024-02").
+  #
+  # Period    | Label format      | Example (ref = 2024-02-15)
+  # ----------|-------------------|---------------------------
+  # thismonth | YYYY-MM           | 2024-02
+  # thisyear  | YYYY              | 2024
+  # prevdate  | YYYY-MM-DD        | 2024-02-14
+  # prevmonth | YYYY-MM           | 2024-01
+  # prevyear  | YYYY              | 2023
+  # prevmonthmtd     | YYYY-MM   | 2024-01
+  # prevyearytd      | YYYY      | 2023
+  # prevmonthsamedate| YYYY-MM-DD| 2024-01-15
+  # prevyearsamedate | YYYY-MM-DD| 2023-02-15
+  def period_stamp_date(period:, reference_date:)
+    ref = reference_date.to_date rescue reference_date
+    case period.to_s
+    when 'prevdate'           then (ref - 1).to_s
+    when 'thismonth'          then ref.strftime('%Y-%m')
+    when 'thisyear'           then ref.year.to_s
+    when 'prevmonth'          then ref.prev_month.strftime('%Y-%m')
+    when 'prevyear'           then (ref.year - 1).to_s
+    when 'prevmonthmtd'       then ref.prev_month.strftime('%Y-%m')
+    when 'prevyearytd'        then (ref.year - 1).to_s
+    when 'prevmonthsamedate'  then ref.prev_month.to_s
+    when 'prevyearsamedate'   then Date.new(ref.year - 1, ref.month, ref.day).to_s rescue ref.to_s
+    else ref.to_s
+    end
+  end
+
   # Uses the same categorical filters as the main query and a period-specific
   # date clause that is dimension-aware (tran_date / year_month / year_quarter / year).
   def build_period_where(period:, end_date:, filters:, dimension: 'tran_date')
     date_clause = period_date_clause(period: period, end_date: end_date, dimension: dimension)
     return '' unless date_clause
 
-    clauses = [date_clause] + categorical_filter_clauses(filters)
+    clauses = [date_clause] + non_date_filter_clauses(filters)
     "WHERE #{clauses.join(' AND ')}"
   end
 
@@ -920,6 +1041,26 @@ class ProductionDataService
       next if normalized.empty?
       "#{column} IN (#{quoted_values(normalized)})"
     end
+  end
+
+  # Returns all non-date filter clauses: categorical + text search + amount.
+  # Used by build_period_where so comparison periods share the same non-date filters
+  # as the main query, without duplicating the date range that period_date_clause handles.
+  def non_date_filter_clauses(filters)
+    conn = @connection
+    clauses = categorical_filter_clauses(filters)
+
+    if filters[:acct_num].present?
+      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:acct_num].to_s.strip)}%"
+      clauses << "acct_num::text ILIKE #{conn.quote(pattern)}"
+    end
+    if filters[:cif_id].present?
+      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
+      clauses << "cif_id::text ILIKE #{conn.quote(pattern)}"
+    end
+    clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
+    clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
+    clauses
   end
 
   def quoted_values(values)

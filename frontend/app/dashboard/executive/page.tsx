@@ -204,23 +204,9 @@ function css(v: string, fallback: string): string {
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
-const RISK_ITEMS = [
-  { label: 'Credit Risk',   score: 62, color: 'var(--accent-amber)' },
-  { label: 'Market Risk',   score: 38, color: 'var(--accent-green)' },
-  { label: 'Liquidity',     score: 24, color: 'var(--accent-green)' },
-  { label: 'Operational',   score: 71, color: 'var(--accent-red)' },
-  { label: 'Compliance',    score: 19, color: 'var(--accent-green)' },
-  { label: 'Cyber Risk',    score: 83, color: 'var(--accent-red)' },
-  { label: 'Interest Rate', score: 45, color: 'var(--accent-amber)' },
-];
-
-const ALERTS = [
-  { color: 'var(--accent-red)',   title: 'Cyber Risk Threshold Breach',  desc: 'Score 83/100 · High-risk clusters detected', time: '06:02' },
-  { color: 'var(--accent-amber)', title: 'NPL Spike — High Risk Branch',  desc: 'NPL ratio >2.5% → NRB review required',     time: '05:44' },
-  { color: 'var(--accent-amber)', title: 'Cost-to-Income Warning',        desc: 'Branch exceeded 55% threshold',              time: '04:31' },
-  { color: 'var(--accent-green)', title: 'LCR Compliance Confirmed',      desc: 'All entities ≥ 100% · Basel III met',        time: '03:15' },
-  { color: 'var(--accent-blue)',  title: 'Board Report Generated',         desc: 'Monthly report ready for review',            time: '02:00' },
-];
+// RISK_ITEMS and ALERTS removed — no live database source for risk scores or alert events.
+// These panels now show a "not connected" placeholder. When a risk/alerts API is added,
+// replace the placeholder panels below and restore data-driven rendering here.
 
 function SparkCard({
   label, value, sub, color, dimColor, icon, sparkData, highlighted = false,
@@ -253,7 +239,7 @@ function SparkCard({
 
 export default function ExecutiveDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
-  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
+  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -705,48 +691,33 @@ export default function ExecutiveDashboard() {
         {/* ── Bottom Row: Risk Monitor + Alerts + Supplementary KPIs ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
 
-          {/* Risk Exposure Monitor */}
-          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+          {/* Risk Exposure Monitor — placeholder until risk API is connected */}
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-3.5">
               <div>
                 <div className="text-[12px] font-semibold text-text-primary">Risk Exposure Monitor</div>
                 <div className="text-[10px] text-text-muted mt-0.5">Normalized 0–100 risk score</div>
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-accent-amber-dim text-accent-amber border border-accent-amber/30 font-semibold">3 Alerts</span>
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-bg-input text-text-muted border border-border font-medium">Not connected</span>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {RISK_ITEMS.map(item => (
-                <div key={item.label} className="flex items-center gap-2">
-                  <span className="text-[10px] text-text-muted w-[85px] flex-shrink-0">{item.label}</span>
-                  <div className="flex-1 h-1.5 rounded-sm bg-bg-input overflow-hidden">
-                    <div className="h-full rounded-sm transition-[width] duration-700" style={{ width: `${item.score}%`, background: item.color }} />
-                  </div>
-                  <span className="text-[10px] font-semibold w-6 text-right flex-shrink-0" style={{ color: item.color }}>{item.score}</span>
-                </div>
-              ))}
+            <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-6 text-center">
+              <span className="text-[11px] text-text-muted">No risk score data source connected.</span>
+              <span className="text-[10px] text-text-muted opacity-60">Connect a risk API endpoint to populate this panel.</span>
             </div>
           </div>
 
-          {/* Regulatory & Alerts Feed */}
-          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
+          {/* Regulatory & Alerts Feed — placeholder until alerts API is connected */}
+          <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-3.5">
               <div>
                 <div className="text-[12px] font-semibold text-text-primary">Regulatory & Alerts Feed</div>
                 <div className="text-[10px] text-text-muted mt-0.5">Live monitoring events</div>
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-accent-blue-dim text-accent-blue border border-accent-blue/30 font-medium">Live</span>
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-bg-input text-text-muted border border-border font-medium">Not connected</span>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {ALERTS.map((alert, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: alert.color }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-medium text-text-primary">{alert.title}</div>
-                    <div className="text-[10px] text-text-muted mt-0.5">{alert.desc}</div>
-                  </div>
-                  <span className="text-[9px] text-text-muted flex-shrink-0">{alert.time}</span>
-                </div>
-              ))}
+            <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-6 text-center">
+              <span className="text-[11px] text-text-muted">No alerts source connected.</span>
+              <span className="text-[10px] text-text-muted opacity-60">Connect an alerts/events API to populate this feed.</span>
             </div>
           </div>
 

@@ -268,15 +268,11 @@ export default function BranchDashboard() {
             <KPICard
               label="Active Branches"
               value={allBranches.length}
-              change={2.4}
-              changeType="up"
               iconBg="var(--accent-blue-dim)"
             />
             <KPICard
               label="Total Amount"
               value={formatNPR(data?.total_amount || 0)}
-              change={7.2}
-              changeType="up"
               iconBg="var(--accent-green-dim)"
               sparkData={allBranches.slice(0, 12).map(b => b.total_amount)}
             />

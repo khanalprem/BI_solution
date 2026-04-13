@@ -101,12 +101,12 @@ function HowItWorksPanel() {
           />
           <StepCard
             num={2} circleCls="bg-accent-green" heading="Choose Measures"
-            body="Measures are aggregations computed over the grouped rows — Total Amount, Count, Credit/Debit, Net Flow, and EOD Balance (via EAB join). At least one standard measure must remain selected."
+            body="Measures are aggregations computed over the grouped rows — Total Amount, Count, Credit/Debit, and Net Flow. Selecting TRAN Date Balance in Dimensions triggers the EAB LEFT JOIN. At least one standard measure must remain selected."
             tags={[
               { label: 'Total Amount',      tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
               { label: 'Transaction Count', tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
               { label: 'Net Flow',          tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
-              { label: 'EOD Balance',       tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
+              { label: 'Net Flow',          tagCls: 'border-accent-green/25 bg-accent-green/10 text-accent-green' },
             ]}
           />
           <StepCard
@@ -153,30 +153,43 @@ interface DimensionFieldDef {
 
 const DATE_DIM_KEYS = new Set(['tran_date', 'year_month', 'year_quarter', 'year']);
 
+const DATE_FIELD_ORDER = ['year', 'year_quarter', 'year_month', 'tran_date'] as const;
+type DateFieldKey = typeof DATE_FIELD_ORDER[number];
+
+// Fields (besides date container) that get a Pivot button
+const PIVOT_CAPABLE_NON_DATE = new Set(['part_tran_type', 'tran_type', 'gl_sub_head_code']);
+
 const DIMENSION_FIELDS: DimensionFieldDef[] = [
-  // ── Categorical ────────────────────────────────────────────────────────────
-  { key: 'gam_branch',       label: 'Account Branch',   type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Branch where the account is registered' },
-  { key: 'gam_province',     label: 'Account Province', type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch' },
-  { key: 'gam_cluster',      label: 'Account Cluster',  type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Branch cluster grouping' },
-  { key: 'gam_solid',        label: 'Account SOL ID',   type: 'categorical', filterKey: 'solid',         optionsKey: 'solids',            description: 'SOL identifier used for account routing' },
-  { key: 'tran_source',      label: 'Channel',          type: 'categorical', filterKey: 'tranSource',    optionsKey: 'tran_sources',      description: 'Transaction channel (mobile / internet / branch)' },
-  { key: 'part_tran_type',   label: 'CR / DR',          type: 'categorical', filterKey: 'partTranType',  optionsKey: 'part_tran_types',   description: 'Credit or debit side of the transaction' },
+  // ── Account / customer dimensions ─────────────────────────────────────────
+  { key: 'gam_branch',       label: 'GAM Branch',       type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Account registration branch (GAM)' },
+  { key: 'gam_province',     label: 'GAM Province',     type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch (GAM)' },
+  { key: 'gam_cluster',      label: 'GAM Cluster',      type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Account branch cluster (GAM)' },
+  { key: 'gam_solid',        label: 'Account SOL ID',   type: 'categorical', filterKey: 'solid',         optionsKey: 'solids',            description: 'SOL identifier for account routing' },
+  { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Full or partial account number (ILIKE search)' },
+  { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name' },
+  { key: 'cif_id',           label: 'CIF Id',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
+  // ── Transaction dimensions ────────────────────────────────────────────────
+  { key: 'tran_source',      label: 'TRAN Source',      type: 'categorical', filterKey: 'tranSource',    optionsKey: 'tran_sources',      description: 'Transaction channel (mobile / internet / branch)' },
+  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical',                             description: 'Branch where the transaction was processed' },
+  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical',                             description: 'Transaction branch cluster' },
+  { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical',                             description: 'Province of the transaction branch' },
+  { key: 'tran_type',        label: 'TRAN Type',        type: 'categorical',                             description: 'Transaction type code' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  optionsKey: 'part_tran_types',   description: 'Credit or debit side of the transaction (CR / DR)' },
+  { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
   { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',          type: 'categorical', filterKey: 'service',       optionsKey: 'services',          description: 'Service type applied to the transaction' },
   { key: 'merchant',         label: 'Merchant',         type: 'categorical', filterKey: 'merchant',      optionsKey: 'merchants',         description: 'Merchant identifier for payment transactions' },
-  { key: 'gl_sub_head_code', label: 'GL Code',          type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
-  { key: 'entry_user',       label: 'Entry User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'entry_users',       description: 'User who entered the transaction' },
-  { key: 'vfd_user',         label: 'Verified User',    type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'vfd_users',         description: 'User who verified the transaction' },
-  // ── Text ──────────────────────────────────────────────────────────────────
-  { key: 'acct_num',         label: 'Account Number',   type: 'text',        filterKey: 'acctNum',       description: 'Full or partial account number (ILIKE search)' },
-  { key: 'cif_id',           label: 'CIF ID',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
-  // ── Date fields — single / range / multi ──────────────────────────────────
-  { key: 'tran_date',    label: 'Transaction Date', type: 'date',    filterKey: 'tranDate',    fromKey: 'tranDateFrom',    toKey: 'tranDateTo',    description: 'Daily granularity (YYYY-MM-DD)' },
-  { key: 'year_month',   label: 'Year Month',       type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
-  { key: 'year_quarter', label: 'Year Quarter',     type: 'quarter', filterKey: 'yearQuarter', fromKey: 'yearQuarterFrom', toKey: 'yearQuarterTo', description: 'Quarterly period (YYYY-Qn)' },
-  { key: 'year',         label: 'Year',             type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
-  // ── EOD Balance — measure rendered in the Dimension panel ─────────────────
-  { key: 'eod_balance',  label: 'EOD Balance (EAB)', type: 'measure_dim',                                                                description: 'MAX(eod_balance) — triggers EAB LEFT JOIN on acid' },
+  // ── User dimensions ───────────────────────────────────────────────────────
+  { key: 'entry_user',       label: 'ENTRY User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'entry_users',       description: 'User who entered the transaction' },
+  { key: 'vfd_user',         label: 'VFD User',         type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'vfd_users',         description: 'User who verified the transaction' },
+  // ── Date fields — rendered in the Date container with shared Pivot/Sort ───
+  { key: 'tran_date',    label: 'Tran Date',     type: 'date',    filterKey: 'tranDate',    fromKey: 'tranDateFrom',    toKey: 'tranDateTo',    description: 'Daily granularity (YYYY-MM-DD)' },
+  { key: 'year_month',   label: 'Year Month',    type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
+  { key: 'year_quarter', label: 'Year Quarter',  type: 'quarter', filterKey: 'yearQuarter', fromKey: 'yearQuarterFrom', toKey: 'yearQuarterTo', description: 'Quarterly period (YYYY-Qn)' },
+  { key: 'year',         label: 'Year',          type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
+  // ── EAB outer-join dimension ──────────────────────────────────────────────
+  // tran_date_bal comes from the eab table (e.tran_date_bal) via LEFT JOIN on acid.
+  { key: 'tran_date_bal', label: 'TRAN Date Balance', type: 'measure_dim', description: 'Account balance on transaction date (from EAB table via acid join)' },
 ];
 
 // ─── Measure definitions ──────────────────────────────────────────────────────
@@ -190,35 +203,40 @@ interface MeasureDef {
 }
 
 const STANDARD_MEASURES: MeasureDef[] = [
-  { key: 'total_amount',      label: 'Total Amount',       description: 'SUM(tran_amt)',                       group: 'standard' },
-  { key: 'transaction_count', label: 'Transaction Count',  description: 'SUM(tran_count)',                     group: 'standard' },
-  { key: 'unique_accounts',   label: 'Unique Accounts',    description: 'COUNT(DISTINCT acct_num)',             group: 'standard' },
-  { key: 'unique_customers',  label: 'Unique Customers',   description: 'COUNT(DISTINCT cif_id)',               group: 'standard' },
-  { key: 'credit_amount',     label: 'Credit Amount',      description: "SUM where part_tran_type = 'CR'",     group: 'standard' },
-  { key: 'debit_amount',      label: 'Debit Amount',       description: "SUM where part_tran_type = 'DR'",     group: 'standard' },
-  { key: 'net_flow',          label: 'Net Flow',           description: 'CR amount − DR amount',                group: 'standard' },
-  // eod_balance moved to Dimensions panel — selected there, sent as measure to backend
+  // Core totals
+  { key: 'tran_amt',        label: 'TRAN Amount',        description: 'SUM(tran_amt)',                                        group: 'standard' },
+  { key: 'tran_count',      label: 'TRAN Count',         description: 'SUM(tran_count)',                                      group: 'standard' },
+  { key: 'signed_tranamt',  label: 'Signed TRAN Amount', description: 'SUM(signed_tranamt) — CR positive, DR negative',       group: 'standard' },
+  // Credit leg
+  { key: 'cr_amt',          label: 'CR Amount',          description: "SUM(tran_amt) where part_tran_type = 'CR'",            group: 'standard' },
+  { key: 'cr_count',        label: 'CR Count',           description: "SUM(tran_count) where part_tran_type = 'CR'",          group: 'standard' },
+  // Debit leg
+  { key: 'dr_amt',          label: 'DR Amount',          description: "SUM(tran_amt) where part_tran_type = 'DR'",            group: 'standard' },
+  { key: 'dr_count',        label: 'DR Count',           description: "SUM(tran_count) where part_tran_type = 'DR'",          group: 'standard' },
+  // Distinct counts & date
+  { key: 'tran_acct_count', label: 'TRAN Acct Count',   description: 'COUNT(DISTINCT acct_num)',                             group: 'standard' },
+  { key: 'tran_maxdate',    label: 'TRAN Max Date',      description: 'MAX(tran_date)',                                       group: 'standard' },
 ];
 
 const COMPARISON_MEASURES: MeasureDef[] = [
-  { key: 'prevdate_amt',            label: 'Prev Date — Amount',            description: 'prevdate_where · tran_amt',         group: 'comparison', period: 'prevdate' },
-  { key: 'prevdate_count',          label: 'Prev Date — Count',             description: 'prevdate_where · tran_count',       group: 'comparison', period: 'prevdate' },
+  { key: 'prevdate_amt',            label: 'Prev. Day — Amount',            description: 'prevdate_where · tran_amt',         group: 'comparison', period: 'prevdate' },
+  { key: 'prevdate_count',          label: 'Prev. Day — Count',             description: 'prevdate_where · tran_count',       group: 'comparison', period: 'prevdate' },
   { key: 'thismonth_amt',           label: 'This Month — Amount',           description: 'thismonth_where · tran_amt',        group: 'comparison', period: 'thismonth' },
   { key: 'thismonth_count',         label: 'This Month — Count',            description: 'thismonth_where · tran_count',      group: 'comparison', period: 'thismonth' },
   { key: 'thisyear_amt',            label: 'This Year — Amount',            description: 'thisyear_where · tran_amt',         group: 'comparison', period: 'thisyear' },
   { key: 'thisyear_count',          label: 'This Year — Count',             description: 'thisyear_where · tran_count',       group: 'comparison', period: 'thisyear' },
-  { key: 'prevmonth_amt',           label: 'Prev Month — Amount',           description: 'prevmonth_where · tran_amt',        group: 'comparison', period: 'prevmonth' },
-  { key: 'prevmonth_count',         label: 'Prev Month — Count',            description: 'prevmonth_where · tran_count',      group: 'comparison', period: 'prevmonth' },
-  { key: 'prevyear_amt',            label: 'Prev Year — Amount',            description: 'prevyear_where · tran_amt',         group: 'comparison', period: 'prevyear' },
-  { key: 'prevyear_count',          label: 'Prev Year — Count',             description: 'prevyear_where · tran_count',       group: 'comparison', period: 'prevyear' },
-  { key: 'prevmonthmtd_amt',        label: 'Prev Month MTD — Amount',       description: 'prevmonthmtd_where · tran_amt',     group: 'comparison', period: 'prevmonthmtd' },
-  { key: 'prevmonthmtd_count',      label: 'Prev Month MTD — Count',        description: 'prevmonthmtd_where · tran_count',   group: 'comparison', period: 'prevmonthmtd' },
-  { key: 'prevyearytd_amt',         label: 'Prev Year YTD — Amount',        description: 'prevyearytd_where · tran_amt',      group: 'comparison', period: 'prevyearytd' },
-  { key: 'prevyearytd_count',       label: 'Prev Year YTD — Count',         description: 'prevyearytd_where · tran_count',    group: 'comparison', period: 'prevyearytd' },
-  { key: 'prevmonthsamedate_amt',   label: 'Prev Month Same Date — Amount', description: 'prevmonthsamedate_where · tran_amt',   group: 'comparison', period: 'prevmonthsamedate' },
-  { key: 'prevmonthsamedate_count', label: 'Prev Month Same Date — Count',  description: 'prevmonthsamedate_where · tran_count', group: 'comparison', period: 'prevmonthsamedate' },
-  { key: 'prevyearsamedate_amt',    label: 'Prev Year Same Date — Amount',  description: 'prevyearsamedate_where · tran_amt',    group: 'comparison', period: 'prevyearsamedate' },
-  { key: 'prevyearsamedate_count',  label: 'Prev Year Same Date — Count',   description: 'prevyearsamedate_where · tran_count',  group: 'comparison', period: 'prevyearsamedate' },
+  { key: 'prevmonth_amt',           label: 'Prev. Month — Amount',          description: 'prevmonth_where · tran_amt',        group: 'comparison', period: 'prevmonth' },
+  { key: 'prevmonth_count',         label: 'Prev. Month — Count',           description: 'prevmonth_where · tran_count',      group: 'comparison', period: 'prevmonth' },
+  { key: 'prevyear_amt',            label: 'Prev. Year — Amount',           description: 'prevyear_where · tran_amt',         group: 'comparison', period: 'prevyear' },
+  { key: 'prevyear_count',          label: 'Prev. Year — Count',            description: 'prevyear_where · tran_count',       group: 'comparison', period: 'prevyear' },
+  { key: 'prevmonthmtd_amt',        label: 'Prev. Month MTD — Amount',      description: 'prevmonthmtd_where · tran_amt',     group: 'comparison', period: 'prevmonthmtd' },
+  { key: 'prevmonthmtd_count',      label: 'Prev. Month MTD — Count',       description: 'prevmonthmtd_where · tran_count',   group: 'comparison', period: 'prevmonthmtd' },
+  { key: 'prevyearytd_amt',         label: 'Prev. Year YTD — Amount',       description: 'prevyearytd_where · tran_amt',      group: 'comparison', period: 'prevyearytd' },
+  { key: 'prevyearytd_count',       label: 'Prev. Year YTD — Count',        description: 'prevyearytd_where · tran_count',    group: 'comparison', period: 'prevyearytd' },
+  { key: 'prevmonthsamedate_amt',   label: 'Prev. Month Same Day — Amount', description: 'prevmonthsamedate_where · tran_amt',   group: 'comparison', period: 'prevmonthsamedate' },
+  { key: 'prevmonthsamedate_count', label: 'Prev. Month Same Day — Count',  description: 'prevmonthsamedate_where · tran_count', group: 'comparison', period: 'prevmonthsamedate' },
+  { key: 'prevyearsamedate_amt',    label: 'Prev. Year Same Day — Amount',  description: 'prevyearsamedate_where · tran_amt',    group: 'comparison', period: 'prevyearsamedate' },
+  { key: 'prevyearsamedate_count',  label: 'Prev. Year Same Day — Count',   description: 'prevyearsamedate_where · tran_count',  group: 'comparison', period: 'prevyearsamedate' },
 ];
 
 // ─── Type badge styling ───────────────────────────────────────────────────────
@@ -265,6 +283,34 @@ function generateDateOptions(filterStats?: FilterStatisticsResponse) {
   };
 }
 
+// ─── Period-label display map ─────────────────────────────────────────────────
+// Backend prefixes comparison tran_date values as "{period_label}:{date}"
+// e.g. "this_month:2022-02-18". These labels come from PERIOD_COMPARISONS[:label]
+// downcased + spaces→underscores.
+const PERIOD_DISPLAY: Record<string, string> = {
+  previous_date:         'Prev. Day',
+  this_month:            'This Month',
+  this_year:             'This Year',
+  previous_month:        'Prev. Month',
+  previous_year:         'Prev. Year',
+  prev_month_mtd:        'Prev. Month MTD',
+  prev_year_ytd:         'Prev. Year YTD',
+  prev_month_same_date:  'Prev. Month Same Day',
+  prev_year_same_date:   'Prev. Year Same Day',
+};
+
+// Parse a raw pivot value that may be "period_label:date" or just "date".
+function parsePivotHeader(pv: string): { period: string | null; date: string } {
+  const sep = pv.indexOf(':');
+  if (sep === -1) return { period: null, date: pv };
+  const periodKey = pv.slice(0, sep);
+  // Only treat it as period-prefixed if we recognise the period key
+  if (periodKey in PERIOD_DISPLAY) {
+    return { period: periodKey, date: pv.slice(sep + 1) };
+  }
+  return { period: null, date: pv };
+}
+
 // ─── Pivot data structures ────────────────────────────────────────────────────
 
 type DataRow = Record<string, string | number | boolean | null>;
@@ -272,6 +318,11 @@ type DataRow = Record<string, string | number | boolean | null>;
 // Separator used internally to key pivot cells: pivotValue + SEP + measureKey.
 // Null byte never appears in real data values.
 const PIVOT_SEP = '\x00';
+
+// Separator used to join multiple pivot dimension values into a composite column key.
+// e.g. "2024-02-01\x01CR" when pivoting on both tran_date + part_tran_type.
+// SOH control character — never appears in real data.
+const PIVOT_DIM_SEP = '\x01';
 
 interface PivotData {
   rowDimKeys:  string[];   // left-side "row" dimension columns
@@ -320,14 +371,78 @@ function renderCell(v: string | number | boolean | null | undefined): string {
 // Each row-dim column is ~160px wide (px-4 padding + typical content).
 const ROW_DIM_COL_WIDTH = 160;
 
+interface L1Group {
+  l1:     string;        // raw level-1 key (may carry "period:date" prefix)
+  period: string | null; // parsed period label key, or null for main data
+  date:   string;        // display date / value
+  l2s:    string[];      // ordered level-2 sub-values (e.g. ["CR", "DR"])
+}
+
+// Module-level helper: top-level pivot group header cell.
+// Defined outside PivotTable so React never sees a "new component type" on re-render.
+function PivotGroupTh({
+  colSpan, period, date,
+}: { colSpan: number; period: string | null; date: string }) {
+  return (
+    <th
+      colSpan={colSpan}
+      className={`px-3 py-2 text-center text-[10px] font-bold border-l border-border whitespace-nowrap ${
+        period !== null
+          ? 'text-accent-amber bg-accent-amber/5'
+          : 'text-accent-purple bg-accent-purple/5'
+      }`}
+    >
+      {period !== null ? (
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[8.5px] font-bold uppercase tracking-wider text-accent-amber/80 leading-none">
+            {PERIOD_DISPLAY[period]}
+          </span>
+          <span className="text-[10px] font-bold text-accent-amber leading-none">{date}</span>
+        </div>
+      ) : date}
+    </th>
+  );
+}
+
 function PivotTable({ data, title, subtitle }: { data: PivotData; title: string; subtitle?: string }) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
   const hasMultiMeasure = measureKeys.length > 1;
 
+  // Detect composite (multi-level) pivot keys: "2024-02-01\x01CR"
+  const isMultiLevel = pivotValues.length > 0 && pivotValues[0].includes(PIVOT_DIM_SEP);
+
+  // Build ordered level-1 groups from composite pivot values.
+  // Preserves the natural sort order established by buildPivotData.
+  const level1Groups: L1Group[] = [];
+  if (isMultiLevel) {
+    const seen = new Map<string, L1Group>();
+    for (const pv of pivotValues) {
+      const sepIdx = pv.indexOf(PIVOT_DIM_SEP);
+      const l1 = sepIdx === -1 ? pv : pv.slice(0, sepIdx);
+      const l2 = sepIdx === -1 ? ''  : pv.slice(sepIdx + 1);
+      if (!seen.has(l1)) {
+        const parsed = parsePivotHeader(l1);
+        const g: L1Group = { l1, period: parsed.period, date: parsed.date, l2s: [] };
+        seen.set(l1, g);
+        level1Groups.push(g);
+      }
+      seen.get(l1)!.l2s.push(l2);
+    }
+  }
+
+  // Total <thead> rows — drives rowSpan on frozen row-dim headers.
+  // single-level: 1 (pivot values) [+ 1 if multiMeasure]
+  // multi-level:  2 (level1 + level2) [+ 1 if multiMeasure]
+  const totalHeaderRows = (isMultiLevel ? 2 : 1) + (hasMultiMeasure ? 1 : 0);
+
+  // Total scrollable columns (for "No data" colSpan).
+  const totalPivotCols = isMultiLevel
+    ? level1Groups.reduce((s, g) => s + g.l2s.length, 0) * measureKeys.length
+    : pivotValues.length * measureKeys.length;
+
   // Pre-compute cumulative left offset for each row-dim column (sticky freeze).
   const stickyLeft = rowDimKeys.map((_, i) => i * ROW_DIM_COL_WIDTH);
-  // The last row-dim column gets a shadow to visually separate frozen from scrolling area.
-  const lastDimIdx = rowDimKeys.length - 1;
+  const lastDimIdx  = rowDimKeys.length - 1;
 
   return (
     <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
@@ -347,17 +462,16 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
         </div>
       </div>
 
-      {/* Two-tier pivot header */}
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0 text-[11.5px]" style={{ minWidth: '100%' }}>
           <thead className="sticky top-0 z-[3]" style={{ background: 'var(--bg-base)' }}>
 
-            {/* Top row — row dim headers (sticky) + pivot value group headers */}
+            {/* ── Row 1: frozen row-dim headers + top-level pivot group headers ── */}
             <tr className="border-b border-border">
               {rowDimKeys.map((k, i) => (
                 <th
                   key={k}
-                  rowSpan={hasMultiMeasure ? 2 : 1}
+                  rowSpan={totalHeaderRows}
                   className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap border-r border-border"
                   style={{
                     position: 'sticky',
@@ -368,33 +482,92 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                     boxShadow: i === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
                   }}
                 >
-                  {k.replaceAll('_', ' ')}
+                  {k}
                 </th>
               ))}
-              {pivotValues.map((pv) => (
-                <th
-                  key={pv}
-                  colSpan={measureKeys.length}
-                  className="px-3 py-2 text-center text-[10px] font-bold text-accent-purple border-l border-border whitespace-nowrap bg-accent-purple/5"
-                >
-                  {pv}
-                </th>
-              ))}
+
+              {isMultiLevel
+                // Multi-level: level-1 group headers spanning all their sub-columns
+                ? level1Groups.map(({ l1, period, date, l2s }) => (
+                    <PivotGroupTh
+                      key={l1}
+                      colSpan={l2s.length * measureKeys.length}
+                      period={period}
+                      date={date}
+                    />
+                  ))
+                // Single-level: each pivot value spans measure columns
+                : pivotValues.map((pv) => {
+                    const { period, date } = parsePivotHeader(pv);
+                    return (
+                      <PivotGroupTh
+                        key={pv}
+                        colSpan={measureKeys.length}
+                        period={period}
+                        date={date}
+                      />
+                    );
+                  })
+              }
             </tr>
 
-            {/* Sub-header row — measure names under each pivot value group */}
-            {hasMultiMeasure && (
+            {/* ── Row 2 (multi-level only): level-2 sub-column headers (CR / DR / …) ── */}
+            {isMultiLevel && (
               <tr className="border-b border-border">
-                {pivotValues.map((pv) =>
-                  measureKeys.map((mk) => (
+                {level1Groups.flatMap(({ l1, period, l2s }) =>
+                  l2s.map((l2) => (
                     <th
-                      key={`${pv}-${mk}`}
-                      className="px-3 py-1.5 text-center text-[8.5px] font-semibold text-text-muted uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 bg-accent-purple/3"
+                      key={`${l1}${PIVOT_DIM_SEP}${l2}`}
+                      colSpan={measureKeys.length}
+                      className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
+                        period !== null
+                          ? 'text-accent-amber/80 bg-accent-amber/5'
+                          : 'text-accent-purple/80 bg-accent-purple/5'
+                      }`}
                     >
-                      {mk.replaceAll('_', ' ')}
+                      {l2}
                     </th>
                   ))
                 )}
+              </tr>
+            )}
+
+            {/* ── Row 2 or 3: measure sub-headers (when hasMultiMeasure) ── */}
+            {hasMultiMeasure && (
+              <tr className="border-b border-border">
+                {isMultiLevel
+                  ? level1Groups.flatMap(({ l1, period, l2s }) =>
+                      l2s.flatMap((l2) =>
+                        measureKeys.map((mk) => (
+                          <th
+                            key={`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${mk}`}
+                            className={`px-3 py-1.5 text-center text-[8.5px] font-semibold uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 ${
+                              period !== null
+                                ? 'text-accent-amber/70 bg-accent-amber/3'
+                                : 'text-text-muted bg-accent-purple/3'
+                            }`}
+                          >
+                            {mk.replaceAll('_', ' ')}
+                          </th>
+                        ))
+                      )
+                    )
+                  : pivotValues.flatMap((pv) => {
+                      const { period } = parsePivotHeader(pv);
+                      return measureKeys.map((mk) => (
+                        <th
+                          key={`${pv}${PIVOT_SEP}${mk}`}
+                          className={`px-3 py-1.5 text-center text-[8.5px] font-semibold uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 ${
+                            period !== null
+                              ? 'text-accent-amber/70 bg-accent-amber/3'
+                              : 'text-text-muted bg-accent-purple/3'
+                          }`}
+                        >
+                          {mk.replaceAll('_', ' ')}
+                        </th>
+                      ));
+                    })
+                }
               </tr>
             )}
           </thead>
@@ -403,7 +576,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={rowDimKeys.length + pivotValues.length * measureKeys.length}
+                  colSpan={rowDimKeys.length + totalPivotCols}
                   className="py-12 text-center text-[11px] text-text-muted"
                 >
                   No data
@@ -412,7 +585,7 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
             ) : (
               rows.map((row, i) => (
                 <tr key={i} className="border-b border-border last:border-0 hover:bg-[rgba(255,255,255,0.04)] transition-colors">
-                  {/* Row dimension cells — sticky frozen columns */}
+                  {/* Frozen row-dim cells */}
                   {rowDimKeys.map((k, di) => (
                     <td
                       key={k}
@@ -429,14 +602,33 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
                       {renderCell(row[k])}
                     </td>
                   ))}
+
                   {/* Pivot value × measure cells — scrollable */}
-                  {pivotValues.map((pv) =>
-                    measureKeys.map((mk) => (
-                      <td key={`${pv}-${mk}`} className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]">
-                        {renderCell(row[`${pv}${PIVOT_SEP}${mk}`])}
-                      </td>
-                    ))
-                  )}
+                  {isMultiLevel
+                    ? level1Groups.flatMap(({ l1, l2s }) =>
+                        l2s.flatMap((l2) => {
+                          const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
+                          return measureKeys.map((mk) => (
+                            <td
+                              key={`${fullKey}${PIVOT_SEP}${mk}`}
+                              className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
+                            >
+                              {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`])}
+                            </td>
+                          ));
+                        })
+                      )
+                    : pivotValues.flatMap((pv) =>
+                        measureKeys.map((mk) => (
+                          <td
+                            key={`${pv}${PIVOT_SEP}${mk}`}
+                            className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-[11px]"
+                          >
+                            {renderCell(row[`${pv}${PIVOT_SEP}${mk}`])}
+                          </td>
+                        ))
+                      )
+                  }
                 </tr>
               ))
             )}
@@ -455,11 +647,11 @@ export default function PivotDashboard() {
   const { filters, setFilters, topBarProps, handleClearFilters, filterStats } = useDashboardPage();
 
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>(['gam_branch']);
-  const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(['total_amount', 'transaction_count']);
-  // partitionDimensions: ordered list of dimension keys checked for "Pivot Col"
-  // Order follows the sequence the user checked them — used as pivot column headers top-to-bottom.
-  const [partitionDimensions, setPartitionDimensions] = useState<string[]>([]);
-  // orderFields: ordered list of dimension/measure keys checked for "Order By"
+  const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(['tran_amt', 'tran_count']);
+  const [datePivotEnabled, setDatePivotEnabled] = useState(false);
+  const [dateSortEnabled, setDateSortEnabled]   = useState(false);
+  const [nonDatePartitions, setNonDatePartitions] = useState<string[]>([]);
+  // orderFields: ordered list of dimension/measure keys checked for "Sort"
   // Combines dimension keys and measure keys into a single ORDER BY field1, field2 clause.
   const [orderFields, setOrderFields]                 = useState<string[]>([]);
   const [expandedField, setExpanded]                = useState<string | null>(null);
@@ -476,7 +668,7 @@ export default function PivotDashboard() {
   const { data: catalog }      = useProductionCatalog();
 
   // All selected dimensions are sent to the backend as true GROUP BY dimensions.
-  // eod_balance and tran_date_bal are now proper dimensions (not measures).
+  // tran_date_bal is an EAB outer-join dimension (not a measure).
   const backendDimensions = useMemo(
     () => selectedDimensions,
     [selectedDimensions],
@@ -490,10 +682,37 @@ export default function PivotDashboard() {
     () => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)),
     [selectedMeasures],
   );
-  // Measures come only from the Measures panel — eod_balance/tran_date_bal are now dimensions.
+  // Measures come only from the Measures panel — tran_date_bal is a dimension (EAB join).
   const measures = useMemo(
-    () => standardMeasures.length > 0 ? standardMeasures : ['total_amount'],
+    () => standardMeasures.length > 0 ? standardMeasures : ['tran_amt'],
     [standardMeasures],
+  );
+
+  // Selected date dimensions in fixed order
+  const selectedDateDims = useMemo(
+    () => DATE_FIELD_ORDER.filter((k) => selectedDimensions.includes(k)),
+    [selectedDimensions],
+  );
+
+  // Date fields going into PARTITION BY (when datePivotEnabled)
+  const datePivotFields = useMemo(
+    () => (datePivotEnabled ? selectedDateDims : []),
+    [datePivotEnabled, selectedDateDims],
+  );
+
+  // Date fields going into ORDER BY (when dateSortEnabled)
+  const dateSortFields = useMemo(
+    () => (dateSortEnabled ? selectedDateDims : []),
+    [dateSortEnabled, selectedDateDims],
+  );
+
+  // Combined partitionDimensions: date pivot fields (fixed order) + non-date pivots
+  const partitionDimensions = useMemo(
+    () => [
+      ...datePivotFields,
+      ...nonDatePartitions.filter((k) => selectedDimensions.includes(k)),
+    ],
+    [datePivotFields, nonDatePartitions, selectedDimensions],
   );
 
   // rowDims: the dimensions that become the LEFT-SIDE row keys in the pivot table.
@@ -515,10 +734,16 @@ export default function PivotDashboard() {
   // Rule: pivot fields first (UI order), then remaining selected dimension fields (row dims).
   // When no pivot is active this is empty — user controls ORDER BY fully via orderFields.
   const autoOrderFields = useMemo(() => {
-    if (partitionDimensions.length === 0) return [];
-    // pivot dims first, then row dims (backendDimensions preserves UI selection order)
-    return [...partitionDimensions, ...rowDims];
-  }, [partitionDimensions, rowDims]);
+    if (partitionDimensions.length > 0) {
+      // Pivot active: pivot fields first, then row dims
+      return [...partitionDimensions, ...rowDims];
+    }
+    if (dateSortEnabled && dateSortFields.length > 0) {
+      // Sort-only (no pivot): date fields in fixed order
+      return dateSortFields;
+    }
+    return [];
+  }, [partitionDimensions, rowDims, dateSortEnabled, dateSortFields]);
 
   // effectiveOrderList — the final deduplicated ORDER BY field list.
   // = autoOrderFields + any user-checked fields not already in autoOrderFields.
@@ -573,13 +798,14 @@ export default function PivotDashboard() {
       return { pivotData: null, flatColumns: flatCols, flatRows: flat, isPivoted: false };
     }
 
-    // Build a single pivot-column key from all checked pivot fields (joined with " › ").
-    // Single field → value as-is.  Multiple fields → "val1 › val2".
+    // Build a single pivot-column key from all checked pivot fields.
+    // Single field → value as-is.  Multiple fields → joined with PIVOT_DIM_SEP (\x01).
+    // e.g. tran_date + part_tran_type → "2024-02-01\x01CR"
     const pivotRows = partitionDimensions.length === 1
       ? rows
       : rows.map((r) => ({
           ...r,
-          _pivot_key: partitionDimensions.map((k) => String(r[k] ?? '')).join(' › '),
+          _pivot_key: partitionDimensions.map((k) => String(r[k] ?? '')).join(PIVOT_DIM_SEP),
         }));
 
     const pivotField = partitionDimensions.length === 1
@@ -665,33 +891,81 @@ export default function PivotDashboard() {
   // ── Dimension toggle ──────────────────────────────────────────────────────
 
   const toggleDimension = useCallback((key: string) => {
-    setSelectedDimensions((prev) => {
-      if (prev.includes(key)) {
-        // Also remove from partition and orderFields if deselected
-        setPartitionDimensions((pp) => pp.filter((k) => k !== key));
-        setOrderFields((of) => of.filter((k) => k !== key));
-        const next = prev.filter((k) => k !== key);
-        return next.length > 0 ? next : prev;
+    const isDateField = (DATE_FIELD_ORDER as readonly string[]).includes(key);
+    const isCurrentlySelected = selectedDimensions.includes(key);
+
+    if (isCurrentlySelected) {
+      // Guard: must keep at least one dimension selected
+      if (selectedDimensions.length === 1) return;
+
+      // ── Clear the filter for this field when deselecting ──────────────────
+      const fieldDef = DIMENSION_FIELDS.find((f) => f.key === key);
+      if (fieldDef) {
+        setFilters((prev) => {
+          const next = { ...prev };
+          if (fieldDef.filterKey) delete next[fieldDef.filterKey as keyof typeof next];
+          if (fieldDef.fromKey)   delete next[fieldDef.fromKey   as keyof typeof next];
+          if (fieldDef.toKey)     delete next[fieldDef.toKey     as keyof typeof next];
+          return next;
+        });
       }
-      return [...prev, key];
-    });
+
+      // ── Update pivot / sort / order state ─────────────────────────────────
+      if (isDateField) {
+        const remainingDate = DATE_FIELD_ORDER.filter(
+          (k) => k !== key && selectedDimensions.includes(k),
+        );
+        if (remainingDate.length === 0) {
+          setDatePivotEnabled(false);
+          setDateSortEnabled(false);
+        }
+      } else {
+        setNonDatePartitions((pp) => pp.filter((k) => k !== key));
+      }
+      setOrderFields((of) => of.filter((k) => k !== key));
+      setSelectedDimensions((prev) => prev.filter((k) => k !== key));
+    } else {
+      // Selecting — auto-enable pivot on first date field
+      if (isDateField) {
+        const currentDateDims = DATE_FIELD_ORDER.filter((k) => selectedDimensions.includes(k));
+        if (currentDateDims.length === 0) setDatePivotEnabled(true);
+      }
+      setSelectedDimensions((prev) => [...prev, key]);
+    }
+
     setPage(1);
-  }, []);
+  }, [selectedDimensions, setFilters]);
 
-  // ── Partition toggle — maintains check order (top-to-bottom = first-checked-first) ─
+  // ── Toggle for date container pivot (single toggle for all date fields) ───
 
-  const togglePartition = useCallback((key: string, e: React.MouseEvent) => {
+  const toggleDatePivot = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setPartitionDimensions((prev) => {
+    setDatePivotEnabled((prev) => !prev);
+    setPage(1);
+  }, []);
+
+  // ── Toggle for date container sort ────────────────────────────────────────
+
+  const toggleDateSort = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDateSortEnabled((prev) => !prev);
+    setPage(1);
+  }, []);
+
+  // ── Toggle for non-date pivot-capable fields ──────────────────────────────
+
+  const toggleNonDatePartition = useCallback((key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNonDatePartitions((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
-      // Auto-select the dimension too so it appears in GROUP BY
-      setSelectedDimensions((dims) => dims.includes(key) ? dims : [...dims, key]);
+      // Auto-select the dimension too
+      setSelectedDimensions((dims) => (dims.includes(key) ? dims : [...dims, key]));
       return [...prev, key];
     });
     setPage(1);
   }, []);
 
-  // ── Order By toggle — maintains check order ───────────────────────────────
+  // ── Sort toggle — maintains check order ──────────────────────────────────
 
   const toggleOrderField = useCallback((key: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -735,7 +1009,7 @@ export default function PivotDashboard() {
 
   const dimensionLabels = useMemo(
     () => selectedDimensions.map((d) => {
-      if (d === 'eod_balance') return 'EOD Balance';
+      if (d === 'tran_date_bal') return 'TRAN Date Balance';
       return catalog?.dimension_options.find((o) => o.value === d)?.label ?? d;
     }).join(' × '),
     [catalog, selectedDimensions],
@@ -782,7 +1056,7 @@ export default function PivotDashboard() {
     // ── EAB join ─────────────────────────────────────────────────────────────
     const eabVal = sp.eab_join ?? '';
     lines.push({
-      text: `  eab_join                 => '${eabVal}',${eabVal ? '  -- ✓ eod_balance selected → LEFT JOIN eab' : '  -- empty: eod_balance not selected'}`,
+      text: `  eab_join                 => '${eabVal}',${eabVal ? '  -- ✓ tran_date_bal selected → LEFT JOIN eab' : '  -- empty: tran_date_bal not selected'}`,
       kind: 'eab',
     });
 
@@ -835,21 +1109,172 @@ export default function PivotDashboard() {
                 )}
               </header>
 
+              {/* ── Section A: Date Dimensions Container ───────────────────── */}
+              <div className="border-b border-border">
+                {/* Container header with shared Pivot + Sort checkboxes */}
+                <div className="flex items-center justify-between gap-2 px-4 py-2 bg-accent-amber/5 border-b border-border/60">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent-amber">Date Dimensions</p>
+                  <div className="flex items-center gap-2">
+                    {/* Pivot checkbox */}
+                    <button
+                      type="button"
+                      onClick={toggleDatePivot}
+                      disabled={selectedDateDims.length === 0}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        datePivotEnabled
+                          ? 'border-accent-purple/40 bg-accent-purple/15 text-accent-purple'
+                          : 'border-border bg-bg-input text-text-muted hover:border-accent-purple/30 hover:text-accent-purple'
+                      }`}
+                      title="Pivot all selected date fields as column headers"
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${datePivotEnabled ? 'border-accent-purple bg-accent-purple' : 'border-current'}`}>
+                        {datePivotEnabled && (
+                          <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="1,4 3,6 7,1.5" />
+                          </svg>
+                        )}
+                      </span>
+                      Pivot
+                    </button>
+                    {/* Sort checkbox */}
+                    <button
+                      type="button"
+                      onClick={toggleDateSort}
+                      disabled={selectedDateDims.length === 0}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        dateSortEnabled
+                          ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
+                          : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
+                      }`}
+                      title="Sort by all selected date fields (year → year_quarter → year_month → tran_date)"
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${dateSortEnabled ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
+                        {dateSortEnabled && (
+                          <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="1,4 3,6 7,1.5" />
+                          </svg>
+                        )}
+                      </span>
+                      Sort
+                    </button>
+                  </div>
+                </div>
+
+                {/* Individual date fields — no pivot/sort buttons; just select + filter expand */}
+                <ul className="divide-y divide-border/60">
+                  {DIMENSION_FIELDS.filter((f) => (DATE_FIELD_ORDER as readonly string[]).includes(f.key)).map((field) => {
+                    const selected  = selectedDimensions.includes(field.key);
+                    const expanded  = expandedField === field.key;
+                    const filtered  = fieldHasFilter(field);
+                    const badge     = TYPE_BADGE[field.type];
+                    const mode      = dateFilterModes[field.key] ?? 'single';
+                    const hasFilter = !!field.filterKey;
+
+                    return (
+                      <li key={field.key} className={`transition-colors ${selected ? 'bg-accent-amber/8' : 'hover:bg-bg-hover'}`}>
+                        <div
+                          className="flex items-center gap-3 px-4 py-2 cursor-pointer select-none"
+                          onClick={() => toggleDimension(field.key)}
+                        >
+                          <span className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'border-accent-amber bg-accent-amber' : 'border-border'}`}>
+                            {selected && (
+                              <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="1.5,5 4,7.5 8.5,2" />
+                              </svg>
+                            )}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-1.5">
+                              <span className={`text-[12px] font-medium ${selected ? 'text-accent-amber' : 'text-text-primary'}`}>
+                                {field.label}
+                              </span>
+                              <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${badge.cls}`}>
+                                {badge.label}
+                              </span>
+                              {filtered && (
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-green/30 bg-accent-green/10 text-accent-green">
+                                  filtered
+                                </span>
+                              )}
+                              {selected && datePivotEnabled && (
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-purple/30 bg-accent-purple/10 text-accent-purple">
+                                  pivot
+                                </span>
+                              )}
+                              {selected && dateSortEnabled && (
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
+                                  sort
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-text-muted mt-0.5 truncate">{field.description}</p>
+                          </div>
+                          {hasFilter && (
+                            <button
+                              type="button"
+                              aria-label={expanded ? 'Collapse filter' : 'Expand filter'}
+                              onClick={(e) => { e.stopPropagation(); setExpanded(expanded ? null : field.key); }}
+                              className="flex-shrink-0 text-text-muted hover:text-text-primary text-[10px] px-1.5 py-0.5 rounded hover:bg-bg-input transition-colors"
+                            >
+                              {expanded ? '▲' : '▼'}
+                            </button>
+                          )}
+                        </div>
+                        {/* Inline filter — date fields */}
+                        {expanded && hasFilter && (
+                          <div className="px-4 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
+                            <div className="space-y-2">
+                              <div className="flex gap-1">
+                                {(['single', 'range', 'multi'] as DateFilterMode[]).map((m) => (
+                                  <button key={m} type="button"
+                                    onClick={() => { setDateMode(field.key, m); clearDateRangeFilters(field); }}
+                                    className={`px-2.5 py-0.5 rounded text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${mode === m ? 'bg-accent-blue text-white' : 'bg-bg-input text-text-secondary border border-border hover:border-border-strong'}`}>
+                                    {m === 'single' ? 'Single' : m === 'range' ? 'Range' : 'Multi'}
+                                  </button>
+                                ))}
+                              </div>
+                              {mode === 'single' && (
+                                <input type="text"
+                                  value={getSingleValue(field.filterKey!)}
+                                  onChange={(e) => { const v = e.target.value.trim(); setFieldFilter(field.filterKey!, v || undefined); }}
+                                  placeholder={field.type === 'date' ? 'YYYY-MM-DD' : field.type === 'month' ? 'YYYY-MM' : field.type === 'quarter' ? 'YYYY-Qn' : 'YYYY'}
+                                  className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                              )}
+                              {mode === 'range' && field.fromKey && field.toKey && (
+                                <div className="flex gap-2">
+                                  <input type="text" value={(filters[field.fromKey] as string) ?? ''} onChange={(e) => setFieldFilter(field.fromKey!, e.target.value.trim() || undefined)} placeholder="From" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                  <input type="text" value={(filters[field.toKey] as string) ?? ''} onChange={(e) => setFieldFilter(field.toKey!, e.target.value.trim() || undefined)} placeholder="To" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                </div>
+                              )}
+                              {mode === 'multi' && (
+                                field.type === 'date' ? (
+                                  <input type="text" value={getMultiValue(field).join(', ')} onChange={(e) => { const vals = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined); }} placeholder="YYYY-MM-DD, YYYY-MM-DD, …" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                ) : (
+                                  <SearchableMultiSelect value={getMultiValue(field)} onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)} options={getOptions(field)} placeholder={`Select ${field.label.toLowerCase()} values…`} />
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* ── Section B: Non-date dimension fields ────────────────────── */}
               <ul className="divide-y divide-border">
-                {DIMENSION_FIELDS.map((field) => {
+                {DIMENSION_FIELDS.filter((f) => !(DATE_FIELD_ORDER as readonly string[]).includes(f.key)).map((field) => {
                   const selected    = selectedDimensions.includes(field.key);
-                  const partitioned = partitionDimensions.includes(field.key);
-                  const partOrder   = partitionDimensions.indexOf(field.key);
-                  // ordered / orderIdx use effectiveOrderList so auto-included dims show as checked
+                  const pivotable   = PIVOT_CAPABLE_NON_DATE.has(field.key);
+                  const partitioned = nonDatePartitions.includes(field.key);
                   const ordered     = effectiveOrderList.includes(field.key);
                   const orderIdx    = effectiveOrderList.indexOf(field.key);
                   const isAutoOrder = autoOrderFields.includes(field.key);
                   const expanded    = expandedField === field.key;
                   const filtered    = fieldHasFilter(field);
                   const badge       = TYPE_BADGE[field.type];
-                  const isDate      = DATE_DIM_KEYS.has(field.key);
                   const isMeasure   = field.type === 'measure_dim';
-                  const mode        = isDate ? (dateFilterModes[field.key] ?? 'single') : null;
                   const hasFilter   = !isMeasure && field.filterKey;
 
                   return (
@@ -883,40 +1308,42 @@ export default function PivotDashboard() {
                             )}
                             {partitioned && (
                               <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-purple/30 bg-accent-purple/10 text-accent-purple">
-                                pivot #{partOrder + 1}
+                                pivot
                               </span>
                             )}
                             {ordered && (
                               <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${isAutoOrder ? 'border-accent-amber/20 bg-accent-amber/8 text-accent-amber/60' : 'border-accent-amber/30 bg-accent-amber/10 text-accent-amber'}`}>
-                                order #{orderIdx + 1}{isAutoOrder ? ' auto' : ''}
+                                sort #{orderIdx + 1}{isAutoOrder ? ' auto' : ''}
                               </span>
                             )}
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 truncate">{field.description}</p>
                         </div>
 
-                        {/* Include in Partition — always visible on every field */}
-                        <button
-                          type="button"
-                          onClick={(e) => togglePartition(field.key, e)}
-                          className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
-                            partitioned
-                              ? 'border-accent-purple/40 bg-accent-purple/15 text-accent-purple'
-                              : 'border-border bg-bg-input text-text-muted hover:border-accent-purple/30 hover:text-accent-purple'
-                          }`}
-                          title="Include this field as a pivot column header"
-                        >
-                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${partitioned ? 'border-accent-purple bg-accent-purple' : 'border-current'}`}>
-                            {partitioned && (
-                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="1,4 3,6 7,1.5" />
-                              </svg>
-                            )}
-                          </span>
-                          Partition
-                        </button>
+                        {/* Pivot button — only for pivot-capable non-date fields */}
+                        {pivotable && (
+                          <button
+                            type="button"
+                            onClick={(e) => toggleNonDatePartition(field.key, e)}
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
+                              partitioned
+                                ? 'border-accent-purple/40 bg-accent-purple/15 text-accent-purple'
+                                : 'border-border bg-bg-input text-text-muted hover:border-accent-purple/30 hover:text-accent-purple'
+                            }`}
+                            title="Pivot on this field's values as column headers"
+                          >
+                            <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${partitioned ? 'border-accent-purple bg-accent-purple' : 'border-current'}`}>
+                              {partitioned && (
+                                <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="1,4 3,6 7,1.5" />
+                                </svg>
+                              )}
+                            </span>
+                            Pivot
+                          </button>
+                        )}
 
-                        {/* Order By button — amber when active, dimmed when auto (pivot-driven) */}
+                        {/* Sort button */}
                         <button
                           type="button"
                           onClick={(e) => { if (!isAutoOrder) toggleOrderField(field.key, e); }}
@@ -927,7 +1354,7 @@ export default function PivotDashboard() {
                               ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
                               : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
                           }`}
-                          title={isAutoOrder ? 'Auto-included in ORDER BY (follows Pivot selection)' : 'Include this field in ORDER BY'}
+                          title={isAutoOrder ? 'Auto-included in ORDER BY (follows Pivot selection)' : 'Sort by this field'}
                         >
                           <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber/70' : 'border-current'}`}>
                             {ordered && (
@@ -936,7 +1363,7 @@ export default function PivotDashboard() {
                               </svg>
                             )}
                           </span>
-                          Order By
+                          Sort
                         </button>
 
                         {hasFilter && (
@@ -974,90 +1401,6 @@ export default function PivotDashboard() {
                               placeholder={field.key === 'acct_num' ? 'Partial account number (ILIKE)' : 'Partial CIF ID (ILIKE)'}
                               className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
                             />
-                          )}
-
-                          {/* Date fields — mode switcher + inputs */}
-                          {isDate && mode !== null && (
-                            <div className="space-y-2">
-                              {/* Mode tabs */}
-                              <div className="flex gap-1">
-                                {(['single', 'range', 'multi'] as DateFilterMode[]).map((m) => (
-                                  <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => { setDateMode(field.key, m); clearDateRangeFilters(field); }}
-                                    className={`px-2.5 py-0.5 rounded text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${
-                                      mode === m
-                                        ? 'bg-accent-blue text-white'
-                                        : 'bg-bg-input text-text-secondary border border-border hover:border-border-strong'
-                                    }`}
-                                  >
-                                    {m === 'single' ? 'Single' : m === 'range' ? 'Range' : 'Multi'}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {/* Single mode */}
-                              {mode === 'single' && (
-                                <input
-                                  type="text"
-                                  value={getSingleValue(field.filterKey!)}
-                                  onChange={(e) => {
-                                    const v = e.target.value.trim();
-                                    setFieldFilter(field.filterKey!, v || undefined);
-                                  }}
-                                  placeholder={
-                                    field.type === 'date'    ? 'YYYY-MM-DD' :
-                                    field.type === 'month'   ? 'YYYY-MM' :
-                                    field.type === 'quarter' ? 'YYYY-Qn' : 'YYYY'
-                                  }
-                                  className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono"
-                                />
-                              )}
-
-                              {/* Range mode */}
-                              {mode === 'range' && field.fromKey && field.toKey && (
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    value={(filters[field.fromKey] as string) ?? ''}
-                                    onChange={(e) => setFieldFilter(field.fromKey!, e.target.value.trim() || undefined)}
-                                    placeholder="From"
-                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={(filters[field.toKey] as string) ?? ''}
-                                    onChange={(e) => setFieldFilter(field.toKey!, e.target.value.trim() || undefined)}
-                                    placeholder="To"
-                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono"
-                                  />
-                                </div>
-                              )}
-
-                              {/* Multi mode */}
-                              {mode === 'multi' && (
-                                field.type === 'date' ? (
-                                  <input
-                                    type="text"
-                                    value={getMultiValue(field).join(', ')}
-                                    onChange={(e) => {
-                                      const vals = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
-                                      if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined);
-                                    }}
-                                    placeholder="YYYY-MM-DD, YYYY-MM-DD, …"
-                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono"
-                                  />
-                                ) : (
-                                  <SearchableMultiSelect
-                                    value={getMultiValue(field)}
-                                    onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)}
-                                    options={getOptions(field)}
-                                    placeholder={`Select ${field.label.toLowerCase()} values…`}
-                                  />
-                                )
-                              )}
-                            </div>
                           )}
                         </div>
                       )}
@@ -1129,14 +1472,14 @@ export default function PivotDashboard() {
                             <p className={`text-[12px] font-medium ${active ? 'text-accent-blue' : 'text-text-primary'}`}>{measure.label}</p>
                             {ordered && (
                               <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
-                                order #{orderIdx + 1}
+                                sort #{orderIdx + 1}
                               </span>
                             )}
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 font-mono">{measure.description}</p>
                         </div>
                       </button>
-                      {/* Order By button */}
+                      {/* Sort button */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1157,7 +1500,7 @@ export default function PivotDashboard() {
                             </svg>
                           )}
                         </span>
-                        Order By
+                        Sort
                       </button>
                     </li>
                   );
@@ -1180,15 +1523,15 @@ export default function PivotDashboard() {
                   <div key={period} className={`border-t border-border ${anyActive ? 'bg-accent-blue/5' : ''}`}>
                     <div className="px-4 pt-2.5 pb-1 flex items-center gap-2">
                       <p className={`text-[11px] font-semibold ${anyActive ? 'text-accent-blue' : 'text-text-primary'}`}>
-                        {period === 'prevdate'          && 'Previous Date'}
+                        {period === 'prevdate'          && 'Prev. Day'}
                         {period === 'thismonth'         && 'This Month'}
                         {period === 'thisyear'          && 'This Year'}
-                        {period === 'prevmonth'         && 'Previous Month'}
-                        {period === 'prevyear'          && 'Previous Year'}
-                        {period === 'prevmonthmtd'      && 'Prev Month MTD'}
-                        {period === 'prevyearytd'       && 'Prev Year YTD'}
-                        {period === 'prevmonthsamedate' && 'Prev Month Same Date'}
-                        {period === 'prevyearsamedate'  && 'Prev Year Same Date'}
+                        {period === 'prevmonth'         && 'Prev. Month'}
+                        {period === 'prevyear'          && 'Prev. Year'}
+                        {period === 'prevmonthmtd'      && 'Prev. Month MTD'}
+                        {period === 'prevyearytd'       && 'Prev. Year YTD'}
+                        {period === 'prevmonthsamedate' && 'Prev. Month Same Day'}
+                        {period === 'prevyearsamedate'  && 'Prev. Year Same Day'}
                       </p>
                       {anyActive && (
                         <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-blue/30 bg-accent-blue/15 text-accent-blue">
@@ -1229,7 +1572,7 @@ export default function PivotDashboard() {
                                 </span>
                               )}
                             </button>
-                            {/* Order By button */}
+                            {/* Sort button */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1241,7 +1584,7 @@ export default function PivotDashboard() {
                                   ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
                                   : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
                               }`}
-                              title={`Order by ${m.label}`}
+                              title={`Sort by ${m.label}`}
                             >
                               <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
                                 {ordered && (
@@ -1268,12 +1611,12 @@ export default function PivotDashboard() {
             {/* How it works */}
             <HowItWorksPanel />
 
-            {/* Partition clause summary — shown when any field is checked for partition */}
+            {/* Pivot clause summary — shown when any field is checked for pivot */}
             {partitionDimensions.length > 0 ? (
               <div className="rounded-lg border border-accent-purple/30 bg-accent-purple/8 px-4 py-2.5 flex items-start gap-2.5">
                 <span className="text-accent-purple text-[13px] leading-none mt-0.5">⊞</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-accent-purple">Partition pivot active</p>
+                  <p className="text-[11px] font-semibold text-accent-purple">Pivot active</p>
                   <p className="text-[10.5px] text-text-secondary mt-0.5">
                     Column headers are built from: {' '}
                     {partitionDimensions.map((k, i) => (
@@ -1301,7 +1644,7 @@ export default function PivotDashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setPartitionDimensions([]); setPage(1); }}
+                  onClick={() => { setNonDatePartitions([]); setDatePivotEnabled(false); setDateSortEnabled(false); setPage(1); }}
                   className="flex-shrink-0 text-[10px] font-medium text-accent-red hover:underline"
                 >
                   Clear
@@ -1311,8 +1654,8 @@ export default function PivotDashboard() {
               <div className="rounded-lg border border-border bg-bg-input/40 px-4 py-2 flex items-center gap-2">
                 <span className="text-text-muted text-[11px]">⊞</span>
                 <p className="text-[10.5px] text-text-muted">
-                  <strong className="text-text-secondary">No partition selected</strong> — check{' '}
-                  <span className="font-semibold text-accent-purple">Partition</span> on any selected dimension to pivot the report on its values as column headers.
+                  <strong className="text-text-secondary">No pivot selected</strong> — check{' '}
+                  <span className="font-semibold text-accent-purple">Pivot</span> on any selected dimension to pivot the report on its values as column headers.
                 </p>
               </div>
             )}
@@ -1392,11 +1735,11 @@ export default function PivotDashboard() {
                   </div>
                   {explorer?.sql_preview?.include_eab && (
                     <div className="mt-1.5 rounded border border-accent-teal/20 bg-accent-teal/8 px-2 py-1.5 text-[10px]">
-                      <span className="text-accent-teal font-semibold block mb-0.5">EOD Balance active — EAB join explained</span>
+                      <span className="text-accent-teal font-semibold block mb-0.5">TRAN Date Balance active — EAB join explained</span>
                       <span className="text-text-muted">
                         <code className="text-accent-teal">select_inner</code> adds <code>acid</code> to GROUP BY so the outer query can join.{' '}
                         <code className="text-accent-teal">select_outer</code> pulls <code>e.tran_date_bal</code> from the production eab table (not schema.rb).{' '}
-                        The procedure result contains both <code>eod_balance</code> (aggregated from tran_summary) and <code>eab_balance</code> (real snapshot from eab).
+                        The procedure result includes <code>tran_date_bal</code> from the eab table — the account balance snapshot on the transaction date.
                       </span>
                     </div>
                   )}

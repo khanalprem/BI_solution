@@ -150,7 +150,7 @@ const FACT_TABLES = [
       { name: 'entry_user_id',    type: 'string',          note: 'Numeric ID of entry user' },
       { name: 'vfd_user',         type: 'string',          note: 'User who verified — dimension' },
       { name: 'vfd_user_id',      type: 'string',          note: 'Numeric ID of verified user' },
-      { name: 'eod_balance',      type: 'decimal(18,2)',   note: 'End-of-day balance (joined from EAB)' },
+      { name: 'eod_balance',      type: 'decimal(18,2)',   note: '⚠ Not in tran_summary — only in gam & eab tables. Use tran_date_bal dimension for EAB balance.' },
       { name: 'merchant',         type: 'string',          note: 'Merchant name — dimension' },
       { name: 'service',          type: 'string',          note: 'Service type — dimension' },
       { name: 'product',          type: 'string',          note: 'Banking product — dimension' },
@@ -434,45 +434,66 @@ const RAILS_TABLES = [
 // ─── Dimensions ───────────────────────────────────────────────────────────────
 
 const DIMENSIONS = [
-  { key: 'gam_branch',       label: 'Account Branch',   type: 'categorical', sql: 'gam_branch',        description: 'Branch where the account is registered' },
-  { key: 'gam_province',     label: 'Account Province', type: 'categorical', sql: 'gam_province',      description: 'Province of the account branch' },
-  { key: 'gam_cluster',      label: 'Account Cluster',  type: 'categorical', sql: 'gam_cluster',       description: 'Branch cluster grouping' },
-  { key: 'gam_solid',        label: 'Account SOL ID',   type: 'categorical', sql: 'gam_solid',         description: 'SOL identifier for account routing' },
-  { key: 'tran_source',      label: 'Channel',          type: 'categorical', sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc.' },
-  { key: 'part_tran_type',   label: 'CR / DR',          type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side of the transaction' },
-  { key: 'product',          label: 'Product',          type: 'categorical', sql: 'product',           description: 'Banking product associated with the account' },
-  { key: 'service',          label: 'Service',          type: 'categorical', sql: 'service',           description: 'Service type applied to the transaction' },
-  { key: 'merchant',         label: 'Merchant',         type: 'categorical', sql: 'merchant',          description: 'Merchant identifier for payment transactions' },
-  { key: 'gl_sub_head_code', label: 'GL Code',          type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code (join to gsh for description)' },
-  { key: 'entry_user',       label: 'Entry User',       type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
-  { key: 'vfd_user',         label: 'Verified User',    type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
-  { key: 'acct_num',         label: 'Account Number',   type: 'text',        sql: 'acct_num',          description: 'Full or partial account number (ILIKE pattern)' },
-  { key: 'cif_id',           label: 'CIF ID',           type: 'text',        sql: 'cif_id',            description: 'Full or partial customer CIF ID (ILIKE pattern)' },
-  { key: 'tran_date',        label: 'Transaction Date', type: 'date',        sql: 'tran_date',         description: 'Daily granularity YYYY-MM-DD — pivotable date dimension' },
-  { key: 'year_month',       label: 'Year Month',       type: 'month',       sql: 'year_month',        description: 'Monthly period YYYY-MM — pivotable (e.g. 2024-03)' },
-  { key: 'year_quarter',     label: 'Year Quarter',     type: 'quarter',     sql: 'year_quarter',      description: 'Quarterly period YYYY-Qn — pivotable (e.g. 2024-Q1)' },
-  { key: 'year',             label: 'Year',             type: 'year',        sql: 'year',              description: 'Calendar year YYYY — pivotable' },
+  // ── Account / customer ──────────────────────────────────────────────────────
+  { key: 'gam_branch',       label: 'GAM Branch',         type: 'categorical', sql: 'gam_branch',        description: 'Branch where the account is registered (GAM)' },
+  { key: 'gam_province',     label: 'GAM Province',       type: 'categorical', sql: 'gam_province',      description: 'Province of the account branch (GAM)' },
+  { key: 'gam_cluster',      label: 'GAM Cluster',        type: 'categorical', sql: 'gam_cluster',       description: 'Cluster grouping of the account branch (GAM)' },
+  { key: 'gam_solid',        label: 'Account SOL ID',     type: 'categorical', sql: 'gam_solid',         description: 'SOL identifier for account routing' },
+  { key: 'acct_num',         label: 'ACCT Num',           type: 'text',        sql: 'acct_num',          description: 'Full or partial account number (ILIKE pattern)' },
+  { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name' },
+  { key: 'cif_id',           label: 'CIF Id',             type: 'text',        sql: 'cif_id',            description: 'Full or partial customer CIF ID (ILIKE pattern)' },
+  // ── Transaction ─────────────────────────────────────────────────────────────
+  { key: 'tran_source',      label: 'TRAN Source',        type: 'categorical', sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc.' },
+  { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
+  { key: 'tran_cluster',     label: 'TRAN Cluster',       type: 'categorical', sql: 'tran_cluster',      description: 'Cluster of the transaction branch' },
+  { key: 'tran_province',    label: 'TRAN Province',      type: 'categorical', sql: 'tran_province',     description: 'Province of the transaction branch' },
+  { key: 'tran_type',        label: 'TRAN Type',          type: 'categorical', sql: 'tran_type',         description: 'Transaction type code — pivot-capable' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side of the transaction (CR / DR) — pivot-capable' },
+  { key: 'gl_sub_head_code', label: 'GL Sub Head',        type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code — join to gsh for description — pivot-capable' },
+  { key: 'product',          label: 'Product',            type: 'categorical', sql: 'product',           description: 'Banking product associated with the account' },
+  { key: 'service',          label: 'Service',            type: 'categorical', sql: 'service',           description: 'Service type applied to the transaction' },
+  { key: 'merchant',         label: 'Merchant',           type: 'categorical', sql: 'merchant',          description: 'Merchant identifier for payment transactions' },
+  // ── User ────────────────────────────────────────────────────────────────────
+  { key: 'entry_user',       label: 'ENTRY User',         type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
+  { key: 'vfd_user',         label: 'VFD User',           type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
+  // ── Date (all are pivot-capable) ────────────────────────────────────────────
+  { key: 'tran_date',        label: 'Tran Date',          type: 'date',        sql: 'tran_date',         description: 'Daily granularity YYYY-MM-DD — pivots to column headers' },
+  { key: 'year_month',       label: 'Year Month',         type: 'month',       sql: 'year_month',        description: 'Monthly period YYYY-MM — pivotable (e.g. 2024-03)' },
+  { key: 'year_quarter',     label: 'Year Quarter',       type: 'quarter',     sql: 'year_quarter',      description: 'Quarterly period YYYY-Qn — pivotable (e.g. 2024-Q1)' },
+  { key: 'year',             label: 'Year',               type: 'year',        sql: 'year',              description: 'Calendar year YYYY — pivotable' },
+  // ── EAB outer-join ──────────────────────────────────────────────────────────
+  { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'eab',         sql: 'e.tran_date_bal',   description: 'Account balance on transaction date — from EAB table via acid LEFT JOIN. Enabling this adds the EAB join to the query.' },
 ];
 
 // ─── Measures ─────────────────────────────────────────────────────────────────
 
 const MEASURES = [
-  { key: 'total_amount',      label: 'Total Amount',      selectSql: 'SUM(tran_amt) AS total_amount',                                                                          orderSql: 'SUM(tran_amt) DESC' },
-  { key: 'transaction_count', label: 'Transaction Count', selectSql: 'SUM(tran_count) AS transaction_count',                                                                   orderSql: 'SUM(tran_count) DESC' },
-  { key: 'unique_accounts',   label: 'Unique Accounts',   selectSql: 'COUNT(DISTINCT acct_num) AS unique_accounts',                                                            orderSql: 'COUNT(DISTINCT acct_num) DESC' },
-  { key: 'unique_customers',  label: 'Unique Customers',  selectSql: "COUNT(DISTINCT cif_id) AS unique_customers",                                                             orderSql: 'COUNT(DISTINCT cif_id) DESC' },
-  { key: 'credit_amount',     label: 'Credit Amount',     selectSql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS credit_amount",                         orderSql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) DESC" },
-  { key: 'debit_amount',      label: 'Debit Amount',      selectSql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) AS debit_amount",                          orderSql: "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) DESC" },
-  { key: 'net_flow',          label: 'Net Flow',          selectSql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) AS net_flow",                      orderSql: "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE -tran_amt END) DESC" },
-  { key: 'eod_balance',       label: 'EOD Balance (EAB)', selectSql: 'MAX(eod_balance) AS eod_balance',                                                                        orderSql: 'MAX(eod_balance) DESC' },
+  // Core totals
+  { key: 'tran_amt',        label: 'TRAN Amount',        selectSql: 'SUM(tran_amt) tran_amt',                                                                              orderSql: 'SUM(tran_amt) DESC' },
+  { key: 'tran_count',      label: 'TRAN Count',         selectSql: 'SUM(tran_count) tran_count',                                                                          orderSql: 'SUM(tran_count) DESC' },
+  { key: 'signed_tranamt',  label: 'Signed TRAN Amount', selectSql: 'SUM(signed_tranamt) signed_tranamt',                                                                   orderSql: 'SUM(signed_tranamt) DESC' },
+  // Credit leg
+  { key: 'cr_amt',          label: 'CR Amount',          selectSql: "SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END) cr_amt",                                   orderSql: "SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END) DESC" },
+  { key: 'cr_count',        label: 'CR Count',           selectSql: "SUM(CASE WHEN part_tran_type='CR' THEN tran_count ELSE 0 END) cr_count",                               orderSql: "SUM(CASE WHEN part_tran_type='CR' THEN tran_count ELSE 0 END) DESC" },
+  // Debit leg
+  { key: 'dr_amt',          label: 'DR Amount',          selectSql: "SUM(CASE WHEN part_tran_type='DR' THEN tran_amt ELSE 0 END) dr_amt",                                   orderSql: "SUM(CASE WHEN part_tran_type='DR' THEN tran_amt ELSE 0 END) DESC" },
+  { key: 'dr_count',        label: 'DR Count',           selectSql: "SUM(CASE WHEN part_tran_type='DR' THEN tran_count ELSE 0 END) dr_count",                               orderSql: "SUM(CASE WHEN part_tran_type='DR' THEN tran_count ELSE 0 END) DESC" },
+  // Distinct counts
+  { key: 'tran_acct_count', label: 'TRAN Acct Count',   selectSql: 'COUNT(DISTINCT acct_num) tran_acct_count',                                                             orderSql: 'COUNT(DISTINCT acct_num) DESC' },
+  // Date / EAB
+  { key: 'tran_maxdate',    label: 'TRAN Max Date',      selectSql: 'MAX(tran_date) tran_maxdate',                                                                          orderSql: 'MAX(tran_date) DESC' },
+  { key: 'tran_date_bal',   label: 'TRAN Date Balance',  selectSql: 'e.tran_date_bal',                                                                                      orderSql: 'e.tran_date_bal DESC',   note: 'EAB join required — select TRAN Date Balance dimension to activate.' },
 ];
+// Note: eod_balance does NOT exist in tran_summary directly.
+// Account balance data comes from the EAB table via the tran_date_bal dimension (TRAN Date Balance).
+// Select "TRAN Date Balance" in Dimensions to trigger the EAB LEFT JOIN.
 
 // ─── Periods ──────────────────────────────────────────────────────────────────
 
 const PERIODS = [
   { key: 'prevdate',          param: 'prevdate_where',          label: 'Previous Date',          desc: '1 calendar day before the end date' },
-  { key: 'thismonth',         param: 'thismonth_where',         label: 'This Month',             desc: 'First day of current month → end date (month-to-date)' },
-  { key: 'thisyear',          param: 'thisyear_where',          label: 'This Year',              desc: 'Jan 1 of current year → end date (year-to-date)' },
+  { key: 'thismonth',         param: 'thismonth_where',         label: 'This Month',             desc: 'Full calendar month containing the end date (1st → last day of month)' },
+  { key: 'thisyear',          param: 'thisyear_where',          label: 'This Year',              desc: 'Full calendar year containing the end date (Jan 1 → Dec 31)' },
   { key: 'prevmonth',         param: 'prevmonth_where',         label: 'Previous Month',         desc: 'Full prior calendar month (1st → last day)' },
   { key: 'prevyear',          param: 'prevyear_where',          label: 'Previous Year',          desc: 'Full prior calendar year (Jan 1 → Dec 31)' },
   { key: 'prevmonthmtd',      param: 'prevmonthmtd_where',      label: 'Prev Month MTD',         desc: 'Prior month day 1 → same day-of-month as end date' },
@@ -539,6 +560,7 @@ export default function SkillsPage() {
     month:       'amber',
     quarter:     'amber',
     year:        'amber',
+    eab:         'teal',
   };
 
   return (
@@ -576,8 +598,8 @@ export default function SkillsPage() {
           <div className="mt-6 flex flex-wrap gap-2.5">
             {[
               { label: '19 Production Tables', color: 'blue' },
-              { label: '18 Dimensions',         color: 'purple' },
-              { label: '8 Measures',             color: 'green' },
+              { label: '24 Dimensions',         color: 'purple' },
+              { label: '10 Measures',            color: 'green' },
               { label: '9 Period Comparisons',   color: 'amber' },
               { label: '20 Procedure Params',    color: 'red' },
               { label: '6 User Roles',           color: 'teal' },
@@ -743,8 +765,8 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (18)"
-            sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary."
+            label="Pivot Dimensions (24)"
+            sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
             <ScrollTable
@@ -763,17 +785,18 @@ export default function SkillsPage() {
         {/* ── Measures ─────────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Measures (8)"
-            sub="Aggregation expressions injected into the SELECT clause of get_tran_summary. At least one must be selected."
+            label="Measures (10)"
+            sub="Aggregation expressions injected into the SELECT clause of get_tran_summary. At least one must be selected. EOD Balance is not a measure — select the TRAN Date Balance dimension to trigger the EAB LEFT JOIN."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
             <ScrollTable
-              headers={['Key', 'Label', 'SELECT SQL', 'ORDER BY SQL']}
+              headers={['Key', 'Label', 'SELECT SQL', 'ORDER BY SQL', 'Notes']}
               rows={MEASURES.map((m) => [
                 <Mono key={m.key}>{m.key}</Mono>,
                 <span key="label" className="font-medium text-text-primary text-[11px]">{m.label}</span>,
                 <span key="sel" className="font-mono text-[9.5px] text-accent-green leading-relaxed">{m.selectSql}</span>,
                 <span key="ord" className="font-mono text-[9.5px] text-text-muted">{m.orderSql}</span>,
+                <span key="note" className="text-[10px] text-text-muted italic">{(m as { note?: string }).note ?? ''}</span>,
               ])}
             />
           </div>

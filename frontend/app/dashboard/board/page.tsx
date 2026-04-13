@@ -15,13 +15,8 @@ import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts
 
 type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'FY' | 'CUSTOM';
 
-const BOARD_REPORTS = [
-  { id: 1, name: 'Monthly Board Pack', frequency: 'Monthly', lastRun: '2024-07-01', status: 'completed' },
-  { id: 2, name: 'Quarterly Governance Report', frequency: 'Quarterly', lastRun: '2024-06-30', status: 'completed' },
-  { id: 3, name: 'Risk Committee Report', frequency: 'Monthly', lastRun: '2024-06-28', status: 'completed' },
-  { id: 4, name: 'Audit Committee Pack', frequency: 'Quarterly', lastRun: '2024-06-15', status: 'completed' },
-  { id: 5, name: 'Annual Strategic Review', frequency: 'Annual', lastRun: '2023-12-31', status: 'completed' },
-];
+// BOARD_REPORTS removed — no live database source for governance report registry.
+// When a reports API is connected, restore a data-driven table here.
 
 interface BoardBranchRow {
   branch_code: string;
@@ -34,7 +29,7 @@ interface BoardBranchRow {
 export default function BoardDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
+  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useDashboardData(filters);
   const { data: filterStats } = useFilterStatistics();
@@ -181,32 +176,12 @@ export default function BoardDashboard() {
           enablePagination={false}
         />
 
-        {/* Governance Reports */}
-        <DataTable title="Governance Reports" subtitle={`${BOARD_REPORTS.length} reports available`}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader>Report Name</TableHeader>
-                <TableHeader>Frequency</TableHeader>
-                <TableHeader>Last Generated</TableHeader>
-                <TableHeader>Status</TableHeader>
-                <TableHeader>Actions</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {BOARD_REPORTS.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell><strong className="text-text-primary">{report.name}</strong></TableCell>
-                  <TableCell><Pill variant="blue">{report.frequency}</Pill></TableCell>
-                  <TableCell>{report.lastRun}</TableCell>
-                  <TableCell><Pill variant="green">Completed</Pill></TableCell>
-                  <TableCell>
-                    <button className="text-accent-blue text-xs hover:underline">Download</button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        {/* Governance Reports — no report registry API connected yet */}
+        <DataTable title="Governance Reports" subtitle="No report registry connected">
+          <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+            <span className="text-[12px] text-text-muted">No governance report registry is connected to the database.</span>
+            <span className="text-[10px] text-text-muted opacity-60">Connect a reports API endpoint to list and download board reports here.</span>
+          </div>
         </DataTable>
       </div>
     </>

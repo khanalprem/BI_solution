@@ -30,7 +30,7 @@ function getChannelColor(channel: string) {
 export default function DigitalDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>('ALL');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({ startDate: '2021-02-18', endDate: '2024-07-01' });
+  const [filters, setFilters] = useState<DashboardFilters>({ ...getDateRange('ALL') });
 
   const { data, isLoading } = useDigitalChannels(filters);
   const { data: filterStats } = useFilterStatistics();

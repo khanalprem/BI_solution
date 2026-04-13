@@ -333,15 +333,11 @@ export default function CustomerDashboard() {
             <KPICard
               label="Total Customers"
               value={(data?.summary?.unique_customers || 0).toLocaleString()}
-              change={4.2}
-              changeType="up"
               iconBg="var(--accent-blue-dim)"
             />
             <KPICard
               label="Total Portfolio Value"
               value={formatNPR(data?.summary?.total_amount || 0)}
-              change={6.8}
-              changeType="up"
               iconBg="var(--accent-green-dim)"
               sparkData={segmentData.map(s => s.amount)}
             />
@@ -355,8 +351,6 @@ export default function CustomerDashboard() {
             <KPICard
               label="Active Accounts"
               value={(data?.summary?.unique_accounts || 0).toLocaleString()}
-              change={3.1}
-              changeType="up"
               iconBg="var(--accent-teal-dim)"
             />
             <KPICard
