@@ -550,6 +550,20 @@ class ProductionDataService
         "#{DIMENSIONS.fetch(dim_key).fetch(:sql)} IN (#{values.map { |v| conn.quote(v) }.join(', ')})"
       end
 
+      # When PARTITION BY is active (e.g. PARTITION BY tran_date), the main query returns
+      # up to page_size rows PER partition. Across N date partitions that's up to
+      # page_size × N unique non-date dimension combinations (e.g. accounts). The comparison
+      # must return ALL of them, not just the top page_size. Compute how many unique
+      # combinations exist and use that as the comparison page_size, capped at 1000.
+      comparison_page_size = if dim_value_clauses.any? && non_date_dims.any?
+        unique_combos = main_sanitized.map { |r|
+          non_date_dims.map { |k| r[k].to_s }.join("\x00")
+        }.uniq.length
+        unique_combos.clamp(normalized_page_size, 1000)
+      else
+        normalized_page_size
+      end
+
       # ── Comparison SELECT / GROUP BY / ORDER BY ────────────────────────────────
       # The comparison call must NOT group by the date dimension.
       # Reason: if we keep "GROUP BY acct_num, tran_date" the comparison returns one row
@@ -623,7 +637,7 @@ class ProductionDataService
             eab_join => #{conn.quote(eab_join)},
             user_id => '',
             page => 1,
-            page_size => #{normalized_page_size}
+            page_size => #{comparison_page_size}
           )
         SQL
 
