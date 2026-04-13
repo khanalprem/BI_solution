@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Syne, JetBrains_Mono } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
-  weight: ["300", "400", "500", "600", "700", "800"],
+  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
-const syne = Syne({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["600", "700", "800"],
@@ -29,6 +29,15 @@ export const metadata: Metadata = {
   description: "Business Intelligence platform for Nepal banking sector",
 };
 
+// Inline script: read localStorage / OS preference BEFORE paint → no flash
+const themeScript = `(function(){
+  var s=localStorage.getItem('bankbi-theme');
+  var p=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  var t=s||p;
+  document.documentElement.dataset.theme=t;
+  if(t==='dark')document.documentElement.classList.add('dark');
+})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -36,8 +45,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
-        className={`${plusJakartaSans.variable} ${syne.variable} ${jetbrainsMono.variable} font-sans`}
+        className={`${inter.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable} font-sans`}
         suppressHydrationWarning
       >
         <Providers>{children}</Providers>
