@@ -55,6 +55,7 @@ cd backend && bundle exec rspec
 | Comparison period logic change | Comparison Period Architecture section |
 | New file/component | Project Structure tree |
 | New convention | Relevant convention section |
+| New shadcn component added | UI Design System Rules section |
 | New known issue / tech debt | Known Issues section |
 
 ### Rule 4 — TypeScript check after every frontend edit
@@ -82,7 +83,7 @@ Before declaring any task done, verify:
 ## Architecture
 
 ```
-Browser (Next.js 15, TanStack Query, Recharts)
+Browser (Next.js 15, Tailwind CSS, shadcn/ui, TanStack Query, PremiumCharts)
     ↓ REST/JSON
 Rails 7 API  →  ProductionDataService  →  get_tran_summary (stored proc)
                                                 ↓
@@ -119,15 +120,18 @@ BI_solution/
 │   │   │   └── skills/page.tsx     ← Platform Guide / Data Dictionary (this UI)
 │   │   └── signin/page.tsx
 │   ├── components/
-│   │   ├── layout/TopBar.tsx
-│   │   └── ui/                     ← RecordTable, Select, charts, etc.
+│   │   ├── layout/
+│   │   │   ├── Sidebar.tsx         ← Collapsible rail (220px ↔ 56px), persists to localStorage
+│   │   │   └── TopBar.tsx
+│   │   └── ui/                     ← shadcn + custom: Badge, KPICard, ChartCard, etc.
 │   ├── lib/
 │   │   ├── api.ts                  ← Axios client (baseURL = :3001)
 │   │   ├── hooks/
 │   │   │   ├── useDashboardPage.ts ← shared filter/period state hook
 │   │   │   └── useDashboardData.ts ← TanStack Query wrappers
 │   │   └── formatters.ts           ← NPR formatting, date helpers
-│   └── types/index.ts              ← DashboardFilters, FilterValuesResponse, etc.
+│   ├── types/index.ts              ← DashboardFilters, FilterValuesResponse, etc.
+│   └── components.json             ← shadcn/ui CLI config
 └── docker-compose.yml
 ```
 
@@ -251,9 +255,101 @@ cd frontend && npx tsc --noEmit 2>&1 | grep "pivot/page"
 Pre-existing errors exist in `board/`, `branch/`, `customer/`, `executive/` pages — ignore those.
 
 ### Styling
-- Design tokens: `text-text-primary`, `text-accent-blue`, `bg-bg-card`, etc. (CSS vars)
-- Color palette: blue (categorical), green (text/measures), amber (date/periods), purple (pivot), teal (EAB/special), red (critical)
-- `font-mono text-[11px]` for numeric cells in tables
+
+**Fonts**
+- Body text: Inter → `font-sans` (CSS var `--font-sans`)
+- Headings / KPI labels: Plus Jakarta Sans → `font-display` (CSS var `--font-display`)
+- Numeric cells / amounts: JetBrains Mono → `font-mono` (CSS var `--font-mono`)
+- Use `font-mono text-xs` for numeric cells in tables (NOT `text-[11px]`)
+
+**Design tokens** — always use Tailwind token classes, never `style={{ color: '...' }}`
+- Backgrounds: `bg-bg-base`, `bg-bg-surface`, `bg-bg-card`, `bg-bg-card-hover`, `bg-bg-input`
+- Borders: `border-border`, `border-border-strong`
+- Text: `text-text-primary`, `text-text-secondary`, `text-text-muted`
+- Accents: `text-accent-blue`, `bg-accent-blue-dim`, etc.
+
+**Color palette** (updated — indigo primary, not blue)
+- `accent-blue` = `#6366F1` (indigo) — primary actions, active states
+- `accent-green` = `#10B981` — positive, credit, growth
+- `accent-red` = `#F43F5E` — negative, debit, critical
+- `accent-amber` = `#F59E0B` — warning, date periods
+- `accent-purple` = `#8B5CF6` — pivot / analysis
+- `accent-teal` = `#14B8A6` — EAB / balance data
+
+**Page layout pattern** — all dashboard pages use:
+```tsx
+<div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+```
+KPI card row:
+```tsx
+<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+```
+Chart grid:
+```tsx
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+```
+
+---
+
+## UI Design System Rules
+
+### shadcn/ui Components — Golden Rules
+
+**Never create custom implementations** of these — always use shadcn:
+
+| Need | Use | Import from |
+|------|-----|-------------|
+| Status badge / pill | `Badge` + `badgeColor` | `@/components/ui/badge` |
+| Table | `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell` | `@/components/ui/table` |
+| Divider line | `Separator` | `@/components/ui/separator` |
+| Hover tooltip | `Tooltip`, `TooltipTrigger`, `TooltipContent`, `TooltipProvider` | `@/components/ui/tooltip` |
+| Loading state | `Skeleton` | `@/components/ui/skeleton` |
+| Button | `Button` | `@/components/ui/button` |
+| Dropdown / context menu | `DropdownMenu` (+ sub-components) | `@/components/ui/dropdown-menu` |
+
+**`Pill.tsx` is deleted** — do not recreate it. Use:
+```tsx
+import { Badge, badgeColor } from '@/components/ui/badge';
+
+// Static variant
+<Badge className={badgeColor.green}>Active</Badge>
+
+// Dynamic variant
+<Badge className={row.risk === 1 ? badgeColor.green : badgeColor.red}>Risk</Badge>
+
+// From function returning string
+<Badge className={badgeColor[getStatus() as BadgeColor]}>...</Badge>
+```
+
+Available `badgeColor` keys: `green` · `red` · `amber` · `blue` · `purple` · `teal` · `muted`
+
+### Class Merging
+
+Always use `cn()` for conditional classes — never string concatenation:
+```typescript
+import { cn } from '@/lib/utils';
+
+// ✅ Correct
+<div className={cn('base-class', isActive && 'active-class', variant === 'blue' && 'text-accent-blue')} />
+
+// ❌ Wrong
+<div className={`base-class ${isActive ? 'active-class' : ''}`} />
+```
+
+### No Inline Style for Tokens
+
+Never use `style={{ color: '#6366F1' }}` when a token class exists:
+```tsx
+// ✅ Correct
+<span className="text-accent-blue">
+
+// ❌ Wrong
+<span style={{ color: '#6366F1' }}>
+```
+
+### Sidebar Collapse
+
+The sidebar supports collapse (220px ↔ 56px icon rail). State persists in `localStorage('bankbi-sidebar-collapsed')`. This is already implemented in `Sidebar.tsx` — do not duplicate this logic.
 
 ---
 
@@ -359,3 +455,6 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - `eod_balance` was removed from `DIMENSIONS` in the service and pivot page — it does not exist in `tran_summary` directly; use `tran_date_bal` (from EAB outer join) instead
 - `DATE_FIELD_ORDER` enforces fixed date ordering: `year → year_quarter → year_month → tran_date`
 - Legacy measure aliases (`total_amount`, `transaction_count`, `unique_accounts`, `unique_customers`, `credit_amount`, `debit_amount`, `net_flow`) remain in the backend MEASURES hash for backwards compatibility but are no longer shown in the pivot sidebar — canonical data-dictionary keys are used instead (`tran_amt`, `tran_count`, etc.)
+- `AdvancedDataTable.tsx` still uses hand-rolled table primitives — future work to migrate internals to shadcn `Table` components
+- `Select.tsx` / `SearchableMultiSelect` kept as-is (complex search+checkbox multi-select not achievable with shadcn Select); shadcn `select.tsx` is available for new simple single-select usage going forward
+- One pre-existing TS error in `lib/hooks/useDashboardPage.ts` (type mismatch on `DashboardFilters`) — unrelated to UI redesign
