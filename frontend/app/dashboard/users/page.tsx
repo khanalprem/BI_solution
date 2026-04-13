@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TopBar } from '@/components/layout/TopBar';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import apiClient from '@/lib/api';
@@ -216,9 +216,9 @@ export default function UsersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-2.5">
-                        <Pill variant={user.is_active ? 'green' : 'red'}>
+                        <Badge className={user.is_active ? badgeColor.green : badgeColor.red}>
                           {user.is_active ? 'Active' : 'Inactive'}
-                        </Pill>
+                        </Badge>
                       </td>
                       <td className="px-4 py-2.5 text-text-muted text-[10.5px]">
                         {user.role === 'branch_staff'

@@ -2,7 +2,7 @@
 
 import { TopBar } from '@/components/layout/TopBar';
 import { RecordTable } from '@/components/ui/RecordTable';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { useProductionCatalog, useProductionTable } from '@/lib/hooks/useDashboardData';
 
 export default function ScheduledDashboard() {
@@ -18,7 +18,7 @@ export default function ScheduledDashboard() {
             <div key={procedure.name} className="rounded-xl border border-border bg-bg-card p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[13px] font-semibold text-text-primary">{procedure.name}</div>
-                <Pill variant="green">production</Pill>
+                <Badge className={badgeColor.green}>production</Badge>
               </div>
               <div className="mt-1 text-[11px] text-text-secondary">{procedure.description}</div>
               {procedure.signature && (

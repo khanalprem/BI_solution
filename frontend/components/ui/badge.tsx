@@ -34,3 +34,16 @@ function Badge({ className, variant, ...props }: BadgeProps) {
 }
 
 export { Badge, badgeVariants }
+
+// BankBI colour-variant mapping — mirrors old Pill variants
+export const badgeColor = {
+  green:  'bg-accent-green-dim  text-accent-green  border-transparent',
+  red:    'bg-accent-red-dim    text-accent-red    border-transparent',
+  amber:  'bg-accent-amber-dim  text-accent-amber  border-transparent',
+  blue:   'bg-accent-blue-dim   text-accent-blue   border-transparent',
+  purple: 'bg-accent-purple-dim text-accent-purple border-transparent',
+  teal:   'bg-accent-teal-dim   text-accent-teal   border-transparent',
+  muted:  'bg-bg-input          text-text-muted    border-transparent',
+} as const;
+
+export type BadgeColor = keyof typeof badgeColor;

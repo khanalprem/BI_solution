@@ -7,7 +7,7 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState, ChartLegendItem } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { useDashboardData, useFilterStatistics, useTopCustomers } from '@/lib/hooks/useDashboardData';
 import { formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
@@ -159,7 +159,7 @@ export default function CustomerDashboard() {
       {
         accessorKey: 'segment',
         header: 'Segment',
-        cell: ({ row }) => <Pill variant="blue">{row.original.segment}</Pill>,
+        cell: ({ row }) => <Badge className={badgeColor.blue}>{row.original.segment}</Badge>,
         enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },
       {
@@ -190,9 +190,9 @@ export default function CustomerDashboard() {
         accessorKey: 'risk',
         header: 'Risk Tier',
         cell: ({ row }) => (
-          <Pill variant={row.original.risk === 1 ? 'green' : row.original.risk === 2 ? 'amber' : 'red'}>
+          <Badge className={row.original.risk === 1 ? badgeColor.green : row.original.risk === 2 ? badgeColor.amber : badgeColor.red}>
             Tier {row.original.risk}
-          </Pill>
+          </Badge>
         ),
         enableColumnFilter: true, filterFn: 'arrayFilter', meta: { filterType: 'select' },
       },

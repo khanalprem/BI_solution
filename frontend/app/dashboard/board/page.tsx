@@ -7,7 +7,6 @@ import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable'
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { DataTable, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '@/components/ui/DataTable';
-import { Pill } from '@/components/ui/Pill';
 import { useDashboardData, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatNPR, formatPercent, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';

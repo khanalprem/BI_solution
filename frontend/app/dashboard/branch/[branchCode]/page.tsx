@@ -8,7 +8,7 @@ import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { useProductionExplorer, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters } from '@/types';
@@ -152,7 +152,7 @@ export default function BranchDetailPage() {
           <Link href="/dashboard/branch" className="text-[11px] text-accent-blue hover:underline">
             ← Back to Branch &amp; Regional
           </Link>
-          <Pill variant="green">Active · Warehouse Mode</Pill>
+          <Badge className={badgeColor.green}>Active · Warehouse Mode</Badge>
         </div>
 
         {/* ── Filters (right below back nav) ── */}

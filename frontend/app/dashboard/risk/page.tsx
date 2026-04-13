@@ -5,7 +5,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor, type BadgeColor } from '@/components/ui/badge';
 import { useRiskSummary } from '@/lib/hooks/useDashboardData';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import { formatNPR, formatPercent } from '@/lib/formatters';
@@ -111,9 +111,9 @@ export default function RiskDashboard() {
       cell: ({ row }) => {
         const pct = row.original.amount > 0 ? (row.original.debit_amount / row.original.amount) * 100 : 0;
         return (
-          <Pill variant={pct > 60 ? 'red' : pct > 45 ? 'amber' : 'green'}>
+          <Badge className={pct > 60 ? badgeColor.red : pct > 45 ? badgeColor.amber : badgeColor.green}>
             {pct > 60 ? 'High' : pct > 45 ? 'Medium' : 'Low'}
-          </Pill>
+          </Badge>
         );
       },
     },
@@ -196,9 +196,9 @@ export default function RiskDashboard() {
             <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-2">
               <div className={`h-full rounded-full transition-all ${top3BranchShare > 50 ? 'bg-accent-red' : top3BranchShare > 30 ? 'bg-accent-amber' : 'bg-accent-green'}`} style={{ width: `${Math.min(top3BranchShare, 100)}%` }} />
             </div>
-            <Pill variant={getRiskLevel(top3BranchShare)}>
+            <Badge className={badgeColor[getRiskLevel(top3BranchShare) as BadgeColor]}>
               {top3BranchShare > 60 ? 'High Concentration' : top3BranchShare > 40 ? 'Moderate' : 'Well Distributed'}
-            </Pill>
+            </Badge>
           </div>
 
           {/* Volatility Risk */}
@@ -211,9 +211,9 @@ export default function RiskDashboard() {
             <div className="h-2 rounded-full bg-bg-input overflow-hidden mb-2">
               <div className={`h-full rounded-full transition-all ${monthlyVolatility > 50 ? 'bg-accent-red' : monthlyVolatility > 25 ? 'bg-accent-amber' : 'bg-accent-green'}`} style={{ width: `${Math.min(monthlyVolatility, 100)}%` }} />
             </div>
-            <Pill variant={monthlyVolatility > 50 ? 'red' : monthlyVolatility > 25 ? 'amber' : 'green'}>
+            <Badge className={monthlyVolatility > 50 ? badgeColor.red : monthlyVolatility > 25 ? badgeColor.amber : badgeColor.green}>
               {monthlyVolatility > 50 ? 'High Volatility' : monthlyVolatility > 25 ? 'Moderate' : 'Stable'}
-            </Pill>
+            </Badge>
           </div>
 
           {/* High Value Risk */}
@@ -226,9 +226,9 @@ export default function RiskDashboard() {
             <div className="text-[12px] text-text-secondary mb-3">
               Threshold: {formatNPR(data?.high_value_threshold ?? 0)}
             </div>
-            <Pill variant={highValueCount > 100 ? 'amber' : 'green'}>
+            <Badge className={highValueCount > 100 ? badgeColor.amber : badgeColor.green}>
               {highValueCount > 100 ? 'Monitor Required' : 'Within Normal'}
-            </Pill>
+            </Badge>
           </div>
         </div>
 

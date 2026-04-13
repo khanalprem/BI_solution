@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { KPICard } from '@/components/ui/KPICard';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { RecordTable } from '@/components/ui/RecordTable';
 import { useProductionCatalog, useProductionTable } from '@/lib/hooks/useDashboardData';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -81,7 +81,7 @@ export default function ConfigDashboard() {
                       <code className={`text-[11px] font-semibold ${selected ? 'text-accent-blue' : 'text-text-primary'}`}>
                         {table.table_name}
                       </code>
-                      <Pill variant={selected ? 'blue' : 'teal'}>{table.category}</Pill>
+                      <Badge className={selected ? badgeColor.blue : badgeColor.teal}>{table.category}</Badge>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-[10px] text-text-muted">
                       <span>{table.estimated_rows.toLocaleString()} rows</span>
@@ -101,7 +101,7 @@ export default function ConfigDashboard() {
                   <div key={proc.name} className="rounded-lg border border-border bg-bg-input p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <code className="text-[11px] font-semibold text-text-primary">{proc.name}</code>
-                      <Pill variant="green">live</Pill>
+                      <Badge className={badgeColor.green}>live</Badge>
                     </div>
                     <div className="mt-0.5 text-[10px] text-text-muted">{proc.description}</div>
                   </div>
@@ -119,7 +119,7 @@ export default function ConfigDashboard() {
                 <div>
                   <div className="flex items-center gap-2">
                     <code className="text-[13px] font-bold text-text-primary">{selectedMeta.table_name}</code>
-                    <Pill variant="blue">{selectedMeta.category}</Pill>
+                    <Badge className={badgeColor.blue}>{selectedMeta.category}</Badge>
                   </div>
                   <div className="text-[11px] text-text-muted mt-0.5">{selectedMeta.description}</div>
                 </div>

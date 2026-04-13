@@ -9,7 +9,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { RecordTable } from '@/components/ui/RecordTable';
-import { Pill } from '@/components/ui/Pill';
+import { Badge, badgeColor } from '@/components/ui/badge';
 import { useCustomerProfile, useFilterStatistics } from '@/lib/hooks/useDashboardData';
 import { formatChannelLabel, formatNPR, getDateRange, parseISODateToLocal } from '@/lib/formatters';
 import type { CustomerRecentTransaction, DashboardFilters } from '@/types';
@@ -155,9 +155,9 @@ export default function CustomerDetailPage() {
       accessorKey: 'part_tran_type',
       header: 'Part Type',
       cell: ({ row }) => (
-        <Pill variant={row.original.part_tran_type === 'CR' ? 'green' : 'red'}>
+        <Badge className={row.original.part_tran_type === 'CR' ? badgeColor.green : badgeColor.red}>
           {row.original.part_tran_type}
-        </Pill>
+        </Badge>
       ),
       enableColumnFilter: true,
       filterFn: 'arrayFilter',
@@ -252,10 +252,10 @@ export default function CustomerDetailPage() {
               ← Back to Customer &amp; Portfolio
             </Link>
             <div className="flex items-center gap-2">
-              <Pill variant="blue">{customerSegment}</Pill>
-              <Pill variant={riskTier === 1 ? 'green' : riskTier === 2 ? 'amber' : 'red'}>
+              <Badge className={badgeColor.blue}>{customerSegment}</Badge>
+              <Badge className={riskTier === 1 ? badgeColor.green : riskTier === 2 ? badgeColor.amber : badgeColor.red}>
                 Tier {riskTier}
-              </Pill>
+              </Badge>
             </div>
           </div>
           <AdvancedFilters
@@ -281,14 +281,14 @@ export default function CustomerDetailPage() {
                   <h2 className="text-[15px] font-bold text-text-primary">
                     {[profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || customerName}
                   </h2>
-                  <Pill variant="blue">{customerSegment}</Pill>
-                  <Pill variant={riskTier === 1 ? 'green' : riskTier === 2 ? 'amber' : 'red'}>
+                  <Badge className={badgeColor.blue}>{customerSegment}</Badge>
+                  <Badge className={riskTier === 1 ? badgeColor.green : riskTier === 2 ? badgeColor.amber : badgeColor.red}>
                     Risk Tier {riskTier}
-                  </Pill>
+                  </Badge>
                   {profile?.account_status && (
-                    <Pill variant={profile.account_status === 'A' ? 'green' : 'red'}>
+                    <Badge className={profile.account_status === 'A' ? badgeColor.green : badgeColor.red}>
                       {profile.account_status === 'A' ? 'Active' : 'Inactive'}
-                    </Pill>
+                    </Badge>
                   )}
                 </div>
 
