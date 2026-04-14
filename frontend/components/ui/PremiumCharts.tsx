@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
 import {
   BarChart   as EBar,
@@ -149,6 +149,20 @@ function areaGradient(color: string) {
   ]);
 }
 
+// Tick counter — bumped whenever the app theme changes. All charts include this
+// in their deps so ECharts rebuilds its option (and re-reads CSS var colors)
+// when the user toggles between dark and light themes.
+function useThemeTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const observer = new MutationObserver(() => setTick((n) => n + 1));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+    return () => observer.disconnect();
+  }, []);
+  return tick;
+}
+
 // ─── Core hook ────────────────────────────────────────────────────────────────
 export function useEChart(
   buildOption: () => EChartsOption,
@@ -156,6 +170,7 @@ export function useEChart(
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<ECharts | null>(null);
+  const themeTick    = useThemeTick();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -164,7 +179,7 @@ export function useEChart(
     if (!chartRef.current || chartRef.current.isDisposed()) {
       chartRef.current = echarts.init(el, null, { renderer: 'canvas' });
     }
-    
+
     let isMounted = true;
     const option = buildOption();
 
@@ -189,7 +204,7 @@ export function useEChart(
       ro.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, themeTick]);
 
   useEffect(() => () => { chartRef.current?.dispose(); }, []);
   return containerRef;
@@ -262,22 +277,27 @@ export function PremiumBarChart({
         name: s.name || s.dataKey,
         type: 'bar' as const,
         data: isHorizontal ? values.slice().reverse() : values,
-        barMaxWidth: 40,
+        // Slightly slimmer & subtler rounding — reads clean across 4-bar and 20-bar charts.
+        barMaxWidth: 28,
         itemStyle: {
-          borderRadius: isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
+          borderRadius: isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0],
           color: itemColors && series.length === 1
             ? undefined
             : barGradient(c),
         },
-        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: `${c}55` } },
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: `${c}44` } },
         animationDuration: 700,
         animationEasing: 'cubicOut' as const,
       };
     });
 
+    // Cap axis tick density so horizontal charts with long amount scales don't
+    // spam "Rs. 300Cr · Rs. 600Cr · …" — 4 ticks reads clean.
+    const valueAxisStyle = { ...noAxisLine(), axisLabel: { ...axisLabel(t), formatter: (v: number) => formatValue(v) }, splitNumber: 4 };
+
     return {
       animation: true,
-      grid: { left: isHorizontal ? 8 : 8, right: 8, top: 10, bottom: 20, containLabel: true },
+      grid: { left: 8, right: 8, top: 10, bottom: 20, containLabel: true },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
@@ -285,11 +305,11 @@ export function PremiumBarChart({
         formatter: tooltipFormatter(formatValue, formatXAxis),
       },
       xAxis: isHorizontal
-        ? { type: 'value', ...noAxisLine(), axisLabel: { ...axisLabel(t), formatter: (v: number) => formatValue(v) }, splitLine: splitLine(t) }
+        ? { type: 'value', ...valueAxisStyle, splitLine: splitLine(t) }
         : { type: 'category', data: xLabels, ...noAxisLine(), axisLabel: { ...axisLabel(t), formatter: formatXAxis ? (v: string) => formatXAxis(v) : (v: string) => String(v).slice(0, 12), overflow: 'truncate' }, splitLine: { show: false } },
       yAxis: isHorizontal
         ? { type: 'category', data: xLabels.slice().reverse(), ...noAxisLine(), axisLabel: { ...axisLabel(t), width: yAxisWidth - 8, overflow: 'truncate' }, splitLine: { show: false } }
-        : { type: 'value', ...noAxisLine(), axisLabel: { ...axisLabel(t), formatter: (v: number) => formatValue(v) }, splitLine: showGrid ? splitLine(t) : { show: false } },
+        : { ...valueAxisStyle, splitLine: showGrid ? splitLine(t) : { show: false } },
       series: eSeries,
     } as EChartsOption;
   }, [data, xAxisKey, JSON.stringify(series), layout, formatValue?.toString(), formatXAxis?.toString(), itemColors]);
@@ -510,9 +530,9 @@ export function PremiumComposedChart({
         type: 'bar' as const,
         yAxisIndex: s.yAxisIndex ?? 0,
         data: data.map((d) => Number(d[s.dataKey] ?? 0)),
-        barMaxWidth: 36,
-        itemStyle: { borderRadius: [4, 4, 0, 0], color: barGradient(c) },
-        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: `${c}55` } },
+        barMaxWidth: 28,
+        itemStyle: { borderRadius: [3, 3, 0, 0], color: barGradient(c) },
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: `${c}44` } },
         animationDuration: 700,
         animationEasing: 'cubicOut' as const,
       };

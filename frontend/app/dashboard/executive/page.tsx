@@ -109,7 +109,7 @@ function ProvinceBarChart({ data }: { data: PM[] }) {
                   { offset: 1, color: "#6366F1" },
                 ],
               },
-              borderRadius: [0, 5, 5, 0],
+              borderRadius: [0, 3, 3, 0],
             },
             label: {
               show: true,
@@ -120,7 +120,7 @@ function ProvinceBarChart({ data }: { data: PM[] }) {
               fontSize: 9,
             },
           })),
-          barMaxWidth: 22,
+          barMaxWidth: 20,
           emphasis: {
             itemStyle: {
               color: {
