@@ -9,7 +9,7 @@ import { ChartCard, ChartEmptyState } from '@/components/ui/ChartCard';
 import { AdvancedDataTable, ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { useBranchPerformance } from '@/lib/hooks/useDashboardData';
 import { formatNPR } from '@/lib/formatters';
-import { PremiumBarChart, PremiumScatterChart } from '@/components/ui/PremiumCharts';
+import { PremiumBarChart, PremiumComposedChart } from '@/components/ui/PremiumCharts';
 import { BranchDashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 
@@ -256,24 +256,19 @@ export default function BranchDashboard() {
             </ChartCard>
             
             <ChartCard
-              title="Branch Scatter: Amount vs Count"
-              subtitle="Top 20 branches · Bubble size = unique accounts"
+              title="Amount vs Transaction Count"
+              subtitle="Top 20 branches · Bars = amount, line = transaction count"
             >
               {allBranches.length === 0 ? (
-                <ChartEmptyState title="No branch scatter data" />
+                <ChartEmptyState title="No branch performance data" />
               ) : (
-                <PremiumScatterChart
-                  data={allBranches.slice(0, 20)}
-                  maxSize={24}
-                  xKey="transaction_count"
-                  yKey="total_amount"
-                  sizeKey="unique_accounts"
-                  nameKey="branch_code"
-                  color="#10b981"
-                  formatX={(v) => v.toLocaleString()}
-                  formatY={formatNPR}
-                  xLabel="Transactions"
-                  yLabel="Amount"
+                <PremiumComposedChart
+                  data={[...allBranches].sort((a, b) => b.total_amount - a.total_amount).slice(0, 20)}
+                  xAxisKey="branch_code"
+                  bars={[{ dataKey: 'total_amount', name: 'Amount', color: '#3b82f6', yAxisIndex: 0 }]}
+                  lines={[{ dataKey: 'transaction_count', name: 'Transactions', color: '#10b981', yAxisIndex: 1 }]}
+                  formatValue={formatNPR}
+                  rightFormatValue={(v) => v.toLocaleString()}
                   height={280}
                 />
               )}

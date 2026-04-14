@@ -763,6 +763,9 @@ export interface SparkLineProps {
 
 export function SparkLine({ data, color = COLORS.blue, height = 32 }: SparkLineProps) {
   const ref = useEChart(() => {
+    // ECharts renders to canvas and cannot parse CSS var() tokens. Resolve them
+    // here so callers can pass "var(--accent-green)" and get the correct hex.
+    const resolved = resolveColor(color);
     return {
       animation: false,
       grid: { left: 0, right: 0, top: 2, bottom: 2 },
@@ -773,9 +776,9 @@ export function SparkLine({ data, color = COLORS.blue, height = 32 }: SparkLineP
         data,
         smooth: 0.4,
         symbol: 'none',
-        lineStyle: { width: 1.5, color },
-        itemStyle: { color },
-        areaStyle: { color: areaGradient(color), opacity: 1 },
+        lineStyle: { width: 1.75, color: resolved },
+        itemStyle: { color: resolved },
+        areaStyle: { color: areaGradient(resolved), opacity: 1 },
       }],
     } as EChartsOption;
   }, [data, color]);

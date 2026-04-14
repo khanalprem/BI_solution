@@ -50,12 +50,12 @@ export function ChartCard({
         )}
       />
 
-      {/* ── Header row ── */}
-      <div className="relative z-10 flex items-start justify-between mb-2.5">
+      {/* ── Header row — typography matches TopBar page title for a consistent hierarchy */}
+      <div className="relative z-10 flex items-start justify-between mb-3">
         <div>
-          <div className="text-xs font-display font-semibold text-text-primary">{title}</div>
+          <h3 className="font-display text-[13.5px] font-bold tracking-tight leading-none text-text-primary">{title}</h3>
           {subtitle && (
-            <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>
+            <p className="text-[10.5px] text-text-muted mt-1 leading-none">{subtitle}</p>
           )}
         </div>
         {controls && <div className="flex gap-1.5 shrink-0 ml-3">{controls}</div>}

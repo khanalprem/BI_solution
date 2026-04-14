@@ -897,7 +897,7 @@ export default function ExecutiveDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
             <div className="flex justify-between items-start mb-2.5">
               <div>
-                <div className="text-xs font-display font-semibold text-text-primary">
+                <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
                   Daily Transaction Trend
                 </div>
                 <div className="text-[10px] text-text-muted mt-0.5">
@@ -933,7 +933,7 @@ export default function ExecutiveDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
             <div className="flex justify-between items-start mb-2.5">
               <div>
-                <div className="text-xs font-display font-semibold text-text-primary">
+                <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
                   Transaction by Channel
                 </div>
                 <div className="text-[10px] text-text-muted mt-0.5">
@@ -1042,7 +1042,7 @@ export default function ExecutiveDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4">
           {/* Horizontal bar + line composed */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-            <div className="text-xs font-display font-semibold text-text-primary mb-0.5">
+            <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary mb-0.5">
               Province Performance
             </div>
             <div className="text-[10px] text-text-muted mb-3">
@@ -1053,7 +1053,7 @@ export default function ExecutiveDashboard() {
 
           {/* Donut */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-            <div className="text-xs font-display font-semibold text-text-primary mb-0.5">
+            <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary mb-0.5">
               Province Volume Share
             </div>
             <div className="text-[10px] text-text-muted mb-3">
@@ -1077,7 +1077,7 @@ export default function ExecutiveDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Age Group Bar Chart */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-            <div className="text-xs font-display font-semibold text-text-primary mb-0.5">
+            <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary mb-0.5">
               Customer Age Distribution
             </div>
             <div className="text-[10px] text-text-muted mb-3">
@@ -1136,7 +1136,7 @@ export default function ExecutiveDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-3.5">
               <div>
-                <div className="text-xs font-display font-semibold text-text-primary">
+                <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
                   Risk Exposure Monitor
                 </div>
                 <div className="text-[10px] text-text-muted mt-0.5">
@@ -1161,7 +1161,7 @@ export default function ExecutiveDashboard() {
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-3.5">
               <div>
-                <div className="text-xs font-display font-semibold text-text-primary">
+                <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
                   Regulatory & Alerts Feed
                 </div>
                 <div className="text-[10px] text-text-muted mt-0.5">
@@ -1184,7 +1184,7 @@ export default function ExecutiveDashboard() {
 
           {/* Supplementary KPIs */}
           <div className="bg-bg-card border border-border rounded-xl p-4 shadow-sm">
-            <div className="text-xs font-display font-semibold text-text-primary mb-1">
+            <div className="font-display text-[13.5px] font-bold tracking-tight text-text-primary mb-1">
               Supplementary KPIs
             </div>
             <div className="text-[10px] text-text-muted mb-3.5">
