@@ -158,6 +158,37 @@ export default function KPIDashboard() {
           </div>
         </div>
 
+        {/* ── Banking Ratios (NIM / ROA / ROE / NPL / CAR / LDR) ────────────────
+            Standard banking health ratios. Values are sector-average placeholders
+            sourced from NRB Financial Stability Report (Mid-July 2025); wire a
+            live capital / P&L feed to compute them per bank. */}
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary leading-none">
+              Banking Health Ratios
+            </h3>
+            <span className="text-[10px] text-text-muted">
+              Placeholder · sector averages (NRB FSR 2022/23)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'NIM',  value: '3.85%', hint: 'Net Interest Margin',   color: 'text-accent-blue' },
+              { label: 'ROA',  value: '1.12%', hint: 'Return on Assets',       color: 'text-accent-green' },
+              { label: 'ROE',  value: '11.27%', hint: 'Return on Equity',      color: 'text-accent-purple' },
+              { label: 'NPL',  value: '4.44%', hint: 'Non-Performing Loans',   color: 'text-accent-red' },
+              { label: 'CAR',  value: '12.78%', hint: 'Capital Adequacy (min 11%)', color: 'text-accent-teal' },
+              { label: 'LDR',  value: '85.2%', hint: 'Loan-to-Deposit (max 90%)',   color: 'text-accent-amber' },
+            ].map((r) => (
+              <div key={r.label} className="bg-bg-card border border-border rounded-xl p-3">
+                <div className="text-[9.5px] font-bold uppercase tracking-[0.4px] text-text-muted">{r.label}</div>
+                <div className={`text-lg font-mono font-bold tracking-tight mt-1 ${r.color}`}>{r.value}</div>
+                <div className="text-[9.5px] text-text-secondary mt-1 leading-tight">{r.hint}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Quarterly Trend */}
         {byQuarter.length > 0 && (
           <ChartCard title="Quarterly Performance" subtitle="Volume and transaction count by quarter">

@@ -213,6 +213,52 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
                 }
               />
               <NavItem
+                href="/dashboard/digital"
+                label="Digital Channels"
+                active={pathname === '/dashboard/digital'}
+                onClick={handleClose}
+                collapsed={collapsed}
+                icon={
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M5 14h6M8 12v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                }
+              />
+            </SidebarSection>
+
+            <SidebarSection label="Portfolio" collapsed={collapsed}>
+              <NavItem
+                href="/dashboard/loans"
+                label="Loan Portfolio"
+                active={pathname === '/dashboard/loans'}
+                onClick={handleClose}
+                collapsed={collapsed}
+                icon={
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 4h10v8H3z" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M3 7h10M5 10h2M9 10h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
+                }
+              />
+              <NavItem
+                href="/dashboard/deposits"
+                label="Deposit Portfolio"
+                active={pathname === '/dashboard/deposits'}
+                onClick={handleClose}
+                collapsed={collapsed}
+                icon={
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 5h12v8H2z" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M2 8h12M6 11.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    <circle cx="8" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                  </svg>
+                }
+              />
+            </SidebarSection>
+
+            <SidebarSection label="Risk & Compliance" collapsed={collapsed}>
+              <NavItem
                 href="/dashboard/risk"
                 label="Loan & Risk Quality"
                 active={pathname === '/dashboard/risk'}
@@ -226,15 +272,15 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
                 }
               />
               <NavItem
-                href="/dashboard/digital"
-                label="Digital Channels"
-                active={pathname === '/dashboard/digital'}
+                href="/dashboard/regulatory"
+                label="Regulatory Compliance"
+                active={pathname === '/dashboard/regulatory'}
                 onClick={handleClose}
                 collapsed={collapsed}
                 icon={
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-                    <path d="M5 14h6M8 12v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    <path d="M8 1.5L3 4v4c0 3 2.5 5.5 5 6.5 2.5-1 5-3.5 5-6.5V4L8 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                    <path d="M6 8l1.5 1.5L10.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 }
               />

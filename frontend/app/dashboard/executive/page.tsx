@@ -243,6 +243,83 @@ type DashboardPeriod =
 // These panels now show a "not connected" placeholder. When a risk/alerts API is added,
 // replace the placeholder panels below and restore data-driven rendering here.
 
+// ─── NRB Compliance Strip ────────────────────────────────────────────────────
+// Top-of-page at-a-glance check on the 4 Basel III / NRB ratios analysts care
+// about most. Values are sector-average placeholders (Mid-July 2025) until the
+// NRB return feed / capital ledger is connected — the full detail view lives
+// on /dashboard/regulatory. Click any card there to drill in.
+
+type NrbRatio = {
+  label: string;
+  value: number;
+  thresholdLabel: string;
+  direction: 'min' | 'max';
+  threshold: number;
+  warnBuffer: number;
+};
+
+const NRB_RATIOS: NrbRatio[] = [
+  { label: 'CAR',    value: 12.78, thresholdLabel: 'Min 11%',  direction: 'min', threshold: 11,   warnBuffer: 0.5 },
+  { label: 'CCAR',   value: 10.03, thresholdLabel: 'Min 8.5%', direction: 'min', threshold: 8.5,  warnBuffer: 0.5 },
+  { label: 'NPL',    value: 4.44,  thresholdLabel: 'Max 5%',   direction: 'max', threshold: 5,    warnBuffer: 1 },
+  { label: 'LDR',    value: 85.2,  thresholdLabel: 'Max 90%',  direction: 'max', threshold: 90,   warnBuffer: 2 },
+];
+
+function NrbComplianceStrip() {
+  return (
+    <div className="rounded-xl border border-border bg-bg-card p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary leading-none">
+            NRB Regulatory Compliance
+          </h3>
+          <p className="text-[10.5px] text-text-muted mt-1 leading-none">
+            Key Basel III / NRB ratios · sector-average placeholders until capital ledger is connected
+          </p>
+        </div>
+        <Link
+          href="/dashboard/regulatory"
+          className="text-[10px] font-medium text-accent-blue hover:underline flex-shrink-0 whitespace-nowrap"
+        >
+          Full regulatory view →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {NRB_RATIOS.map((r) => {
+          const distance = r.direction === 'min' ? r.value - r.threshold : r.threshold - r.value;
+          const status: 'ok' | 'warning' | 'breach' = distance < 0 ? 'breach' : distance <= r.warnBuffer ? 'warning' : 'ok';
+          const accent = status === 'ok' ? 'var(--accent-green)' : status === 'warning' ? 'var(--accent-amber)' : 'var(--accent-red)';
+          const accentDim = status === 'ok' ? 'var(--accent-green-dim)' : status === 'warning' ? 'var(--accent-amber-dim)' : 'var(--accent-red-dim)';
+          return (
+            <div
+              key={r.label}
+              className="rounded-lg border border-border p-3 flex flex-col gap-1.5"
+              style={{ background: 'var(--bg-input)' }}
+            >
+              <div className="flex items-baseline justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-[0.4px] text-text-muted">{r.label}</span>
+                <span className="text-[9px] text-text-secondary">{r.thresholdLabel}</span>
+              </div>
+              <div className="text-lg font-mono font-bold" style={{ color: accent }}>
+                {r.value.toFixed(2)}%
+              </div>
+              <div className="h-1 w-full rounded-full overflow-hidden" style={{ background: accentDim }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.max(6, (r.value / (r.direction === 'min' ? r.threshold * 1.6 : r.threshold * 1.2)) * 100))}%`,
+                    background: accent,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SparkCard({
   label,
   value,
@@ -891,6 +968,9 @@ export default function ExecutiveDashboard() {
             }
           />
         </div>
+
+        {/* ── NRB Compliance Strip — quick glance at key regulatory ratios ── */}
+        <NrbComplianceStrip />
 
         {/* ── Revenue Trend + Channel Breakdown ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4">
