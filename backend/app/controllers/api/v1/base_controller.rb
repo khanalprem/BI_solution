@@ -69,14 +69,14 @@ module Api
       end
 
       def filter_params
+        # Only filters that actually produce SQL WHERE clauses are listed here.
+        # Previously-accepted-but-ignored filters (district, municipality, scheme_type)
+        # were removed — their UI rows were also removed to avoid silent no-ops.
         {
           branch: parse_multi_value_param(param_value(:branch_code, :branchCode, :branch)),
           province: parse_multi_value_param(param_value(:province)),
-          district: parse_multi_value_param(param_value(:district)),
-          municipality: parse_multi_value_param(param_value(:municipality)),
           cluster: parse_multi_value_param(param_value(:cluster)),
           solid: parse_multi_value_param(param_value(:solid)),
-          scheme_type: parse_multi_value_param(param_value(:scheme_type, :schemeType)),
           tran_type: parse_multi_value_param(param_value(:tran_type, :tranType)),
           part_tran_type: parse_multi_value_param(param_value(:part_tran_type, :partTranType)),
           tran_source: parse_multi_value_param(param_value(:tran_source, :tranSource, :channel)),

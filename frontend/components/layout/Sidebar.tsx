@@ -200,7 +200,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
               />
               <NavItem
                 href="/dashboard/employer"
-                label="Employer & Payroll"
+                label="Staff & Operations"
                 active={pathname === '/dashboard/employer'}
                 onClick={handleClose}
                 collapsed={collapsed}

@@ -2,18 +2,19 @@ module Api
   module V1
     class FiltersController < BaseController
       def values
-        data = Rails.cache.fetch('filter_values', expires_in: 1.hour) do
+        # Filter options returned to the UI. Only filters whose values produce
+        # SQL WHERE clauses downstream are included. District/municipality were
+        # always empty and scheme_type had no live WHERE support, so they were
+        # removed from the response to avoid populating dead dropdowns.
+        data = Rails.cache.fetch('filter_values_v2', expires_in: 1.hour) do
           {
             provinces: distinct_values(:gam_province),
             branches: distinct_values(:gam_branch, limit: 100),
             clusters: distinct_values(:gam_cluster),
             solids: distinct_values(:gam_solid, limit: 100),
-            districts: [],
-            municipalities: [],
             tran_types: distinct_values(:tran_type),
             part_tran_types: distinct_values(:part_tran_type),
             tran_sources: distinct_values(:tran_source),
-            scheme_types: AccountMasterLookup.distinct_values(:schm_type, limit: 100),
             products: distinct_values(:product, limit: 50),
             services: distinct_values(:service, limit: 50),
             merchants: distinct_values(:merchant, limit: 50),

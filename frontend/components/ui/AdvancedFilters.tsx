@@ -16,14 +16,12 @@ interface AdvancedFiltersProps {
   hideStats?: boolean;
 }
 
+// Categorical filter keys that map 1:1 to backend WHERE IN-clauses.
+// Keep this list aligned with DashboardFilters and AdvancedFilters' rendered fields.
 type MultiFilterKey =
   | 'province'
   | 'branchCode'
-  | 'district'
-  | 'municipality'
   | 'cluster'
-  | 'solid'
-  | 'schemeType'
   | 'tranType'
   | 'partTranType'
   | 'tranSource'
@@ -69,23 +67,22 @@ function labelForValue(filterKey: MultiFilterKey, value: string): string {
   return value;
 }
 
-// Extract only the "advanced" (non-quick, non-date) fields from a filter object
+// Extract only the "advanced" (non-quick, non-date) fields from a filter object.
+// Kept in sync with the advanced-panel JSX below so the "dirty" detection works correctly.
 function advancedFieldsFrom(f: DashboardFilters) {
   return {
-    tranType:     f.tranType,
-    cluster:      f.cluster,
-    solid:        f.solid,
-    schemeType:   f.schemeType,
-    product:      f.product,
-    service:      f.service,
-    merchant:     f.merchant,
+    tranType:      f.tranType,
+    cluster:       f.cluster,
+    product:       f.product,
+    service:       f.service,
+    merchant:      f.merchant,
     glSubHeadCode: f.glSubHeadCode,
-    entryUser:    f.entryUser,
-    vfdUser:      f.vfdUser,
-    minAmount:    f.minAmount,
-    maxAmount:    f.maxAmount,
-    acctNum:      f.acctNum,
-    cifId:        f.cifId,
+    entryUser:     f.entryUser,
+    vfdUser:       f.vfdUser,
+    minAmount:     f.minAmount,
+    maxAmount:     f.maxAmount,
+    acctNum:       f.acctNum,
+    cifId:         f.cifId,
   };
 }
 
@@ -180,7 +177,6 @@ export function AdvancedFilters({
       { key: 'tranSource', label: 'Channel' },
       { key: 'partTranType', label: 'Part Type' },
       { key: 'cluster', label: 'Cluster' },
-      { key: 'schemeType', label: 'Scheme Type' },
       { key: 'tranType', label: 'Transaction Type' },
       { key: 'product', label: 'Product' },
       { key: 'service', label: 'Service' },
@@ -230,8 +226,6 @@ export function AdvancedFilters({
   const partTypeOptions = filterValues.part_tran_types.map((p) => ({ value: p, label: p }));
   const tranTypeOptions = filterValues.tran_types.map((t) => ({ value: t, label: t }));
   const clusterOptions = filterValues.clusters.map((c) => ({ value: c, label: c }));
-  const solidOptions = filterValues.solids.map((s) => ({ value: s, label: `SOL ${s}` }));
-  const schemeTypeOptions = filterValues.scheme_types.filter(Boolean).map((s) => ({ value: s, label: s }));
   const productOptions = filterValues.products.filter(Boolean).map((p) => ({ value: p, label: p }));
   const serviceOptions = filterValues.services.filter(Boolean).map((s) => ({ value: s, label: s }));
   const merchantOptions = filterValues.merchants.filter(Boolean).map((m) => ({ value: m, label: m }));
@@ -341,7 +335,7 @@ export function AdvancedFilters({
           <DataStat
             label="Dimensions"
             value={`${filterValues.branches.length} branches · ${filterValues.provinces.length} provinces`}
-            hint={`${solidOptions.length} SOL IDs · ${schemeTypeOptions.length} schemes · ${glOptions.length} GL codes`}
+            hint={`${clusterOptions.length} clusters · ${glOptions.length} GL codes · ${tranTypeOptions.length} tran types`}
           />
         </div>
       )}
@@ -372,10 +366,6 @@ export function AdvancedFilters({
             <div>
               <FilterLabel>Cluster</FilterLabel>
               <SearchableMultiSelect value={asArray(draft.cluster)} onChange={(v) => setDraftMulti('cluster', v)} options={clusterOptions} placeholder="All clusters" />
-            </div>
-            <div>
-              <FilterLabel>Scheme Type</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.schemeType)} onChange={(v) => setDraftMulti('schemeType', v)} options={schemeTypeOptions} placeholder="All account schemes" />
             </div>
             <div>
               <FilterLabel>Product</FilterLabel>

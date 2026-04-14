@@ -3,13 +3,13 @@ export type MultiValueFilter = string | string[];
 export interface DashboardFilters {
   startDate: string;
   endDate: string;
+  // Categorical filters — each one maps 1:1 to a column in tran_summary and is
+  // applied as a SQL IN-clause by the backend. Filters that the backend cannot
+  // apply (district, municipality, schemeType) were removed.
   province?: MultiValueFilter;
   branchCode?: MultiValueFilter;
-  district?: MultiValueFilter;
-  municipality?: MultiValueFilter;
   cluster?: MultiValueFilter;
   solid?: MultiValueFilter;
-  schemeType?: MultiValueFilter;
   tranType?: MultiValueFilter;
   partTranType?: MultiValueFilter;
   tranSource?: MultiValueFilter;
@@ -53,7 +53,12 @@ export interface DashboardSummary {
   credit_ratio: number;
 }
 
-export interface BranchMetrics {
+// These dashboard aggregate shapes are rendered both in typed lists AND inside
+// chart components that read fields via dynamic keys (d[xAxisKey], d[dataKey]).
+// Extending Record<string, unknown> tells TS they are index-accessible, so they
+// can be passed directly to PremiumBarChart / PremiumLineChart / etc. without
+// casts. The known fields retain their specific types for everywhere else.
+export interface BranchMetrics extends Record<string, unknown> {
   branch_code: string;
   province: string;
   total_amount: number;
@@ -62,7 +67,7 @@ export interface BranchMetrics {
   avg_transaction: number;
 }
 
-export interface ProvinceMetrics {
+export interface ProvinceMetrics extends Record<string, unknown> {
   province: string;
   total_amount: number;
   transaction_count: number;
@@ -71,13 +76,13 @@ export interface ProvinceMetrics {
   avg_per_branch: number;
 }
 
-export interface ChannelMetrics {
+export interface ChannelMetrics extends Record<string, unknown> {
   channel: string;
   total_amount: number;
   transaction_count: number;
 }
 
-export interface TrendData {
+export interface TrendData extends Record<string, unknown> {
   date: string;
   amount: number;
   count: number;
@@ -155,12 +160,9 @@ export interface FilterValuesResponse {
   branches: string[];
   clusters: string[];
   solids: string[];
-  districts: string[];
-  municipalities: string[];
   tran_types: string[];
   part_tran_types: string[];
   tran_sources: string[];
-  scheme_types: string[];
   products: string[];
   services: string[];
   merchants: string[];

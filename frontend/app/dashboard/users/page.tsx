@@ -127,7 +127,7 @@ export default function UsersPage() {
                   { key: 'financial',  label: 'Financial Results' },
                   { key: 'risk',       label: 'Risk & Exposure' },
                   { key: 'digital',    label: 'Digital Channels' },
-                  { key: 'employer',   label: 'Employer & Payroll' },
+                  { key: 'employer',   label: 'Staff & Operations' },
                   { key: 'kpi',        label: 'KPI Tree Analysis' },
                   { key: 'pivot',      label: 'Pivot Analysis' },
                   { key: 'config',     label: 'Configuration / DB Explorer' },

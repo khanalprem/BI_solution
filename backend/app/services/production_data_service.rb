@@ -914,13 +914,15 @@ class ProductionDataService
       clauses << "tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
     end
 
-    # Categorical filters
+    # Categorical filters — each key is a real tran_summary column whose IN-clause
+    # is generated when the corresponding filter has any value.
     {
       'gam_branch'       => filters[:branch],
       'gam_province'     => filters[:province],
       'gam_cluster'      => filters[:cluster],
       'gam_solid'        => filters[:solid],
       'tran_source'      => filters[:tran_source],
+      'tran_type'        => filters[:tran_type],
       'part_tran_type'   => filters[:part_tran_type],
       'product'          => filters[:product],
       'service'          => filters[:service],

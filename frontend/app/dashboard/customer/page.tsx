@@ -25,7 +25,9 @@ interface CustomerData {
   avg_transaction: number;
 }
 
-interface SegmentData {
+// Extends Record<string, unknown> so this shape is directly compatible with
+// chart components that read via dynamic keys (d[xAxisKey], d[dataKey]).
+interface SegmentData extends Record<string, unknown> {
   segment: string;
   customers: number;
   amount: number;

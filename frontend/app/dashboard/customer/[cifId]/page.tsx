@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { TopBar } from "@/components/layout/TopBar";
 import { AdvancedFilters } from "@/components/ui/AdvancedFilters";
@@ -13,30 +13,12 @@ import {
 } from "@/components/ui/AdvancedDataTable";
 import { RecordTable } from "@/components/ui/RecordTable";
 import { Badge, badgeColor } from "@/components/ui/badge";
-import {
-  useCustomerProfile,
-  useFilterStatistics,
-} from "@/lib/hooks/useDashboardData";
-import {
-  formatChannelLabel,
-  formatNPR,
-  getDateRange,
-  parseISODateToLocal,
-} from "@/lib/formatters";
-import type { CustomerRecentTransaction, DashboardFilters } from "@/types";
+import { useCustomerProfile } from "@/lib/hooks/useDashboardData";
+import { useDashboardPage } from "@/lib/hooks/useDashboardPage";
+import { formatChannelLabel, formatNPR } from "@/lib/formatters";
+import type { CustomerRecentTransaction } from "@/types";
 import { CustomerDashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 import { PremiumBarChart } from "@/components/ui/PremiumCharts";
-
-type DashboardPeriod =
-  | "ALL"
-  | "1D"
-  | "WTD"
-  | "MTD"
-  | "QTD"
-  | "YTD"
-  | "PYTD"
-  | "FY"
-  | "CUSTOM";
 
 interface BranchTouchpoint {
   branch_code: string;
@@ -49,59 +31,22 @@ interface BranchTouchpoint {
 export default function CustomerDetailPage() {
   const params = useParams<{ cifId: string }>();
   const cifId = decodeURIComponent(params.cifId);
-  const [period, setPeriod] = useState<DashboardPeriod>("ALL");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [txFilter, setTxFilter] = useState<"all" | "income" | "expense">("all");
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange("ALL"),
-    cifId,
-  });
 
-  const { data: filterStats } = useFilterStatistics();
+  // Shared dashboard page state — period presets, filter panel toggle, clear,
+  // and date-range sync. The cifId is pinned as an "extra filter" so the user
+  // cannot accidentally clear it while changing other filters.
+  const extraFilters = useMemo(() => ({ cifId }), [cifId]);
+  const {
+    filters,
+    setFilters,
+    filtersOpen,
+    setFiltersOpen,
+    handleClearFilters,
+    topBarProps,
+  } = useDashboardPage({ extraFilters });
+
   const { data: profile, isLoading } = useCustomerProfile(filters, cifId);
-
-  const referenceDate = useMemo(() => {
-    return parseISODateToLocal(filterStats?.date_range?.max) || new Date();
-  }, [filterStats?.date_range?.max]);
-
-  const minReferenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.min),
-    [filterStats?.date_range?.min],
-  );
-
-  useEffect(() => {
-    if (period === "CUSTOM") return;
-    const dateRange = getDateRange(
-      period,
-      referenceDate,
-      minReferenceDate || undefined,
-    );
-    setFilters((prev) => ({ ...prev, ...dateRange, cifId }));
-  }, [period, referenceDate, minReferenceDate, cifId]);
-
-  const handleCustomRangeChange = (range: {
-    startDate: string;
-    endDate: string;
-  }) => {
-    setPeriod("CUSTOM");
-    setFilters((prev) => ({ ...prev, ...range, cifId }));
-  };
-
-  const handleClearFilters = () => {
-    if (period === "CUSTOM") {
-      setFilters((prev) => ({
-        ...prev,
-        cifId,
-        startDate: prev.startDate,
-        endDate: prev.endDate,
-      }));
-      return;
-    }
-    setFilters({
-      ...getDateRange(period, referenceDate, minReferenceDate || undefined),
-      cifId,
-    });
-  };
 
   const branchColumns = useMemo<ColumnDef<BranchTouchpoint>[]>(
     () => [
@@ -331,21 +276,7 @@ export default function CustomerDetailPage() {
   if (isLoading) {
     return (
       <>
-        <TopBar
-          title="Customer Detail"
-          subtitle={cifId}
-          period={period}
-          onPeriodChange={setPeriod}
-          customRange={{
-            startDate: filters.startDate,
-            endDate: filters.endDate,
-          }}
-          onCustomRangeChange={handleCustomRangeChange}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-          onToggleFilters={() => setFiltersOpen((current) => !current)}
-          filtersOpen={filtersOpen}
-        />
+        <TopBar title="Customer Detail" subtitle={cifId} {...topBarProps} />
         <CustomerDashboardSkeleton />
       </>
     );
@@ -374,14 +305,7 @@ export default function CustomerDetailPage() {
       <TopBar
         title={customerName}
         subtitle={`Customer Detail · ${profile?.cif_id || cifId}`}
-        period={period}
-        onPeriodChange={setPeriod}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={handleCustomRangeChange}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
+        {...topBarProps}
       />
 
       <div className="px-5 py-4 flex flex-col gap-[14px]">
