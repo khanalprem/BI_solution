@@ -359,6 +359,113 @@ class ProductionDataService
     end
   end
 
+  # Fetch raw HTD (ledger detail) rows for a pivot row drill-down.
+  # HTD uses different column names than tran_summary, so we JOIN with GAM
+  # to resolve acct_num from acid and map dimension keys to HTD/GAM columns.
+  HTD_DETAIL_COLUMNS = %w[cif_id acid acct_num acct_name gam_branch tran_date tran_type part_tran_type tran_branch entry_user vfd_user tran_amt].freeze
+  HTD_MAX_ROWS = 50
+
+  # Maps tran_summary dimension keys → HTD/GAM column references.
+  # Only dimensions that exist in HTD or GAM are included.
+  HTD_DIM_MAP = {
+    'acct_num'         => 'g.acct_num',
+    'cif_id'           => 'g.cif_id',
+    'gam_branch'       => 'g.sol_id',
+    'gam_solid'        => 'g.sol_id',
+    'gl_sub_head_code' => 'h.gl_sub_head_code',
+    'part_tran_type'   => 'h.part_tran_type',
+    'tran_type'        => 'h.tran_type',
+    'tran_date'        => 'h.tran_date',
+    'entry_user'       => 'h.entry_user_id',
+    'vfd_user'         => 'h.vfd_user_id',
+    'tran_branch'      => 'h.sol_id',
+  }.freeze
+
+  # Maps filter keys → HTD/GAM column references.
+  HTD_FILTER_MAP = {
+    branch:          'g.sol_id',
+    solid:           'g.sol_id',
+    gl_sub_head_code: 'h.gl_sub_head_code',
+    part_tran_type:  'h.part_tran_type',
+    entry_user:      'h.entry_user_id',
+    vfd_user:        'h.vfd_user_id',
+  }.freeze
+
+  def htd_detail(start_date: nil, end_date: nil, filters:, row_dims: {}, page: 1, page_size: 50)
+    conn = @connection
+    normalized_page = [page.to_i, 1].max
+    normalized_page_size = [[page_size.to_i, 1].max, HTD_MAX_ROWS].min
+    offset = (normalized_page - 1) * normalized_page_size
+
+    clauses = []
+
+    # Date range from pivot filters
+    if start_date && end_date
+      clauses << "h.tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
+    end
+
+    # Categorical filters — only those that map to HTD/GAM columns
+    HTD_FILTER_MAP.each do |filter_key, htd_col|
+      normalized = normalize_filter_values(filters[filter_key])
+      next if normalized.empty?
+      clauses << "#{htd_col} IN (#{quoted_values(normalized)})"
+    end
+
+    # Date dimension filters (exact-match or from/to range) — same as explorer_where_clause
+    tran_date_from = filters[:tran_date_from].presence
+    tran_date_to   = filters[:tran_date_to].presence
+    tran_date_vals = normalize_filter_values(filters[:tran_date])
+
+    if tran_date_from && tran_date_to
+      clauses << "h.tran_date BETWEEN #{conn.quote(tran_date_from)} AND #{conn.quote(tran_date_to)}"
+    elsif tran_date_vals.any?
+      clauses << "h.tran_date IN (#{quoted_values(tran_date_vals)})"
+    end
+
+    if filters[:acct_num].present?
+      clauses << "g.acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
+    end
+
+    if filters[:cif_id].present?
+      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
+      clauses << "g.cif_id::text ILIKE #{conn.quote(pattern)}"
+    end
+
+    # Row dimension values from the clicked pivot row — map to HTD/GAM columns
+    row_dims.each do |dim_key, dim_value|
+      key = dim_key.to_s
+      htd_col = HTD_DIM_MAP[key]
+      next unless htd_col
+      clauses << "#{htd_col}::text = #{conn.quote(dim_value.to_s)}"
+    end
+
+    where = clauses.any? ? "WHERE #{clauses.join(' AND ')}" : 'WHERE 1=1'
+    from_clause = "FROM htd h INNER JOIN gam g ON g.acid = h.acid #{where}"
+
+    # Count is safe here — always scoped to specific dimension values (e.g., single acct_num + date range)
+    total_rows = conn.exec_query("SELECT COUNT(*) AS cnt #{from_clause}").first['cnt'].to_i
+
+    sql = <<~SQL.squish
+      SELECT g.cif_id, h.acid, g.acct_num, g.acct_name, g.sol_id AS gam_branch,
+             h.tran_date, h.tran_type, h.part_tran_type,
+             h.sol_id AS tran_branch, h.entry_user_id AS entry_user, h.vfd_user_id AS vfd_user,
+             h.tran_amt
+      #{from_clause}
+      ORDER BY h.tran_date DESC
+      LIMIT #{normalized_page_size} OFFSET #{offset}
+    SQL
+
+    rows = conn.exec_query(sql).to_a
+
+    {
+      columns: HTD_DETAIL_COLUMNS,
+      rows: rows,
+      total_rows: total_rows,
+      page: normalized_page,
+      page_size: normalized_page_size
+    }
+  end
+
   def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', orderby_clause: '', page: 1, page_size: 10)
     # Fallback dates used for internal calculations (EAB join, period comparisons).
     # start_date / end_date may be nil when frontend sends no date params (ALL period before
@@ -700,8 +807,12 @@ class ProductionDataService
         include_eab:        include_eab,
         page:               normalized_page,
         page_size:          normalized_page_size,
-        period_wheres:      period_wheres.reject { |_, v| v.empty? }
-      }
+        # Note: period comparisons run as SEPARATE CALL 2 (not combined with CALL 1).
+        # CALL 1 uses all period_wheres = '' (empty). CALL 2 uses restricted_where
+        # with acct_num IN (...) from current page + the period date clause.
+        period_wheres:      period_wheres.reject { |_, v| v.empty? },
+        comparison_note:    has_comparisons ? 'Comparisons run as separate restricted calls (not combined with main query)' : nil
+      }.compact
     }
   end
 

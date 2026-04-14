@@ -53,6 +53,23 @@ module Api
         )
       end
 
+      def htd_detail
+        explicit_start = parse_date(param_value(:start_date, :startDate))
+        explicit_end   = parse_date(param_value(:end_date, :endDate))
+
+        # Row dimension values passed as row_dims[dim_key]=value
+        row_dims = params[:row_dims].present? ? params[:row_dims].to_unsafe_h : {}
+
+        render json: production_service.htd_detail(
+          start_date: explicit_start,
+          end_date:   explicit_end,
+          filters:    filter_params,
+          row_dims:   row_dims,
+          page:       params[:page],
+          page_size:  params[:page_size]
+        )
+      end
+
       private
 
       # Sanitize ORDER BY / PARTITION BY clauses to only allow known dimension/measure keys

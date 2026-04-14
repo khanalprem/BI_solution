@@ -348,3 +348,11 @@ export interface ProductionExplorerResponse {
     page_size:          number;
   };
 }
+
+export interface HtdDetailResponse {
+  columns: string[];
+  rows: Array<Record<string, string | number | null>>;
+  total_rows: number;
+  page: number;
+  page_size: number;
+}

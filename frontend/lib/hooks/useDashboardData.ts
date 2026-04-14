@@ -14,6 +14,7 @@ import type {
   FilterStatisticsResponse,
   FilterValuesResponse,
   FinancialSummaryData,
+  HtdDetailResponse,
   KpiSummaryData,
   ProductionCatalogResponse,
   ProductionExplorerResponse,
@@ -242,6 +243,38 @@ export function useProductionExplorer(
     enabled: dimensions.length > 0 && measures.length > 0,
     staleTime: 60 * 1000,
     retry: 1, // Limit retries — explorer queries can be expensive stored procedure calls
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useHtdDetail(
+  filters: DashboardFilters,
+  rowDims: Record<string, string>,
+  enabled: boolean,
+  page = 1,
+  pageSize = 50,
+) {
+  const params = useMemo(() => {
+    const p: Record<string, string | number> = {
+      ...toApiFilters(filters),
+      page,
+      page_size: pageSize,
+    };
+    for (const [k, v] of Object.entries(rowDims)) {
+      p[`row_dims[${k}]`] = v;
+    }
+    return p;
+  }, [filters, rowDims, page, pageSize]);
+
+  return useQuery<HtdDetailResponse>({
+    queryKey: ['htd-detail', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<HtdDetailResponse>('/production/htd_detail', { params });
+      return data;
+    },
+    enabled,
+    staleTime: 60 * 1000,
+    retry: 1,
     placeholderData: (prev) => prev,
   });
 }

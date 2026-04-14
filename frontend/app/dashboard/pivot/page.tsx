@@ -7,8 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RecordTable } from '@/components/ui/RecordTable';
 import { SearchableMultiSelect } from '@/components/ui/Select';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
-import { useFilterValues, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
+import { useFilterValues, useHtdDetail, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
 import { formatNPR } from '@/lib/formatters';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse } from '@/types';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
@@ -434,7 +435,125 @@ function PivotGroupTh({
   );
 }
 
-function PivotTable({ data, title, subtitle }: { data: PivotData; title: string; subtitle?: string }) {
+// ─── HTD detail row (drill-down) ────────────────────────────────────────────
+
+const HTD_PAGE_SIZE = 10;
+
+function HtdDetailRow({
+  filters,
+  rowDims,
+  totalCols,
+}: {
+  filters: DashboardFilters;
+  rowDims: Record<string, string>;
+  totalCols: number;
+}) {
+  const [htdPage, setHtdPage] = useState(1);
+  const { data, isLoading, isError, isFetching } = useHtdDetail(filters, rowDims, true, htdPage, HTD_PAGE_SIZE);
+
+  const totalRows = data?.total_rows ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / HTD_PAGE_SIZE));
+
+  return (
+    <tr>
+      <td colSpan={totalCols} className="p-0">
+        <div className="mx-6 my-2 rounded-lg border border-border overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border" style={{ background: 'var(--bg-base)' }}>
+            <span className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider">
+              HTD Detail — {Object.entries(rowDims).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+            </span>
+            {totalRows > 0 && (
+              <span className="text-[9.5px] text-text-muted font-medium">
+                {totalRows.toLocaleString()} rows
+              </span>
+            )}
+          </div>
+          {isLoading ? (
+            <div className="p-3 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-4 w-full" />
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="p-3 text-[11px] text-accent-red">Failed to load detail data.</div>
+          ) : !data || data.rows.length === 0 ? (
+            <div className="p-3 text-[11px] text-text-muted">No detail rows found.</div>
+          ) : (
+            <>
+              <div className={isFetching ? 'opacity-60 transition-opacity' : ''}>
+                <table className="w-full border-separate border-spacing-0 text-[11px]">
+                  <thead>
+                    <tr className="border-b border-border">
+                      {data.columns.map((col) => (
+                        <th key={col} className={`px-3 py-1.5 text-[9px] font-bold text-text-muted uppercase tracking-wider ${col === 'tran_amt' ? 'text-right' : 'text-left'}`} style={{ background: 'var(--bg-base)' }}>
+                          {col.replaceAll('_', ' ')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((row, ri) => (
+                      <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-[rgba(255,255,255,0.04)]">
+                        {data.columns.map((col) => (
+                          <td key={col} className={`px-3 py-1.5 whitespace-nowrap ${col === 'tran_amt' ? 'text-right font-mono text-xs' : 'text-text-secondary'}`}>
+                            {col === 'tran_amt' ? formatNPR(row[col] as number | null) : (row[col] ?? '—')}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-3 py-2 border-t border-border" style={{ background: 'var(--bg-base)' }}>
+                  <p className="text-[11px] text-text-muted">
+                    Showing {((htdPage - 1) * HTD_PAGE_SIZE) + 1}–{Math.min(htdPage * HTD_PAGE_SIZE, totalRows).toLocaleString()} of {totalRows.toLocaleString()} rows
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage(1)}
+                      className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      «
+                    </button>
+                    <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage((p) => p - 1)}
+                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      ← Prev
+                    </button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let p: number;
+                      if (totalPages <= 5) p = i + 1;
+                      else if (htdPage <= 3) p = i + 1;
+                      else if (htdPage >= totalPages - 2) p = totalPages - 4 + i;
+                      else p = htdPage - 2 + i;
+                      return (
+                        <button key={p} type="button" onClick={() => setHtdPage(p)}
+                          className={`min-w-[28px] h-7 rounded-md text-[11px] font-medium transition-all ${
+                            p === htdPage ? 'bg-accent-blue text-white shadow-sm' : 'border border-border bg-bg-input text-text-secondary hover:bg-bg-card'
+                          }`}>
+                          {p}
+                        </button>
+                      );
+                    })}
+                    <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage((p) => p + 1)}
+                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      Next →
+                    </button>
+                    <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage(totalPages)}
+                      className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      »
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title: string; subtitle?: string; filters: DashboardFilters }) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
   const hasMultiMeasure = measureKeys.length > 1;
 
@@ -471,8 +590,24 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
     : pivotValues.length * measureKeys.length;
 
   // Pre-compute cumulative left offset for each row-dim column (sticky freeze).
-  const stickyLeft = rowDimKeys.map((_, i) => i * ROW_DIM_COL_WIDTH);
+  // +36px for the expand column at position 0.
+  const EXPAND_COL_WIDTH = 36;
+  const stickyLeft = rowDimKeys.map((_, i) => EXPAND_COL_WIDTH + i * ROW_DIM_COL_WIDTH);
   const lastDimIdx  = rowDimKeys.length - 1;
+
+  // Expand/collapse state for HTD drill-down — keyed by row index.
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const toggleExpand = useCallback((idx: number) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }, []);
+
+  // Total columns including expand col for colSpan calculations.
+  const totalAllCols = 1 + rowDimKeys.length + totalPivotCols;
 
   return (
     <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
@@ -496,8 +631,21 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
         <table className="border-separate border-spacing-0 text-[11.5px]" style={{ minWidth: '100%' }}>
           <thead className="sticky top-0 z-[3]" style={{ background: 'var(--bg-base)' }}>
 
-            {/* ── Row 1: frozen row-dim headers + top-level pivot group headers ── */}
+            {/* ── Row 1: expand col + frozen row-dim headers + top-level pivot group headers ── */}
             <tr className="border-b border-border">
+              {/* Expand column header */}
+              <th
+                rowSpan={totalHeaderRows}
+                className="px-1 py-2 text-center text-[9.5px] font-bold text-text-muted border-r border-border"
+                style={{
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 4,
+                  background: 'var(--bg-base)',
+                  width: EXPAND_COL_WIDTH,
+                  minWidth: EXPAND_COL_WIDTH,
+                }}
+              />
               {rowDimKeys.map((k, i) => (
                 <th
                   key={k}
@@ -606,61 +754,113 @@ function PivotTable({ data, title, subtitle }: { data: PivotData; title: string;
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={rowDimKeys.length + totalPivotCols}
+                  colSpan={totalAllCols}
                   className="py-12 text-center text-[11px] text-text-muted"
                 >
                   No data
                 </td>
               </tr>
             ) : (
-              rows.map((row, i) => (
-                <tr key={i} className={`border-b border-border last:border-0 transition-colors ${row.__isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}>
-                  {/* Frozen row-dim cells */}
-                  {rowDimKeys.map((k, di) => (
+              rows.flatMap((row, i) => {
+                const isTotal = Boolean(row.__isTotal);
+                const isExpanded = expandedRows.has(i);
+                const els = [
+                  <tr key={i} className={`border-b border-border last:border-0 transition-colors ${isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}>
+                    {/* Expand/collapse toggle */}
                     <td
-                      key={k}
-                      className="px-4 py-2.5 text-text-primary font-medium whitespace-nowrap border-r border-border/40"
+                      className="px-1 py-2.5 text-center border-r border-border/40"
                       style={{
                         position: 'sticky',
-                        left: stickyLeft[di],
+                        left: 0,
                         zIndex: 2,
                         background: 'var(--bg-card)',
-                        minWidth: ROW_DIM_COL_WIDTH,
-                        boxShadow: di === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                        width: EXPAND_COL_WIDTH,
+                        minWidth: EXPAND_COL_WIDTH,
                       }}
                     >
-                      {renderCell(row[k])}
+                      {!isTotal && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(i)}
+                          className={`w-5 h-5 inline-flex items-center justify-center rounded-md text-xs font-bold transition-all ${
+                            isExpanded
+                              ? 'bg-accent-blue text-white shadow-sm'
+                              : 'border border-border text-text-muted hover:border-accent-blue hover:text-accent-blue hover:bg-accent-blue/10'
+                          }`}
+                          title={isExpanded ? 'Collapse detail' : 'Expand HTD detail'}
+                        >
+                          {isExpanded ? '−' : '+'}
+                        </button>
+                      )}
                     </td>
-                  ))}
+                    {/* Frozen row-dim cells */}
+                    {rowDimKeys.map((k, di) => (
+                      <td
+                        key={k}
+                        className="px-4 py-2.5 text-text-primary font-medium whitespace-nowrap border-r border-border/40"
+                        style={{
+                          position: 'sticky',
+                          left: stickyLeft[di],
+                          zIndex: 2,
+                          background: 'var(--bg-card)',
+                          minWidth: ROW_DIM_COL_WIDTH,
+                          boxShadow: di === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                        }}
+                      >
+                        {renderCell(row[k])}
+                      </td>
+                    ))}
 
-                  {/* Pivot value × measure cells — scrollable */}
-                  {isMultiLevel
-                    ? level1Groups.flatMap(({ l1, l2s }) =>
-                        l2s.flatMap((l2) => {
-                          const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
-                          return measureKeys.map((mk) => (
+                    {/* Pivot value × measure cells — scrollable */}
+                    {isMultiLevel
+                      ? level1Groups.flatMap(({ l1, l2s }) =>
+                          l2s.flatMap((l2) => {
+                            const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
+                            return measureKeys.map((mk) => (
+                              <td
+                                key={`${fullKey}${PIVOT_SEP}${mk}`}
+                                className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
+                              >
+                                {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`], mk)}
+                              </td>
+                            ));
+                          })
+                        )
+                      : pivotValues.flatMap((pv) =>
+                          measureKeys.map((mk) => (
                             <td
-                              key={`${fullKey}${PIVOT_SEP}${mk}`}
+                              key={`${pv}${PIVOT_SEP}${mk}`}
                               className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
                             >
-                              {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`], mk)}
+                              {renderCell(row[`${pv}${PIVOT_SEP}${mk}`], mk)}
                             </td>
-                          ));
-                        })
-                      )
-                    : pivotValues.flatMap((pv) =>
-                        measureKeys.map((mk) => (
-                          <td
-                            key={`${pv}${PIVOT_SEP}${mk}`}
-                            className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
-                          >
-                            {renderCell(row[`${pv}${PIVOT_SEP}${mk}`], mk)}
-                          </td>
-                        ))
-                      )
+                          ))
+                        )
+                    }
+                  </tr>,
+                ];
+
+                // Expanded HTD detail row
+                if (isExpanded && !isTotal) {
+                  const rowDims: Record<string, string> = {};
+                  for (const k of rowDimKeys) {
+                    const v = row[k];
+                    if (v !== null && v !== undefined && v !== '') {
+                      rowDims[k] = String(v);
+                    }
                   }
-                </tr>
-              ))
+                  els.push(
+                    <HtdDetailRow
+                      key={`detail-${i}`}
+                      filters={filters}
+                      rowDims={rowDims}
+                      totalCols={totalAllCols}
+                    />
+                  );
+                }
+
+                return els;
+              })
             )}
           </tbody>
         </table>
@@ -1840,6 +2040,7 @@ export default function PivotDashboard() {
                     ? 'Executing get_tran_summary against production…'
                     : `${backendTotal.toLocaleString()} raw rows · ${pivotData.rows.length.toLocaleString()} pivoted rows on this page · page ${page} of ${totalPages}`
                 }
+                filters={filters}
               />
             ) : (
               <RecordTable

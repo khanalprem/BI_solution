@@ -241,6 +241,22 @@ Amount measures (`tran_amt`, `cr_amt`, `dr_amt`, `signed_tranamt`) use `formatNP
 ### URL state sync
 Pivot state (`dims`, `measures`, `page`) syncs to URL search params via `useSearchParams` + `router.replace()`. Enables shareable analysis links (e.g., `/dashboard/pivot?dims=gam_branch,tran_date&measures=tran_amt`).
 
+### HTD drill-down (row expansion)
+Each pivot row has a `+`/`−` toggle in the first column. Clicking `+` fetches raw ledger rows from the `htd` table and shows them inline below the row.
+
+- **Endpoint**: `GET /api/v1/production/htd_detail`
+  - Params: all standard filters + `row_dims[dim_key]=value` for row's dimension values + `page`, `page_size` (default 10, max 50)
+- **Service method**: `ProductionDataService#htd_detail` — `htd h INNER JOIN gam g ON g.acid = h.acid`, filtered WHERE, paginated with `LIMIT/OFFSET`, `COUNT(*)` for total (safe — always scoped to a single pivot row's dims)
+- **Columns returned**: `cif_id, acid, acct_num, acct_name, gam_branch, tran_date, tran_type, part_tran_type, tran_branch, entry_user, vfd_user, tran_amt`
+- **Column mapping**: HTD uses different names than `tran_summary` — mappings live in `HTD_DIM_MAP` (row dim keys → HTD/GAM cols) and `HTD_FILTER_MAP` (filter keys → HTD/GAM cols). If a column exists in neither HTD nor GAM (e.g. `tran_source`, `product`, `merchant`, `service`), it is NOT included in the HTD detail — these only exist in `tran_summary`.
+- **Filters applied**: global date range + date dimension filters (`tran_date`, `tran_date_from`/`to`) + categorical filters that exist in HTD/GAM + row dimension values from the clicked row.
+- **Frontend**: `HtdDetailRow` component in `pivot/page.tsx` + `useHtdDetail()` hook in `useDashboardData.ts`. Pagination UI (page pills + «/»/Prev/Next) matches main pivot pagination style. `placeholderData: prev` keeps previous page visible while fetching.
+- **Adding a new HTD detail column**:
+  1. Check the column exists in `htd` or `gam` (use `information_schema.columns`) — if not, skip
+  2. Add to the `SELECT` in `htd_detail` method (use table alias + `AS` if renaming)
+  3. Add to `HTD_DETAIL_COLUMNS` constant in service
+  4. If it's an amount-type column, update the amount-alignment check in `HtdDetailRow` (currently `col === 'tran_amt'` for `text-right` + NPR formatting)
+
 ---
 
 ## Frontend Conventions
