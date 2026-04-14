@@ -360,6 +360,8 @@ function buildPivotData(
   const dataRows = Array.from(grouped.values());
 
   // Build grand totals row (sum all numeric pivot cells)
+  // Note: backend returns PG numeric/decimal columns as JSON strings (BigDecimal),
+  // so we coerce with Number() before summing.
   if (dataRows.length > 0) {
     const totalsRow: DataRow = { __isTotal: true };
     rowDimKeys.forEach((k, i) => { totalsRow[k] = i === 0 ? 'TOTAL' : ''; });
@@ -370,7 +372,11 @@ function buildPivotData(
         let hasValue = false;
         for (const row of dataRows) {
           const v = row[cellKey];
-          if (typeof v === 'number') { sum += v; hasValue = true; }
+          if (v === null || v === undefined || v === '') continue;
+          const n = typeof v === 'number' ? v : Number(v);
+          if (!Number.isFinite(n)) continue;
+          sum += n;
+          hasValue = true;
         }
         totalsRow[cellKey] = hasValue ? sum : null;
       }
@@ -390,10 +396,12 @@ const AMOUNT_MEASURES = new Set([
 
 function renderCell(v: string | number | boolean | null | undefined, measureKey?: string): string {
   if (v === null || v === undefined || v === '') return '—';
-  if (typeof v === 'number') {
+  // Coerce numeric strings (backend returns decimal cols as JSON strings) to numbers.
+  const n = typeof v === 'number' ? v : Number(v);
+  if (Number.isFinite(n) && (typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(String(v)))) {
     // Use NPR formatting for amount measures, plain locale for counts
-    if (measureKey && AMOUNT_MEASURES.has(measureKey)) return formatNPR(v);
-    return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (measureKey && AMOUNT_MEASURES.has(measureKey)) return formatNPR(n);
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
   return String(v);
 }
@@ -470,8 +478,8 @@ function HtdDetailRow({
           </div>
           {isLoading ? (
             <div className="p-3 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-4 w-full" />
+              {Array.from({ length: HTD_PAGE_SIZE }).map((_, i) => (
+                <Skeleton key={i} className="h-6 w-full" />
               ))}
             </div>
           ) : isError ? (
@@ -480,7 +488,7 @@ function HtdDetailRow({
             <div className="p-3 text-[11px] text-text-muted">No detail rows found.</div>
           ) : (
             <>
-              <div className={isFetching ? 'opacity-60 transition-opacity' : ''}>
+              <div>
                 <table className="w-full border-separate border-spacing-0 text-[11px]">
                   <thead>
                     <tr className="border-b border-border">
@@ -492,15 +500,25 @@ function HtdDetailRow({
                     </tr>
                   </thead>
                   <tbody>
-                    {data.rows.map((row, ri) => (
-                      <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-[rgba(255,255,255,0.04)]">
-                        {data.columns.map((col) => (
-                          <td key={col} className={`px-3 py-1.5 whitespace-nowrap ${col === 'tran_amt' ? 'text-right font-mono text-xs' : 'text-text-secondary'}`}>
-                            {col === 'tran_amt' ? formatNPR(row[col] as number | null) : (row[col] ?? '—')}
-                          </td>
+                    {isFetching
+                      ? Array.from({ length: HTD_PAGE_SIZE }).map((_, ri) => (
+                          <tr key={`skeleton-${ri}`} className="border-b border-border/30 last:border-0">
+                            {data.columns.map((col) => (
+                              <td key={col} className="px-3 py-1.5">
+                                <Skeleton className={`h-4 ${col === 'tran_amt' ? 'w-20 ml-auto' : 'w-full'}`} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      : data.rows.map((row, ri) => (
+                          <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-bg-card-hover">
+                            {data.columns.map((col) => (
+                              <td key={col} className={`px-3 py-1.5 whitespace-nowrap ${col === 'tran_amt' ? 'text-right font-mono text-xs' : 'text-text-secondary'}`}>
+                                {col === 'tran_amt' ? formatNPR(row[col] == null ? null : Number(row[col])) : (row[col] ?? '—')}
+                              </td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
@@ -765,7 +783,7 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
                 const isTotal = Boolean(row.__isTotal);
                 const isExpanded = expandedRows.has(i);
                 const els = [
-                  <tr key={i} className={`border-b border-border last:border-0 transition-colors ${isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}>
+                  <tr key={i} className={`border-b border-border last:border-0 transition-colors ${isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-bg-card-hover'}`}>
                     {/* Expand/collapse toggle */}
                     <td
                       className="px-1 py-2.5 text-center border-r border-border/40"

@@ -246,15 +246,17 @@ Each pivot row has a `+`/`−` toggle in the first column. Clicking `+` fetches 
 
 - **Endpoint**: `GET /api/v1/production/htd_detail`
   - Params: all standard filters + `row_dims[dim_key]=value` for row's dimension values + `page`, `page_size` (default 10, max 50)
-- **Service method**: `ProductionDataService#htd_detail` — `htd h INNER JOIN gam g ON g.acid = h.acid`, filtered WHERE, paginated with `LIMIT/OFFSET`, `COUNT(*)` for total (safe — always scoped to a single pivot row's dims)
-- **Columns returned**: `cif_id, acid, acct_num, acct_name, gam_branch, tran_date, tran_type, part_tran_type, tran_branch, entry_user, vfd_user, tran_amt`
-- **Column mapping**: HTD uses different names than `tran_summary` — mappings live in `HTD_DIM_MAP` (row dim keys → HTD/GAM cols) and `HTD_FILTER_MAP` (filter keys → HTD/GAM cols). If a column exists in neither HTD nor GAM (e.g. `tran_source`, `product`, `merchant`, `service`), it is NOT included in the HTD detail — these only exist in `tran_summary`.
+- **Stored procedure**: `public.get_tran_detail(join_clause text, page int, page_size int)` — builds `htd h JOIN gam g ON g.acid = h.acid AND <join_clause>`, applies `ROW_NUMBER()` pagination, joins with `eab` for `tran_date_bal`, and drops results into TEMP TABLE `tran_detail` with a `total_rows` column for pagination.
+- **Service method**: `ProductionDataService#htd_detail` — builds a boolean `join_clause` string from filters + row_dims, calls the procedure inside a transaction (temp table is connection-scoped), then `SELECT * FROM tran_detail` and maps the result columns to the stable frontend names.
+- **Columns returned to frontend**: `cif_id, acid, acct_num, acct_name, tran_date, tran_type, part_tran_type, tran_branch, gl_sub_head_code, entry_user, vfd_user, tran_amt, tran_date_bal`
+- **Column mapping**: Procedure returns raw HTD/GAM columns (`entry_user_id`, `vfd_user_id`, `sol_id`). Service renames them to the stable frontend keys (`entry_user`, `vfd_user`, `tran_branch`). Frontend-requested columns that do not exist in HTD or GAM (e.g. `tran_source`, `product`, `merchant`, `service`) are NOT included — they only exist in `tran_summary`.
+- **`join_clause` builder** (`build_htd_join_clause`): produces a pure boolean expression (NO leading WHERE/AND — procedure prepends the `AND`). `HTD_DIM_MAP` maps row-dim keys to HTD/GAM columns; `HTD_FILTER_MAP` maps filter keys to HTD/GAM columns. Returns `'1=1'` when no filters apply.
 - **Filters applied**: global date range + date dimension filters (`tran_date`, `tran_date_from`/`to`) + categorical filters that exist in HTD/GAM + row dimension values from the clicked row.
 - **Frontend**: `HtdDetailRow` component in `pivot/page.tsx` + `useHtdDetail()` hook in `useDashboardData.ts`. Pagination UI (page pills + «/»/Prev/Next) matches main pivot pagination style. `placeholderData: prev` keeps previous page visible while fetching.
 - **Adding a new HTD detail column**:
-  1. Check the column exists in `htd` or `gam` (use `information_schema.columns`) — if not, skip
-  2. Add to the `SELECT` in `htd_detail` method (use table alias + `AS` if renaming)
-  3. Add to `HTD_DETAIL_COLUMNS` constant in service
+  1. Update `public.get_tran_detail` procedure to SELECT the new column from `htd`/`gam`/`eab`
+  2. Add the new key to `HTD_DETAIL_COLUMNS` constant in service
+  3. Add a mapping line in the `rows.map` block of `htd_detail` (raw proc column → frontend key)
   4. If it's an amount-type column, update the amount-alignment check in `HtdDetailRow` (currently `col === 'tran_amt'` for `text-right` + NPR formatting)
 
 ---
@@ -553,3 +555,5 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - `db/scripts/performance_indexes.sql` contains 4 pending indexes for DBA execution (eab composite, year_month, entry_user, gl_sub_head_code)
 - Risk page thresholds now configurable via env vars: `RISK_HIGH_VALUE_THRESHOLD`, `RISK_CONCENTRATION_WARN/HIGH`, `RISK_VOLATILITY_WARN/HIGH`
 - `digital_channels` assumes NULL `tran_source` = branch — verify with data owners
+- **Numeric/decimal PG columns are returned as JSON strings** (Rails serializes `BigDecimal` as string). Frontend must coerce with `Number(v)` before arithmetic (e.g., TOTAL row summation in `buildPivotData`) and before passing to `formatNPR`. The `renderCell()` helper handles this automatically by detecting numeric-looking strings via `/^-?\d+(\.\d+)?$/`. When writing new components that consume measure columns, always coerce.
+- Hover row backgrounds must use theme tokens (`hover:bg-bg-card-hover`), not hardcoded `rgba(255,255,255,0.04)` which is invisible on white in light theme.
