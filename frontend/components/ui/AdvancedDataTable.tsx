@@ -261,7 +261,7 @@ export function AdvancedDataTable<TData>({
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] bg-bg-card">
+      <div className="rounded-xl border border-border overflow-hidden bg-bg-card" style={{ boxShadow: 'var(--shadow-card)' }}>
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-bg-surface">
@@ -397,7 +397,7 @@ export function AdvancedDataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-border last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                    className="border-b border-border last:border-0 transition-colors hover:bg-row-hover"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-2.5 text-[11.5px] text-text-secondary whitespace-nowrap">

@@ -60,6 +60,18 @@
 
   /* Noise texture */
   --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+
+  /* Theme-aware hover tint for table rows (white overlay on dark bg). */
+  --row-hover:     rgba(255,255,255,0.04);
+  --row-hover-strong: rgba(255,255,255,0.06);
+
+  /* Shared gradient tokens (avatar / logo) — adapt to theme via overrides below. */
+  --gradient-brand:  linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #14B8A6 100%);
+  --gradient-avatar: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+
+  /* Theme-aware shadows (heavy black shadows are muddy on white). */
+  --shadow-card:            0 4px 20px rgba(0,0,0,0.15);
+  --shadow-freeze-divider:  2px 0 6px -2px rgba(0,0,0,0.3);
 }
 
 [data-theme="light"] {
@@ -92,6 +104,18 @@
   --chart-tooltip-bg:     rgba(255,255,255,0.97);
   --chart-tooltip-border: rgba(15,23,42,0.10);
   --chart-glow:           0 4px 16px rgba(15,23,42,0.08);
+
+  /* Row hover: dark tint on light bg */
+  --row-hover:        rgba(15,23,42,0.04);
+  --row-hover-strong: rgba(15,23,42,0.06);
+
+  /* Slightly darker brand gradient for light theme contrast */
+  --gradient-brand:  linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #0D9488 100%);
+  --gradient-avatar: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+
+  /* Softer shadows for light theme (black-tinted slate instead of pure black) */
+  --shadow-card:            0 2px 10px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-freeze-divider:  2px 0 6px -2px rgba(15,23,42,0.10);
 }
 
 * {

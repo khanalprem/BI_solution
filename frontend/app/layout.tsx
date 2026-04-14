@@ -29,11 +29,11 @@ export const metadata: Metadata = {
   description: "Business Intelligence platform for Nepal banking sector",
 };
 
-// Inline script: read localStorage / OS preference BEFORE paint → no flash
+// Inline script: read localStorage BEFORE paint → no flash.
+// Default theme is light — only user-saved preference in localStorage overrides it.
 const themeScript = `(function(){
   var s=localStorage.getItem('bankbi-theme');
-  var p=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
-  var t=s||p;
+  var t=s||'light';
   document.documentElement.dataset.theme=t;
   if(t==='dark')document.documentElement.classList.add('dark');
 })();`;

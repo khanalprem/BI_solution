@@ -17,6 +17,8 @@ const config: Config = {
           "card-hover": "var(--bg-card-hover)",
           input:        "var(--bg-input)",
         },
+        "row-hover":        "var(--row-hover)",
+        "row-hover-strong": "var(--row-hover-strong)",
         border: {
           DEFAULT: "var(--border)",
           strong:  "var(--border-strong)",

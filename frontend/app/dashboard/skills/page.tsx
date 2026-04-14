@@ -433,20 +433,28 @@ const RAILS_TABLES = [
 
 // ─── Dimensions ───────────────────────────────────────────────────────────────
 
+// Aligned with /Users/premprasadkhanal/Downloads/data dictionary.xlsx (rows where type = "dimension").
+// Display labels match the dictionary's "display" column verbatim.
+// Order: broad → narrow drill-down hierarchy (matches the pivot sidebar render order).
 const DIMENSIONS = [
-  // ── Account / customer ──────────────────────────────────────────────────────
-  { key: 'gam_branch',       label: 'GAM Branch',         type: 'categorical', sql: 'gam_branch',        description: 'Branch where the account is registered (GAM)' },
+  // ── Date (broad → narrow, all pivot-capable) ────────────────────────────────
+  { key: 'year',             label: 'Year',               type: 'year',        sql: 'year',              description: 'Calendar year YYYY — pivotable' },
+  { key: 'year_quarter',     label: 'Year Quarter',       type: 'quarter',     sql: 'year_quarter',      description: 'Quarterly period YYYY-Qn — pivotable (e.g. 2024-Q1)' },
+  { key: 'year_month',       label: 'Year Month',         type: 'month',       sql: 'year_month',        description: 'Monthly period YYYY-MM — pivotable (e.g. 2024-03)' },
+  { key: 'tran_date',        label: 'Tran Date',          type: 'date',        sql: 'tran_date',         description: 'Daily granularity YYYY-MM-DD — pivots to column headers' },
+  // ── Customer / Account (geo broad → narrow, then identity) ──────────────────
   { key: 'gam_province',     label: 'GAM Province',       type: 'categorical', sql: 'gam_province',      description: 'Province of the account branch (GAM)' },
   { key: 'gam_cluster',      label: 'GAM Cluster',        type: 'categorical', sql: 'gam_cluster',       description: 'Cluster grouping of the account branch (GAM)' },
-  { key: 'gam_solid',        label: 'Account SOL ID',     type: 'categorical', sql: 'gam_solid',         description: 'SOL identifier for account routing' },
+  { key: 'gam_branch',       label: 'GAM Branch',         type: 'categorical', sql: 'gam_branch',        description: 'Branch where the account is registered (GAM)' },
+  { key: 'cif_id',           label: 'CIF Id',             type: 'text',        sql: 'cif_id',            description: 'Full or partial customer CIF ID (ILIKE pattern)' },
+  { key: 'acid',             label: 'ACID',               type: 'text',        sql: 'acid',              description: 'Internal account identifier' },
   { key: 'acct_num',         label: 'ACCT Num',           type: 'text',        sql: 'acct_num',          description: 'Full or partial account number (ILIKE pattern)' },
   { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name' },
-  { key: 'cif_id',           label: 'CIF Id',             type: 'text',        sql: 'cif_id',            description: 'Full or partial customer CIF ID (ILIKE pattern)' },
-  // ── Transaction ─────────────────────────────────────────────────────────────
-  { key: 'tran_source',      label: 'TRAN Source',        type: 'categorical', sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc.' },
-  { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
-  { key: 'tran_cluster',     label: 'TRAN Cluster',       type: 'categorical', sql: 'tran_cluster',      description: 'Cluster of the transaction branch' },
+  // ── Transaction (geo broad → narrow, then channel / type, then accounting) ──
   { key: 'tran_province',    label: 'TRAN Province',      type: 'categorical', sql: 'tran_province',     description: 'Province of the transaction branch' },
+  { key: 'tran_cluster',     label: 'TRAN Cluster',       type: 'categorical', sql: 'tran_cluster',      description: 'Cluster of the transaction branch' },
+  { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
+  { key: 'tran_source',      label: 'TRAN Source',        type: 'categorical', sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc.' },
   { key: 'tran_type',        label: 'TRAN Type',          type: 'categorical', sql: 'tran_type',         description: 'Transaction type code — pivot-capable' },
   { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side of the transaction (CR / DR) — pivot-capable' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',        type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code — join to gsh for description — pivot-capable' },
@@ -456,13 +464,6 @@ const DIMENSIONS = [
   // ── User ────────────────────────────────────────────────────────────────────
   { key: 'entry_user',       label: 'ENTRY User',         type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
   { key: 'vfd_user',         label: 'VFD User',           type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
-  // ── Date (all are pivot-capable) ────────────────────────────────────────────
-  { key: 'tran_date',        label: 'Tran Date',          type: 'date',        sql: 'tran_date',         description: 'Daily granularity YYYY-MM-DD — pivots to column headers' },
-  { key: 'year_month',       label: 'Year Month',         type: 'month',       sql: 'year_month',        description: 'Monthly period YYYY-MM — pivotable (e.g. 2024-03)' },
-  { key: 'year_quarter',     label: 'Year Quarter',       type: 'quarter',     sql: 'year_quarter',      description: 'Quarterly period YYYY-Qn — pivotable (e.g. 2024-Q1)' },
-  { key: 'year',             label: 'Year',               type: 'year',        sql: 'year',              description: 'Calendar year YYYY — pivotable' },
-  // ── EAB outer-join ──────────────────────────────────────────────────────────
-  { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'eab',         sql: 'e.tran_date_bal',   description: 'Account balance on transaction date — from EAB table via acid LEFT JOIN. Enabling this adds the EAB join to the query.' },
 ];
 
 // ─── Measures ─────────────────────────────────────────────────────────────────
@@ -482,23 +483,28 @@ const MEASURES = [
   { key: 'tran_acct_count', label: 'TRAN Acct Count',   selectSql: 'COUNT(DISTINCT acct_num) tran_acct_count',                                                             orderSql: 'COUNT(DISTINCT acct_num) DESC' },
   // Date / EAB
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      selectSql: 'MAX(tran_date) tran_maxdate',                                                                          orderSql: 'MAX(tran_date) DESC' },
-  { key: 'tran_date_bal',   label: 'TRAN Date Balance',  selectSql: 'e.tran_date_bal',                                                                                      orderSql: 'e.tran_date_bal DESC',   note: 'EAB join required — select TRAN Date Balance dimension to activate.' },
+  { key: 'tran_date_bal',   label: 'TRAN Date Balance',  selectSql: 'e.tran_date_bal',                                                                                      orderSql: 'e.tran_date_bal DESC',   note: 'From EAB table via acid LEFT JOIN — surfaced inside the Transaction Details modal as opening_bal / running_bal.' },
 ];
 // Note: eod_balance does NOT exist in tran_summary directly.
-// Account balance data comes from the EAB table via the tran_date_bal dimension (TRAN Date Balance).
-// Select "TRAN Date Balance" in Dimensions to trigger the EAB LEFT JOIN.
+// Account balance data comes from the EAB table via the tran_date_bal column,
+// surfaced inside the Transaction Details drill-down modal (opening_bal / running_bal columns).
 
 // ─── Periods ──────────────────────────────────────────────────────────────────
 
+// Order: grouped by time scale (Day → Month → Year). Within each scale:
+// "this" first, then full-prior, then to-date, then same-date variants.
 const PERIODS = [
+  // ── Day-level ──
   { key: 'prevdate',          param: 'prevdate_where',          label: 'Previous Date',          desc: '1 calendar day before the end date' },
+  // ── Month-level ──
   { key: 'thismonth',         param: 'thismonth_where',         label: 'This Month',             desc: 'Full calendar month containing the end date (1st → last day of month)' },
-  { key: 'thisyear',          param: 'thisyear_where',          label: 'This Year',              desc: 'Full calendar year containing the end date (Jan 1 → Dec 31)' },
   { key: 'prevmonth',         param: 'prevmonth_where',         label: 'Previous Month',         desc: 'Full prior calendar month (1st → last day)' },
-  { key: 'prevyear',          param: 'prevyear_where',          label: 'Previous Year',          desc: 'Full prior calendar year (Jan 1 → Dec 31)' },
   { key: 'prevmonthmtd',      param: 'prevmonthmtd_where',      label: 'Prev Month MTD',         desc: 'Prior month day 1 → same day-of-month as end date' },
-  { key: 'prevyearytd',       param: 'prevyearytd_where',       label: 'Prev Year YTD',          desc: 'Prior year Jan 1 → same calendar date as end date' },
   { key: 'prevmonthsamedate', param: 'prevmonthsamedate_where', label: 'Prev Month Same Date',   desc: 'Exact same day-of-month in the previous calendar month' },
+  // ── Year-level ──
+  { key: 'thisyear',          param: 'thisyear_where',          label: 'This Year',              desc: 'Full calendar year containing the end date (Jan 1 → Dec 31)' },
+  { key: 'prevyear',          param: 'prevyear_where',          label: 'Previous Year',          desc: 'Full prior calendar year (Jan 1 → Dec 31)' },
+  { key: 'prevyearytd',       param: 'prevyearytd_where',       label: 'Prev Year YTD',          desc: 'Prior year Jan 1 → same calendar date as end date' },
   { key: 'prevyearsamedate',  param: 'prevyearsamedate_where',  label: 'Prev Year Same Date',    desc: 'Exact same calendar date in the previous year' },
 ];
 
@@ -598,7 +604,7 @@ export default function SkillsPage() {
           <div className="mt-6 flex flex-wrap gap-2.5">
             {[
               { label: '19 Production Tables', color: 'blue' },
-              { label: '24 Dimensions',         color: 'purple' },
+              { label: '23 Dimensions',         color: 'purple' },
               { label: '10 Measures',            color: 'green' },
               { label: '9 Period Comparisons',   color: 'amber' },
               { label: '20 Procedure Params',    color: 'red' },
@@ -765,7 +771,7 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (24)"
+            label="Pivot Dimensions (23)"
             sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">

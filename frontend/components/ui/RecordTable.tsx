@@ -157,7 +157,7 @@ export function RecordTable({ title, subtitle, columns, rows, actions }: RecordT
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
+      <div className="rounded-xl border border-border overflow-hidden" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-card)' }}>
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border" style={{ background: 'var(--bg-surface)' }}>
@@ -224,7 +224,7 @@ export function RecordTable({ title, subtitle, columns, rows, actions }: RecordT
                 </tr>
               ) : (
                 filteredRows.map((row, i) => (
-                  <tr key={i} className="border-b border-border last:border-0 hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+                  <tr key={i} className="border-b border-border last:border-0 hover:bg-row-hover transition-colors">
                     {shownCols.map(col => (
                       <td key={col} className="px-4 py-2.5 text-text-secondary whitespace-nowrap">
                         {renderCellValue(row[col])}

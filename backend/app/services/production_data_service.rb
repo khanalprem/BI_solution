@@ -123,6 +123,7 @@ class ProductionDataService
     'gam_solid'        => { label: 'Account SOL ID',     sql: 'gam_solid' },
     'acct_num'         => { label: 'ACCT Num',           sql: 'acct_num' },
     'acct_name'        => { label: 'ACCT Name',          sql: 'acct_name' },
+    'acid'             => { label: 'ACID',               sql: 'acid' },
     'cif_id'           => { label: 'CIF Id',             sql: 'cif_id' },
     # ── Transaction dimensions ────────────────────────────────────────────────
     'tran_source'      => { label: 'TRAN Source',        sql: 'tran_source' },
@@ -363,7 +364,7 @@ class ProductionDataService
   # Delegates to the `public.get_tran_detail(join_clause, page, page_size)` stored procedure,
   # which builds the HTD↔GAM↔EAB join, applies ROW_NUMBER() pagination, and drops results
   # into a TEMP TABLE `tran_detail` (also includes a `total_rows` column for pagination).
-  HTD_DETAIL_COLUMNS = %w[cif_id acid acct_num acct_name tran_date tran_type part_tran_type tran_branch gl_sub_head_code entry_user vfd_user tran_amt tran_date_bal].freeze
+  HTD_DETAIL_COLUMNS = %w[cif_id acid acct_num acct_name tran_date tran_type part_tran_type tran_branch gl_sub_head_code entry_user vfd_user tran_amt opening_bal running_bal].freeze
   HTD_MAX_ROWS = 50
 
   # Maps tran_summary dimension keys → HTD/GAM column references (for the procedure's join_clause).
@@ -427,7 +428,8 @@ class ProductionDataService
           'entry_user'       => r['entry_user_id'],
           'vfd_user'         => r['vfd_user_id'],
           'tran_amt'         => r['tran_amt'],
-          'tran_date_bal'    => r['tran_date_bal']
+          'opening_bal'      => r['opening_bal'],
+          'running_bal'      => r['running_bal']
         }
       end
 
@@ -436,51 +438,41 @@ class ProductionDataService
         rows: rows,
         total_rows: total_rows,
         page: normalized_page,
-        page_size: normalized_page_size
+        page_size: normalized_page_size,
+        sql_preview: {
+          join_clause: join_clause,
+          page: normalized_page,
+          page_size: normalized_page_size
+        }
       }
     end
   end
 
   private
 
+  # Build the boolean expression passed to `public.get_tran_detail(join_clause, ...)`.
+  # Only includes the clicked row's dimension values — the global date range and other
+  # filters are intentionally NOT added, because the row already carries the specific
+  # dimension values that scope the detail query. Keeping only row_dims produces a
+  # minimal, predictable clause (e.g. "g.acct_num::text = '100011' AND h.tran_date::date = '2024-02-19'").
+  #
+  # Date handling: `tran_date` is a timestamp in HTD, so comparing `::text` to 'YYYY-MM-DD'
+  # fails (it would need to match 'YYYY-MM-DD 00:00:00'). For date-valued dims, cast to `::date`.
+  HTD_DATE_DIMS = %w[tran_date].freeze
+
   def build_htd_join_clause(start_date:, end_date:, filters:, row_dims:)
     conn = @connection
     clauses = []
-
-    if start_date && end_date
-      clauses << "h.tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
-    end
-
-    HTD_FILTER_MAP.each do |filter_key, htd_col|
-      normalized = normalize_filter_values(filters[filter_key])
-      next if normalized.empty?
-      clauses << "#{htd_col} IN (#{quoted_values(normalized)})"
-    end
-
-    tran_date_from = filters[:tran_date_from].presence
-    tran_date_to   = filters[:tran_date_to].presence
-    tran_date_vals = normalize_filter_values(filters[:tran_date])
-
-    if tran_date_from && tran_date_to
-      clauses << "h.tran_date BETWEEN #{conn.quote(tran_date_from)} AND #{conn.quote(tran_date_to)}"
-    elsif tran_date_vals.any?
-      clauses << "h.tran_date IN (#{quoted_values(tran_date_vals)})"
-    end
-
-    if filters[:acct_num].present?
-      clauses << "g.acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
-    end
-
-    if filters[:cif_id].present?
-      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
-      clauses << "g.cif_id::text ILIKE #{conn.quote(pattern)}"
-    end
 
     row_dims.each do |dim_key, dim_value|
       key = dim_key.to_s
       htd_col = HTD_DIM_MAP[key]
       next unless htd_col
-      clauses << "#{htd_col}::text = #{conn.quote(dim_value.to_s)}"
+      if HTD_DATE_DIMS.include?(key)
+        clauses << "#{htd_col}::date = #{conn.quote(dim_value.to_s)}::date"
+      else
+        clauses << "#{htd_col}::text = #{conn.quote(dim_value.to_s)}"
+      end
     end
 
     # Procedure appends this after `and`, so must be at least 1=1 when no filters.

@@ -143,6 +143,7 @@ export function KPICard({
   return (
     <div
       onClick={onClick}
+      style={{ boxShadow: highlighted ? undefined : 'var(--shadow-card)' }}
       className={cn(
         // Layout
         'relative flex flex-col gap-1.5 p-3 rounded-xl',
@@ -151,15 +152,14 @@ export function KPICard({
         accent.border,
         // Surface — glassmorphism-lite
         'bg-bg-card/95 backdrop-blur-sm',
-        'shadow-[0_2px_8px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.04)]',
         accent.ring,
         // Interaction
         onClick ? 'cursor-pointer' : '',
         'select-none',
         'transition-all duration-200',
-        'hover:bg-bg-card-hover hover:border-border-strong hover:shadow-[0_6px_24px_rgba(0,0,0,0.24)]',
+        'hover:bg-bg-card-hover hover:border-border-strong',
         'animate-fade-in',
-        highlighted && 'border-accent-blue/40 shadow-[0_4px_20px_rgba(99,102,241,0.10),inset_0_1px_0_rgba(255,255,255,0.05)]'
+        highlighted && 'border-accent-blue/40 shadow-[0_4px_20px_rgba(99,102,241,0.12)]'
       )}
     >
       {/* ── Top row: label + icon ── */}

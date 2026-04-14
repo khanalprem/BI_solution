@@ -102,7 +102,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
         <div className={`border-b border-border flex items-center flex-shrink-0 ${collapsed ? 'px-3 py-4 justify-center' : 'px-3 py-4 gap-3'}`}>
           {/* Logo: geometric bar-chart mark */}
           <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 relative overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #14B8A6 100%)' }}
+            style={{ background: 'var(--gradient-brand)' }}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <rect x="1" y="7" width="3" height="6" rx="0.8" fill="white" opacity="0.9" />
@@ -350,7 +350,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
             <div className="flex justify-center">
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
-                style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)' }}
+                style={{ background: 'var(--gradient-avatar)' }}
                 title={userName}
               >
                 {userName.slice(0, 2).toUpperCase() || 'U'}
@@ -364,7 +364,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
                   className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-bg-input transition-all text-left outline-none focus-visible:ring-1 focus-visible:ring-accent-blue/50"
                 >
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' }}
+                    style={{ background: 'var(--gradient-avatar)' }}
                   >
                     {userName.slice(0, 2).toUpperCase() || 'U'}
                   </div>

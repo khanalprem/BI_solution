@@ -355,4 +355,9 @@ export interface HtdDetailResponse {
   total_rows: number;
   page: number;
   page_size: number;
+  sql_preview: {
+    join_clause: string;
+    page: number;
+    page_size: number;
+  };
 }

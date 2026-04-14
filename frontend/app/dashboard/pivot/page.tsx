@@ -10,6 +10,8 @@ import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import { useFilterValues, useHtdDetail, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
 import { formatNPR } from '@/lib/formatters';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse } from '@/types';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
@@ -160,37 +162,46 @@ const DATE_FIELD_ORDER = ['year', 'year_quarter', 'year_month', 'tran_date'] as 
 // Fields (besides date container) that get a Pivot button
 const PIVOT_CAPABLE_NON_DATE = new Set(['part_tran_type', 'tran_type', 'gl_sub_head_code']);
 
+// Dimensions sourced from the data dictionary (data dictionary.xlsx, type = "dimension").
+// Display labels match the dictionary's "display" column verbatim.
+//
+// Order strategy: BROAD → NARROW drill-down hierarchy within each section
+// (matches conventional BI tools like Power BI / Tableau).
+//   1. Date          — Year → Quarter → Month → Day
+//   2. Customer/Account — geo (Province → Cluster → Branch), then identity (CIF → ACID → ACCT Num → ACCT Name)
+//   3. Transaction   — geo (Province → Cluster → Branch), then channel/type, then accounting/product
+//   4. User          — entry then verifier
 const DIMENSION_FIELDS: DimensionFieldDef[] = [
-  // ── Account / customer dimensions ─────────────────────────────────────────
-  { key: 'gam_branch',       label: 'GAM Branch',       type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Account registration branch (GAM)' },
+  // ── Date dimensions — broad → narrow (matches DATE_FIELD_ORDER for partition rendering) ──
+  { key: 'year',         label: 'Year',          type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
+  { key: 'year_quarter', label: 'Year Quarter',  type: 'quarter', filterKey: 'yearQuarter', fromKey: 'yearQuarterFrom', toKey: 'yearQuarterTo', description: 'Quarterly period (YYYY-Qn)' },
+  { key: 'year_month',   label: 'Year Month',    type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
+  { key: 'tran_date',    label: 'Tran Date',     type: 'date',    filterKey: 'tranDate',    fromKey: 'tranDateFrom',    toKey: 'tranDateTo',    description: 'Daily granularity (YYYY-MM-DD)' },
+
+  // ── Customer / Account (geo hierarchy, then identity broad → narrow) ─────
   { key: 'gam_province',     label: 'GAM Province',     type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch (GAM)' },
   { key: 'gam_cluster',      label: 'GAM Cluster',      type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Account branch cluster (GAM)' },
-  { key: 'gam_solid',        label: 'Account SOL ID',   type: 'categorical', filterKey: 'solid',         optionsKey: 'solids',            description: 'SOL identifier for account routing' },
+  { key: 'gam_branch',       label: 'GAM Branch',       type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Account registration branch (GAM)' },
+  { key: 'cif_id',           label: 'CIF Id',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
+  { key: 'acid',             label: 'ACID',             type: 'text',                                    description: 'Internal account identifier' },
   { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Account number (exact match)' },
   { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name' },
-  { key: 'cif_id',           label: 'CIF Id',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
-  // ── Transaction dimensions ────────────────────────────────────────────────
-  { key: 'tran_source',      label: 'TRAN Source',      type: 'categorical', filterKey: 'tranSource',    optionsKey: 'tran_sources',      description: 'Transaction channel (mobile / internet / branch)' },
-  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical',                             description: 'Branch where the transaction was processed' },
-  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical',                             description: 'Transaction branch cluster' },
+
+  // ── Transaction (geo, then channel / type, then accounting / product) ────
   { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical',                             description: 'Province of the transaction branch' },
+  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical',                             description: 'Transaction branch cluster' },
+  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical',                             description: 'Branch where the transaction was processed' },
+  { key: 'tran_source',      label: 'TRAN Source',      type: 'categorical', filterKey: 'tranSource',    optionsKey: 'tran_sources',      description: 'Transaction channel (mobile / internet / branch)' },
   { key: 'tran_type',        label: 'TRAN Type',        type: 'categorical',                             description: 'Transaction type code' },
   { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  optionsKey: 'part_tran_types',   description: 'Credit or debit side of the transaction (CR / DR)' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
   { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',          type: 'categorical', filterKey: 'service',       optionsKey: 'services',          description: 'Service type applied to the transaction' },
   { key: 'merchant',         label: 'Merchant',         type: 'categorical', filterKey: 'merchant',      optionsKey: 'merchants',         description: 'Merchant identifier for payment transactions' },
-  // ── User dimensions ───────────────────────────────────────────────────────
+
+  // ── User ─────────────────────────────────────────────────────────────────
   { key: 'entry_user',       label: 'ENTRY User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'entry_users',       description: 'User who entered the transaction' },
   { key: 'vfd_user',         label: 'VFD User',         type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'vfd_users',         description: 'User who verified the transaction' },
-  // ── Date fields — rendered in the Date container with shared Pivot/Sort ───
-  { key: 'tran_date',    label: 'Tran Date',     type: 'date',    filterKey: 'tranDate',    fromKey: 'tranDateFrom',    toKey: 'tranDateTo',    description: 'Daily granularity (YYYY-MM-DD)' },
-  { key: 'year_month',   label: 'Year Month',    type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
-  { key: 'year_quarter', label: 'Year Quarter',  type: 'quarter', filterKey: 'yearQuarter', fromKey: 'yearQuarterFrom', toKey: 'yearQuarterTo', description: 'Quarterly period (YYYY-Qn)' },
-  { key: 'year',         label: 'Year',          type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
-  // ── EAB outer-join dimension ──────────────────────────────────────────────
-  // tran_date_bal comes from the eab table (e.tran_date_bal) via LEFT JOIN on acid.
-  { key: 'tran_date_bal', label: 'TRAN Date Balance', type: 'measure_dim', description: 'Account balance on transaction date (from EAB table via acid join)' },
 ];
 
 // ─── Measure definitions ──────────────────────────────────────────────────────
@@ -219,26 +230,76 @@ const STANDARD_MEASURES: MeasureDef[] = [
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      description: 'MAX(tran_date)',                                       group: 'standard' },
 ];
 
+// Order strategy: grouped by time scale (Day → Month → Year), and within each
+// scale "current" comes first, then full-prior, then to-date, then same-date.
+// Lets analysts find the right comparison without scanning the whole list.
 const COMPARISON_MEASURES: MeasureDef[] = [
+  // ── Day-level ────────────────────────────────────────────────────────────
   { key: 'prevdate_amt',            label: 'Prev. Day — Amount',            description: 'prevdate_where · tran_amt',         group: 'comparison', period: 'prevdate' },
   { key: 'prevdate_count',          label: 'Prev. Day — Count',             description: 'prevdate_where · tran_count',       group: 'comparison', period: 'prevdate' },
+
+  // ── Month-level (this → prev full → prev MTD → prev same-date) ───────────
   { key: 'thismonth_amt',           label: 'This Month — Amount',           description: 'thismonth_where · tran_amt',        group: 'comparison', period: 'thismonth' },
   { key: 'thismonth_count',         label: 'This Month — Count',            description: 'thismonth_where · tran_count',      group: 'comparison', period: 'thismonth' },
-  { key: 'thisyear_amt',            label: 'This Year — Amount',            description: 'thisyear_where · tran_amt',         group: 'comparison', period: 'thisyear' },
-  { key: 'thisyear_count',          label: 'This Year — Count',             description: 'thisyear_where · tran_count',       group: 'comparison', period: 'thisyear' },
   { key: 'prevmonth_amt',           label: 'Prev. Month — Amount',          description: 'prevmonth_where · tran_amt',        group: 'comparison', period: 'prevmonth' },
   { key: 'prevmonth_count',         label: 'Prev. Month — Count',           description: 'prevmonth_where · tran_count',      group: 'comparison', period: 'prevmonth' },
-  { key: 'prevyear_amt',            label: 'Prev. Year — Amount',           description: 'prevyear_where · tran_amt',         group: 'comparison', period: 'prevyear' },
-  { key: 'prevyear_count',          label: 'Prev. Year — Count',            description: 'prevyear_where · tran_count',       group: 'comparison', period: 'prevyear' },
   { key: 'prevmonthmtd_amt',        label: 'Prev. Month MTD — Amount',      description: 'prevmonthmtd_where · tran_amt',     group: 'comparison', period: 'prevmonthmtd' },
   { key: 'prevmonthmtd_count',      label: 'Prev. Month MTD — Count',       description: 'prevmonthmtd_where · tran_count',   group: 'comparison', period: 'prevmonthmtd' },
-  { key: 'prevyearytd_amt',         label: 'Prev. Year YTD — Amount',       description: 'prevyearytd_where · tran_amt',      group: 'comparison', period: 'prevyearytd' },
-  { key: 'prevyearytd_count',       label: 'Prev. Year YTD — Count',        description: 'prevyearytd_where · tran_count',    group: 'comparison', period: 'prevyearytd' },
   { key: 'prevmonthsamedate_amt',   label: 'Prev. Month Same Day — Amount', description: 'prevmonthsamedate_where · tran_amt',   group: 'comparison', period: 'prevmonthsamedate' },
   { key: 'prevmonthsamedate_count', label: 'Prev. Month Same Day — Count',  description: 'prevmonthsamedate_where · tran_count', group: 'comparison', period: 'prevmonthsamedate' },
+
+  // ── Year-level (this → prev full → prev YTD → prev same-date) ────────────
+  { key: 'thisyear_amt',            label: 'This Year — Amount',            description: 'thisyear_where · tran_amt',         group: 'comparison', period: 'thisyear' },
+  { key: 'thisyear_count',          label: 'This Year — Count',             description: 'thisyear_where · tran_count',       group: 'comparison', period: 'thisyear' },
+  { key: 'prevyear_amt',            label: 'Prev. Year — Amount',           description: 'prevyear_where · tran_amt',         group: 'comparison', period: 'prevyear' },
+  { key: 'prevyear_count',          label: 'Prev. Year — Count',            description: 'prevyear_where · tran_count',       group: 'comparison', period: 'prevyear' },
+  { key: 'prevyearytd_amt',         label: 'Prev. Year YTD — Amount',       description: 'prevyearytd_where · tran_amt',      group: 'comparison', period: 'prevyearytd' },
+  { key: 'prevyearytd_count',       label: 'Prev. Year YTD — Count',        description: 'prevyearytd_where · tran_count',    group: 'comparison', period: 'prevyearytd' },
   { key: 'prevyearsamedate_amt',    label: 'Prev. Year Same Day — Amount',  description: 'prevyearsamedate_where · tran_amt',    group: 'comparison', period: 'prevyearsamedate' },
   { key: 'prevyearsamedate_count',  label: 'Prev. Year Same Day — Count',   description: 'prevyearsamedate_where · tran_count',  group: 'comparison', period: 'prevyearsamedate' },
 ];
+
+// ─── Date input formatting ────────────────────────────────────────────────────
+// Live-format date filter inputs as the user types: insert separators automatically
+// (YYYY-MM-DD, YYYY-MM, YYYY-Qn). On blur, pad single-digit month / day with a
+// leading zero so "2024-2-9" becomes "2024-02-09".
+type DateLikeType = 'date' | 'month' | 'quarter' | 'year';
+
+function formatDateValue(raw: string, type: DateLikeType): string {
+  if (type === 'year') {
+    return raw.replace(/\D/g, '').slice(0, 4);
+  }
+  if (type === 'quarter') {
+    // YYYY-Qn — 4 year digits + 1 quarter digit
+    const digits = raw.replace(/[^\d]/g, '').slice(0, 5);
+    if (digits.length <= 4) return digits;
+    return `${digits.slice(0, 4)}-Q${digits.slice(4)}`;
+  }
+  if (type === 'month') {
+    const digits = raw.replace(/\D/g, '').slice(0, 6);
+    if (digits.length <= 4) return digits;
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  }
+  // date: YYYY-MM-DD
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+function padDateOnBlur(value: string, type: DateLikeType): string {
+  const v = value.trim();
+  if (!v) return v;
+  if (type === 'date') {
+    const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  }
+  if (type === 'month') {
+    const m = v.match(/^(\d{4})-(\d{1,2})$/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
+  }
+  return v;
+}
 
 // ─── Type badge styling ───────────────────────────────────────────────────────
 
@@ -447,131 +508,255 @@ function PivotGroupTh({
 
 const HTD_PAGE_SIZE = 10;
 
-function HtdDetailRow({
+// Columns that should be right-aligned + NPR-formatted in the HTD detail table.
+const HTD_AMOUNT_COLS = new Set(['tran_amt', 'opening_bal', 'running_bal']);
+
+// Extract YYYY-MM-DD from a tran_date value (timestamp string or Date) for grouping rows by date.
+function htdDateKey(v: unknown): string {
+  if (v == null) return '';
+  const s = String(v);
+  // Take the first 10 chars if it looks like YYYY-MM-DDT... (ISO timestamp); otherwise full string.
+  return s.length >= 10 && s[4] === '-' && s[7] === '-' ? s.slice(0, 10) : s;
+}
+
+// Shared inner panel used by both the inline expanded row AND the per-cell modal.
+// Renders: header bar (with proc-call toggle + row count) → collapsible procedure preview
+// → loading/error/empty states OR table + pagination.
+function HtdDetailPanel({
   filters,
   rowDims,
-  totalCols,
 }: {
   filters: DashboardFilters;
   rowDims: Record<string, string>;
-  totalCols: number;
 }) {
   const [htdPage, setHtdPage] = useState(1);
+  const [showProcPreview, setShowProcPreview] = useState(false);
   const { data, isLoading, isError, isFetching } = useHtdDetail(filters, rowDims, true, htdPage, HTD_PAGE_SIZE);
 
   const totalRows = data?.total_rows ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / HTD_PAGE_SIZE));
 
+  const procLines = useMemo((): SqlLine[] => {
+    if (!data?.sql_preview) return [];
+    const sp = data.sql_preview;
+    return [
+      { text: 'CALL public.get_tran_detail(', kind: 'header' },
+      { text: `  join_clause  => '${sp.join_clause}',`, kind: 'where' },
+      { text: `  page         => ${sp.page},`, kind: 'page' },
+      { text: `  page_size    => ${sp.page_size}`, kind: 'page' },
+      { text: ')', kind: 'footer' },
+      { text: '-- Populates TEMP TABLE tran_detail (htd h ⟕ gam g on acid AND <join_clause>) → joined with eab', kind: 'placeholder' },
+    ];
+  }, [data]);
+
   return (
-    <tr>
-      <td colSpan={totalCols} className="p-0">
-        <div className="mx-6 my-2 rounded-lg border border-border overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border" style={{ background: 'var(--bg-base)' }}>
-            <span className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider">
-              HTD Detail — {Object.entries(rowDims).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+    <>
+      {/* Header bar — pr-10 reserves space for the dialog's close (X) button at right-3 */}
+      <div className="flex items-center justify-between pl-3 pr-10 py-1.5 border-b border-border" style={{ background: 'var(--bg-base)' }}>
+        <span className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider">
+          Transaction Details — {Object.entries(rowDims).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+        </span>
+        <div className="flex items-center gap-2">
+          {data?.sql_preview && (
+            <button
+              type="button"
+              onClick={() => setShowProcPreview((v) => !v)}
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider transition-colors ${
+                showProcPreview
+                  ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
+                  : 'border-border bg-bg-input text-text-muted hover:border-accent-blue/30 hover:text-accent-blue'
+              }`}
+              title="Show procedure call preview"
+            >
+              {showProcPreview ? '− proc call' : '+ proc call'}
+            </button>
+          )}
+          {totalRows > 0 && (
+            <span className="text-[9.5px] text-text-muted font-medium">
+              {totalRows.toLocaleString()} rows
             </span>
-            {totalRows > 0 && (
-              <span className="text-[9.5px] text-text-muted font-medium">
-                {totalRows.toLocaleString()} rows
-              </span>
-            )}
-          </div>
-          {isLoading ? (
-            <div className="p-3 space-y-2">
-              {Array.from({ length: HTD_PAGE_SIZE }).map((_, i) => (
-                <Skeleton key={i} className="h-6 w-full" />
-              ))}
-            </div>
-          ) : isError ? (
-            <div className="p-3 text-[11px] text-accent-red">Failed to load detail data.</div>
-          ) : !data || data.rows.length === 0 ? (
-            <div className="p-3 text-[11px] text-text-muted">No detail rows found.</div>
-          ) : (
-            <>
-              <div>
-                <table className="w-full border-separate border-spacing-0 text-[11px]">
-                  <thead>
-                    <tr className="border-b border-border">
-                      {data.columns.map((col) => (
-                        <th key={col} className={`px-3 py-1.5 text-[9px] font-bold text-text-muted uppercase tracking-wider ${col === 'tran_amt' ? 'text-right' : 'text-left'}`} style={{ background: 'var(--bg-base)' }}>
-                          {col.replaceAll('_', ' ')}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isFetching
-                      ? Array.from({ length: HTD_PAGE_SIZE }).map((_, ri) => (
-                          <tr key={`skeleton-${ri}`} className="border-b border-border/30 last:border-0">
-                            {data.columns.map((col) => (
-                              <td key={col} className="px-3 py-1.5">
-                                <Skeleton className={`h-4 ${col === 'tran_amt' ? 'w-20 ml-auto' : 'w-full'}`} />
-                              </td>
-                            ))}
-                          </tr>
-                        ))
-                      : data.rows.map((row, ri) => (
-                          <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-bg-card-hover">
-                            {data.columns.map((col) => (
-                              <td key={col} className={`px-3 py-1.5 whitespace-nowrap ${col === 'tran_amt' ? 'text-right font-mono text-xs' : 'text-text-secondary'}`}>
-                                {col === 'tran_amt' ? formatNPR(row[col] == null ? null : Number(row[col])) : (row[col] ?? '—')}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-3 py-2 border-t border-border" style={{ background: 'var(--bg-base)' }}>
-                  <p className="text-[11px] text-text-muted">
-                    Showing {((htdPage - 1) * HTD_PAGE_SIZE) + 1}–{Math.min(htdPage * HTD_PAGE_SIZE, totalRows).toLocaleString()} of {totalRows.toLocaleString()} rows
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage(1)}
-                      className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      «
-                    </button>
-                    <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage((p) => p - 1)}
-                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      ← Prev
-                    </button>
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let p: number;
-                      if (totalPages <= 5) p = i + 1;
-                      else if (htdPage <= 3) p = i + 1;
-                      else if (htdPage >= totalPages - 2) p = totalPages - 4 + i;
-                      else p = htdPage - 2 + i;
-                      return (
-                        <button key={p} type="button" onClick={() => setHtdPage(p)}
-                          className={`min-w-[28px] h-7 rounded-md text-[11px] font-medium transition-all ${
-                            p === htdPage ? 'bg-accent-blue text-white shadow-sm' : 'border border-border bg-bg-input text-text-secondary hover:bg-bg-card'
-                          }`}>
-                          {p}
-                        </button>
-                      );
-                    })}
-                    <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage((p) => p + 1)}
-                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      Next →
-                    </button>
-                    <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage(totalPages)}
-                      className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      »
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
           )}
         </div>
-      </td>
-    </tr>
+      </div>
+
+      {showProcPreview && data?.sql_preview && (
+        <div className="border-b border-border" style={{ background: 'var(--bg-base)' }}>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 border-b border-border/60">
+            {[
+              { dot: 'bg-accent-green',  label: 'join_clause (WHERE)' },
+              { dot: 'bg-text-muted',    label: 'pagination' },
+            ].map((l) => (
+              <span key={l.label} className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${l.dot}`} />
+                <span className="text-[9px] text-text-muted">{l.label}</span>
+              </span>
+            ))}
+          </div>
+          <div className="px-3 py-2 overflow-x-auto">
+            <pre className="text-[10px] leading-[1.75] font-mono">
+              {procLines.map((line, i) => (
+                <span key={i} className={`block ${KIND_CLS[line.kind] ?? 'text-text-secondary'}`}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="p-3 space-y-2">
+          {Array.from({ length: HTD_PAGE_SIZE }).map((_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
+        </div>
+      ) : isError ? (
+        <div className="p-3 text-[11px] text-accent-red">Failed to load detail data.</div>
+      ) : !data || data.rows.length === 0 ? (
+        <div className="p-3 text-[11px] text-text-muted">No detail rows found.</div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full border-separate border-spacing-0 text-[11px]">
+              <thead>
+                <tr className="border-b border-border">
+                  {data.columns.map((col) => (
+                    <th
+                      key={col}
+                      className={`px-3 py-1.5 text-[9px] font-bold text-text-muted uppercase tracking-wider ${HTD_AMOUNT_COLS.has(col) ? 'text-right' : 'text-left'}`}
+                      style={{ background: 'var(--bg-base)' }}
+                    >
+                      {col.replaceAll('_', ' ')}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isFetching
+                  ? Array.from({ length: HTD_PAGE_SIZE }).map((_, ri) => (
+                      <tr key={`skeleton-${ri}`} className="border-b border-border/30 last:border-0">
+                        {data.columns.map((col) => (
+                          <td key={col} className="px-3 py-1.5">
+                            <Skeleton className={`h-4 ${HTD_AMOUNT_COLS.has(col) ? 'w-20 ml-auto' : 'w-full'}`} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  : data.rows.map((row, ri) => {
+                      const dateKey = htdDateKey(row.tran_date);
+                      const prevDateKey = ri > 0 ? htdDateKey(data.rows[ri - 1].tran_date) : null;
+                      const isFirstOfDate = ri === 0 || dateKey !== prevDateKey;
+                      return (
+                        <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
+                          {data.columns.map((col) => {
+                            const isAmount = HTD_AMOUNT_COLS.has(col);
+                            let display: string;
+                            if (col === 'opening_bal') {
+                              display = isFirstOfDate ? formatNPR(row[col] == null ? null : Number(row[col])) : '';
+                            } else if (isAmount) {
+                              display = formatNPR(row[col] == null ? null : Number(row[col]));
+                            } else {
+                              display = row[col] != null && row[col] !== '' ? String(row[col]) : '—';
+                            }
+                            return (
+                              <td
+                                key={col}
+                                className={`px-3 py-1.5 whitespace-nowrap ${isAmount ? 'text-right font-mono text-xs' : 'text-text-secondary'}`}
+                              >
+                                {display}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-3 py-2 border-t border-border" style={{ background: 'var(--bg-base)' }}>
+              <p className="text-[11px] text-text-muted">
+                Showing {((htdPage - 1) * HTD_PAGE_SIZE) + 1}–{Math.min(htdPage * HTD_PAGE_SIZE, totalRows).toLocaleString()} of {totalRows.toLocaleString()} rows
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage(1)}
+                  className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  «
+                </button>
+                <button type="button" disabled={htdPage <= 1} onClick={() => setHtdPage((p) => p - 1)}
+                  className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  ← Prev
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let p: number;
+                  if (totalPages <= 5) p = i + 1;
+                  else if (htdPage <= 3) p = i + 1;
+                  else if (htdPage >= totalPages - 2) p = totalPages - 4 + i;
+                  else p = htdPage - 2 + i;
+                  return (
+                    <button key={p} type="button" onClick={() => setHtdPage(p)}
+                      className={`min-w-[28px] h-7 rounded-md text-[11px] font-medium transition-all ${
+                        p === htdPage ? 'bg-accent-blue text-white shadow-sm' : 'border border-border bg-bg-input text-text-secondary hover:bg-bg-card'
+                      }`}>
+                      {p}
+                    </button>
+                  );
+                })}
+                <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage((p) => p + 1)}
+                  className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  Next →
+                </button>
+                <button type="button" disabled={htdPage >= totalPages} onClick={() => setHtdPage(totalPages)}
+                  className="px-2 py-1.5 text-[11px] font-medium rounded-lg border border-border bg-bg-input text-text-primary hover:bg-bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  »
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </>
   );
 }
 
-function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title: string; subtitle?: string; filters: DashboardFilters }) {
+// Single pivot cell with optional shadcn Tooltip on hover. Keeps the markup
+// of the table consistent (always renders a <td>); tooltip is a portal so it
+// floats over the table without affecting layout.
+function PivotCell({
+  clickable,
+  label,
+  onClick,
+  children,
+}: {
+  clickable: boolean;
+  label: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  const baseClass = 'px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs';
+  const interactiveClass = 'cursor-pointer hover:bg-accent-blue/10 hover:text-accent-blue transition-colors';
+
+  if (!clickable) {
+    return <td className={baseClass}>{children}</td>;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <td onClick={onClick} className={`${baseClass} ${interactiveClass}`}>{children}</td>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={6}
+        className="z-[210] rounded-md border border-border bg-bg-card text-text-primary px-2 py-1 text-[10.5px] font-medium shadow-md"
+      >
+        <span className="text-text-muted">View Transaction Details</span>
+        {label && <span className="block text-text-primary mt-0.5">{label}</span>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: PivotData; title: string; subtitle?: string; filters: DashboardFilters; pivotDimKeys: string[] }) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
   const hasMultiMeasure = measureKeys.length > 1;
 
@@ -613,22 +798,42 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
   const stickyLeft = rowDimKeys.map((_, i) => EXPAND_COL_WIDTH + i * ROW_DIM_COL_WIDTH);
   const lastDimIdx  = rowDimKeys.length - 1;
 
-  // Expand/collapse state for HTD drill-down — keyed by row index.
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const toggleExpand = useCallback((idx: number) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
+  // Drill-down (modal): triggered by clicking the row-level "+" icon OR any pivot cell.
+  // Both paths use the same Dialog so the UX is consistent.
+  const [cellDrill, setCellDrill] = useState<{ rowDims: Record<string, string>; label: string } | null>(null);
+
+  // Build row_dims for a specific cell click. Combines:
+  //   - row's left-side rowDim values
+  //   - the cell's pivot dim values (decoded from the composite pivotValue using PIVOT_DIM_SEP)
+  // Period-prefixed values (e.g. "this_month:2024-03") are excluded — they are not raw dims.
+  const buildCellRowDims = useCallback((row: DataRow, pivotValue: string) => {
+    const rd: Record<string, string> = {};
+    for (const k of rowDimKeys) {
+      const v = row[k];
+      if (v !== null && v !== undefined && v !== '') rd[k] = String(v);
+    }
+    const parts = pivotValue.split(PIVOT_DIM_SEP);
+    pivotDimKeys.forEach((dimKey, idx) => {
+      const raw = parts[idx] ?? '';
+      const parsed = parsePivotHeader(raw);
+      if (parsed.period === null && parsed.date) rd[dimKey] = parsed.date;
     });
-  }, []);
+    return rd;
+  }, [rowDimKeys, pivotDimKeys]);
+
+  // Build a human label for the modal title from a cell's pivot value.
+  const buildCellLabel = useCallback((row: DataRow, pivotValue: string) => {
+    const rowPart = rowDimKeys.map((k) => row[k]).filter(Boolean).join(' · ');
+    const pivotPart = pivotValue.split(PIVOT_DIM_SEP).filter(Boolean).join(' / ');
+    return [rowPart, pivotPart].filter(Boolean).join(' — ');
+  }, [rowDimKeys]);
 
   // Total columns including expand col for colSpan calculations.
   const totalAllCols = 1 + rowDimKeys.length + totalPivotCols;
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)]" style={{ background: 'var(--bg-card)' }}>
+    <TooltipProvider delayDuration={150} skipDelayDuration={50}>
+    <div className="rounded-xl border border-border overflow-hidden" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-card)' }}>
       {/* Table header bar */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border" style={{ background: 'var(--bg-surface)' }}>
         <div className="min-w-0">
@@ -675,7 +880,7 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
                     zIndex: 4,
                     background: 'var(--bg-base)',
                     minWidth: ROW_DIM_COL_WIDTH,
-                    boxShadow: i === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                    boxShadow: i === lastDimIdx ? 'var(--shadow-freeze-divider)' : undefined,
                   }}
                 >
                   {k}
@@ -779,12 +984,12 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
                 </td>
               </tr>
             ) : (
-              rows.flatMap((row, i) => {
+              rows.map((row, i) => {
                 const isTotal = Boolean(row.__isTotal);
-                const isExpanded = expandedRows.has(i);
-                const els = [
-                  <tr key={i} className={`border-b border-border last:border-0 transition-colors ${isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-bg-card-hover'}`}>
-                    {/* Expand/collapse toggle */}
+                return (
+                  <tr key={i} className={`border-b border-border last:border-0 transition-colors ${isTotal ? 'bg-bg-surface font-semibold sticky bottom-0' : 'hover:bg-row-hover'}`}>
+                    {/* Row-level drill-down: opens the same modal as cell-click, but with
+                        row-level dims (left dims + uniform pivot dims when applicable). */}
                     <td
                       className="px-1 py-2.5 text-center border-r border-border/40"
                       style={{
@@ -799,15 +1004,33 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
                       {!isTotal && (
                         <button
                           type="button"
-                          onClick={() => toggleExpand(i)}
-                          className={`w-5 h-5 inline-flex items-center justify-center rounded-md text-xs font-bold transition-all ${
-                            isExpanded
-                              ? 'bg-accent-blue text-white shadow-sm'
-                              : 'border border-border text-text-muted hover:border-accent-blue hover:text-accent-blue hover:bg-accent-blue/10'
-                          }`}
-                          title={isExpanded ? 'Collapse detail' : 'Expand HTD detail'}
+                          onClick={() => {
+                            const rd: Record<string, string> = {};
+                            for (const k of rowDimKeys) {
+                              const v = row[k];
+                              if (v !== null && v !== undefined && v !== '') rd[k] = String(v);
+                            }
+                            // Include pivot dim values when uniform across all pivot columns on this page.
+                            // Skip period-prefixed values (e.g. "this_month:2024-03").
+                            if (pivotDimKeys.length > 0 && pivotValues.length > 0) {
+                              const splits = pivotValues.map((pv) => pv.split(PIVOT_DIM_SEP));
+                              pivotDimKeys.forEach((dimKey, idx) => {
+                                const rawValues = splits
+                                  .map((parts) => parts[idx] ?? '')
+                                  .map((v) => parsePivotHeader(v))
+                                  .filter((p) => p.period === null && p.date)
+                                  .map((p) => p.date);
+                                const distinct = new Set(rawValues);
+                                if (distinct.size === 1) rd[dimKey] = [...distinct][0];
+                              });
+                            }
+                            const rowPart = rowDimKeys.map((k) => row[k]).filter(Boolean).join(' · ');
+                            setCellDrill({ rowDims: rd, label: rowPart });
+                          }}
+                          className="w-5 h-5 inline-flex items-center justify-center rounded-md text-xs font-bold transition-all border border-border text-text-muted hover:border-accent-blue hover:text-accent-blue hover:bg-accent-blue/10"
+                          title="View Transaction Details"
                         >
-                          {isExpanded ? '−' : '+'}
+                          +
                         </button>
                       )}
                     </td>
@@ -822,68 +1045,80 @@ function PivotTable({ data, title, subtitle, filters }: { data: PivotData; title
                           zIndex: 2,
                           background: 'var(--bg-card)',
                           minWidth: ROW_DIM_COL_WIDTH,
-                          boxShadow: di === lastDimIdx ? '2px 0 6px -2px rgba(0,0,0,0.3)' : undefined,
+                          boxShadow: di === lastDimIdx ? 'var(--shadow-freeze-divider)' : undefined,
                         }}
                       >
                         {renderCell(row[k])}
                       </td>
                     ))}
 
-                    {/* Pivot value × measure cells — scrollable */}
+                    {/* Pivot value × measure cells — scrollable + clickable for per-cell drill-down */}
                     {isMultiLevel
                       ? level1Groups.flatMap(({ l1, l2s }) =>
                           l2s.flatMap((l2) => {
                             const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
-                            return measureKeys.map((mk) => (
-                              <td
-                                key={`${fullKey}${PIVOT_SEP}${mk}`}
-                                className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
-                              >
-                                {renderCell(row[`${fullKey}${PIVOT_SEP}${mk}`], mk)}
-                              </td>
-                            ));
+                            return measureKeys.map((mk) => {
+                              const cellVal = row[`${fullKey}${PIVOT_SEP}${mk}`];
+                              const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
+                              return (
+                                <PivotCell
+                                  key={`${fullKey}${PIVOT_SEP}${mk}`}
+                                  clickable={clickable}
+                                  label={clickable ? buildCellLabel(row, fullKey) : ''}
+                                  onClick={clickable ? () => setCellDrill({
+                                    rowDims: buildCellRowDims(row, fullKey),
+                                    label: buildCellLabel(row, fullKey),
+                                  }) : undefined}
+                                >
+                                  {renderCell(cellVal, mk)}
+                                </PivotCell>
+                              );
+                            });
                           })
                         )
                       : pivotValues.flatMap((pv) =>
-                          measureKeys.map((mk) => (
-                            <td
-                              key={`${pv}${PIVOT_SEP}${mk}`}
-                              className="px-3 py-2.5 text-right text-text-secondary whitespace-nowrap border-l border-border/30 font-mono text-xs"
-                            >
-                              {renderCell(row[`${pv}${PIVOT_SEP}${mk}`], mk)}
-                            </td>
-                          ))
+                          measureKeys.map((mk) => {
+                            const cellVal = row[`${pv}${PIVOT_SEP}${mk}`];
+                            const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
+                            return (
+                              <PivotCell
+                                key={`${pv}${PIVOT_SEP}${mk}`}
+                                clickable={clickable}
+                                label={clickable ? buildCellLabel(row, pv) : ''}
+                                onClick={clickable ? () => setCellDrill({
+                                  rowDims: buildCellRowDims(row, pv),
+                                  label: buildCellLabel(row, pv),
+                                }) : undefined}
+                              >
+                                {renderCell(cellVal, mk)}
+                              </PivotCell>
+                            );
+                          })
                         )
                     }
-                  </tr>,
-                ];
-
-                // Expanded HTD detail row
-                if (isExpanded && !isTotal) {
-                  const rowDims: Record<string, string> = {};
-                  for (const k of rowDimKeys) {
-                    const v = row[k];
-                    if (v !== null && v !== undefined && v !== '') {
-                      rowDims[k] = String(v);
-                    }
-                  }
-                  els.push(
-                    <HtdDetailRow
-                      key={`detail-${i}`}
-                      filters={filters}
-                      rowDims={rowDims}
-                      totalCols={totalAllCols}
-                    />
-                  );
-                }
-
-                return els;
+                  </tr>
+                );
               })
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Drill-down modal — uses shadcn Dialog. Surface bg-surface matches the panel.
+          Panel header already reserves pr-10 for the dialog's built-in close (X) button. */}
+      <Dialog open={!!cellDrill} onOpenChange={(open) => { if (!open) setCellDrill(null); }}>
+        <DialogContent
+          className="max-w-[95vw] w-[95vw] max-h-[90vh] overflow-hidden p-0 flex flex-col rounded-xl border border-border"
+          style={{ background: 'var(--bg-surface)' }}
+        >
+          <DialogTitle className="sr-only">Transaction Details — {cellDrill?.label}</DialogTitle>
+          <div className="flex-1 overflow-auto">
+            {cellDrill && <HtdDetailPanel filters={filters} rowDims={cellDrill.rowDims} />}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -914,6 +1149,8 @@ export default function PivotDashboard() {
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
+  // Procedure-call preview panel — collapsed by default (developer-only context).
+  const [showProcPreview, setShowProcPreview]       = useState(false);
   const [dateFilterModes, setDateFilterModes]       = useState<Record<string, DateFilterMode>>({
     tran_date:    'single',
     year_month:   'multi',
@@ -1429,7 +1666,7 @@ export default function PivotDashboard() {
                 </div>
 
                 {/* Individual date fields — no pivot/sort buttons; just select + filter expand */}
-                <ul className="divide-y divide-border/60">
+                <ul className="divide-y divide-border">
                   {DIMENSION_FIELDS.filter((f) => (DATE_FIELD_ORDER as readonly string[]).includes(f.key)).map((field) => {
                     const selected  = selectedDimensions.includes(field.key);
                     const expanded  = expandedField === field.key;
@@ -1439,7 +1676,7 @@ export default function PivotDashboard() {
                     const hasFilter = !!field.filterKey;
 
                     return (
-                      <li key={field.key} className={`transition-colors ${selected ? 'bg-accent-amber/8' : 'hover:bg-bg-hover'}`}>
+                      <li key={field.key} className={`transition-colors border-l-2 ${selected ? 'bg-accent-amber/8 border-accent-amber' : 'border-transparent hover:bg-row-hover'}`}>
                         <div
                           className="flex items-center gap-3 px-4 py-2 cursor-pointer select-none"
                           onClick={() => toggleDimension(field.key)}
@@ -1503,19 +1740,65 @@ export default function PivotDashboard() {
                               {mode === 'single' && (
                                 <input type="text"
                                   value={getSingleValue(field.filterKey!)}
-                                  onChange={(e) => { const v = e.target.value.trim(); setFieldFilter(field.filterKey!, v || undefined); }}
+                                  onChange={(e) => {
+                                    const v = formatDateValue(e.target.value, field.type as DateLikeType);
+                                    setFieldFilter(field.filterKey!, v || undefined);
+                                  }}
+                                  onBlur={(e) => {
+                                    const v = padDateOnBlur(e.target.value, field.type as DateLikeType);
+                                    setFieldFilter(field.filterKey!, v || undefined);
+                                  }}
                                   placeholder={field.type === 'date' ? 'YYYY-MM-DD' : field.type === 'month' ? 'YYYY-MM' : field.type === 'quarter' ? 'YYYY-Qn' : 'YYYY'}
+                                  inputMode="numeric"
                                   className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
                               )}
                               {mode === 'range' && field.fromKey && field.toKey && (
                                 <div className="flex gap-2">
-                                  <input type="text" value={(filters[field.fromKey] as string) ?? ''} onChange={(e) => setFieldFilter(field.fromKey!, e.target.value.trim() || undefined)} placeholder="From" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
-                                  <input type="text" value={(filters[field.toKey] as string) ?? ''} onChange={(e) => setFieldFilter(field.toKey!, e.target.value.trim() || undefined)} placeholder="To" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                  <input type="text"
+                                    value={(filters[field.fromKey] as string) ?? ''}
+                                    onChange={(e) => {
+                                      const v = formatDateValue(e.target.value, field.type as DateLikeType);
+                                      setFieldFilter(field.fromKey!, v || undefined);
+                                    }}
+                                    onBlur={(e) => {
+                                      const v = padDateOnBlur(e.target.value, field.type as DateLikeType);
+                                      setFieldFilter(field.fromKey!, v || undefined);
+                                    }}
+                                    placeholder="From"
+                                    inputMode="numeric"
+                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                  <input type="text"
+                                    value={(filters[field.toKey] as string) ?? ''}
+                                    onChange={(e) => {
+                                      const v = formatDateValue(e.target.value, field.type as DateLikeType);
+                                      setFieldFilter(field.toKey!, v || undefined);
+                                    }}
+                                    onBlur={(e) => {
+                                      const v = padDateOnBlur(e.target.value, field.type as DateLikeType);
+                                      setFieldFilter(field.toKey!, v || undefined);
+                                    }}
+                                    placeholder="To"
+                                    inputMode="numeric"
+                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
                                 </div>
                               )}
                               {mode === 'multi' && (
                                 field.type === 'date' ? (
-                                  <input type="text" value={getMultiValue(field).join(', ')} onChange={(e) => { const vals = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined); }} placeholder="YYYY-MM-DD, YYYY-MM-DD, …" className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
+                                  <input type="text"
+                                    value={getMultiValue(field).join(', ')}
+                                    onChange={(e) => {
+                                      // Live-format each comma-separated entry
+                                      const vals = e.target.value.split(',').map((s) => formatDateValue(s.trim(), 'date')).filter(Boolean);
+                                      if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined);
+                                    }}
+                                    onBlur={(e) => {
+                                      // Pad single-digit month / day on each entry
+                                      const vals = e.target.value.split(',').map((s) => padDateOnBlur(s.trim(), 'date')).filter(Boolean);
+                                      if (field.filterKey) setFieldFilter(field.filterKey, vals.length > 0 ? vals : undefined);
+                                    }}
+                                    placeholder="YYYY-MM-DD, YYYY-MM-DD, …"
+                                    inputMode="numeric"
+                                    className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
                                 ) : (
                                   <SearchableMultiSelect value={getMultiValue(field)} onChange={(vals) => setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined)} options={getOptions(field)} placeholder={`Select ${field.label.toLowerCase()} values…`} />
                                 )
@@ -1545,7 +1828,7 @@ export default function PivotDashboard() {
                   const hasFilter   = !isMeasure && field.filterKey;
 
                   return (
-                    <li key={field.key} className={`transition-colors ${selected ? (partitioned ? 'bg-accent-purple/5' : 'bg-accent-blue/5') : 'hover:bg-bg-hover'}`}>
+                    <li key={field.key} className={`transition-colors border-l-2 ${selected ? (partitioned ? 'bg-accent-purple/5 border-accent-purple' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
                       {/* Row */}
                       <div
                         className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none"
@@ -1737,7 +2020,7 @@ export default function PivotDashboard() {
                   const ordered  = orderFields.includes(measure.key);
                   const orderIdx = orderFields.indexOf(measure.key);
                   return (
-                    <li key={measure.key} className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${active ? (ordered ? 'bg-accent-amber/5' : 'bg-accent-blue/5') : 'hover:bg-bg-hover'}`}>
+                    <li key={measure.key} className={`flex items-center gap-2 px-4 py-2.5 transition-colors border-l-2 ${active ? (ordered ? 'bg-accent-amber/5 border-accent-amber' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
                       {/* Select checkbox — div wrapper avoids button-in-button (Radix Checkbox renders as button) */}
                       <div
                         role="button"
@@ -1948,11 +2231,16 @@ export default function PivotDashboard() {
             )}
 
 
-            {/* ── Full procedure call preview — all 20 params ──────────────── */}
+            {/* ── Full procedure call preview — collapsed by default (developer detail) ── */}
             <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-input/50">
+              {/* Header — always visible, click to toggle */}
+              <button
+                type="button"
+                onClick={() => setShowProcPreview((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-input/50 hover:bg-bg-input transition-colors text-left"
+              >
                 <div className="flex items-center gap-2.5">
+                  <span className={`text-[10px] font-mono text-text-muted transition-transform ${showProcPreview ? 'rotate-90' : ''}`}>▸</span>
                   <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-text-muted">
                     get_tran_summary — All 20 Parameters
                   </p>
@@ -1969,69 +2257,76 @@ export default function PivotDashboard() {
                     </span>
                   )}
                   {isFetching && <span className="text-[10px] text-accent-blue animate-pulse">Running…</span>}
-                </div>
-              </div>
-
-              {/* Colour legend */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 border-b border-border bg-bg-base/40">
-                {[
-                  { dot: 'bg-accent-blue',   label: 'SELECT' },
-                  { dot: 'bg-accent-green',  label: 'WHERE' },
-                  { dot: 'bg-accent-purple', label: 'GROUP / ORDER / PARTITION' },
-                  { dot: 'bg-accent-amber',  label: 'Period comparisons' },
-                  { dot: 'bg-accent-teal',   label: 'EAB join' },
-                  { dot: 'bg-text-muted',    label: 'Pagination / security' },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${l.dot}`} />
-                    <span className="text-[9px] text-text-muted">{l.label}</span>
+                  <span className="text-[9px] font-medium text-text-muted uppercase tracking-wider">
+                    {showProcPreview ? 'Hide' : 'Show'}
                   </span>
-                ))}
-              </div>
+                </div>
+              </button>
 
-              {/* Lines */}
-              <div className="px-4 py-3 overflow-x-auto">
-                <pre className="text-[10px] leading-[1.75] font-mono">
-                  {sqlPreviewLines.map((line, i) => (
-                    <span key={i} className={`block ${KIND_CLS[line.kind] ?? 'text-text-secondary'}`}>
-                      {line.text}
+              {showProcPreview && (
+                <>
+                  {/* Colour legend */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2 border-b border-border bg-bg-base/40">
+                    {[
+                      { dot: 'bg-accent-blue',   label: 'SELECT' },
+                      { dot: 'bg-accent-green',  label: 'WHERE' },
+                      { dot: 'bg-accent-purple', label: 'GROUP / ORDER / PARTITION' },
+                      { dot: 'bg-accent-amber',  label: 'Period comparisons' },
+                      { dot: 'bg-accent-teal',   label: 'EAB join' },
+                      { dot: 'bg-text-muted',    label: 'Pagination / security' },
+                    ].map((l) => (
+                      <span key={l.label} className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${l.dot}`} />
+                        <span className="text-[9px] text-text-muted">{l.label}</span>
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Lines */}
+                  <div className="px-4 py-3 overflow-x-auto">
+                    <pre className="text-[10px] leading-[1.75] font-mono">
+                      {sqlPreviewLines.map((line, i) => (
+                        <span key={i} className={`block ${KIND_CLS[line.kind] ?? 'text-text-secondary'}`}>
+                          {line.text}
+                        </span>
+                      ))}
+                    </pre>
+                  </div>
+
+                  {/* partitionby explainer */}
+                  <div className="border-t border-border px-4 py-3 bg-accent-purple/5 flex items-start gap-2.5">
+                    <span className="w-4 h-4 rounded-full bg-accent-purple/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                        <circle cx="5" cy="5" r="4" stroke="#8b5cf6" strokeWidth="1.5"/>
+                        <path d="M5 4.5v3M5 3v.5" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
                     </span>
-                  ))}
-                </pre>
-              </div>
-
-              {/* partitionby explainer */}
-              <div className="border-t border-border px-4 py-3 bg-accent-purple/5 flex items-start gap-2.5">
-                <span className="w-4 h-4 rounded-full bg-accent-purple/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                    <circle cx="5" cy="5" r="4" stroke="#8b5cf6" strokeWidth="1.5"/>
-                    <path d="M5 4.5v3M5 3v.5" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                </span>
-                <div className="space-y-1">
-                  <p className="text-[10.5px] font-semibold text-accent-purple">partitionby_clause rules</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-text-muted">
-                    <div className="rounded border border-accent-green/20 bg-accent-green/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-green block mb-0.5">{"=> ''"}</span>
-                      <span className="text-accent-green font-semibold">✓ No pivot</span> — Global <code>ROW_NUMBER()</code>. Standard paginated table.
-                    </div>
-                    <div className="rounded border border-accent-blue/20 bg-accent-blue/8 px-2 py-1.5">
-                      <span className="font-mono text-accent-blue block mb-0.5">{"=> 'PARTITION BY tran_date'"}</span>
-                      <span className="text-accent-blue font-semibold">✓ Pivot active</span> — Full clause passed verbatim. Field values become column headers.
+                    <div className="space-y-1">
+                      <p className="text-[10.5px] font-semibold text-accent-purple">partitionby_clause rules</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-text-muted">
+                        <div className="rounded border border-accent-green/20 bg-accent-green/8 px-2 py-1.5">
+                          <span className="font-mono text-accent-green block mb-0.5">{"=> ''"}</span>
+                          <span className="text-accent-green font-semibold">✓ No pivot</span> — Global <code>ROW_NUMBER()</code>. Standard paginated table.
+                        </div>
+                        <div className="rounded border border-accent-blue/20 bg-accent-blue/8 px-2 py-1.5">
+                          <span className="font-mono text-accent-blue block mb-0.5">{"=> 'PARTITION BY tran_date'"}</span>
+                          <span className="text-accent-blue font-semibold">✓ Pivot active</span> — Full clause passed verbatim. Field values become column headers.
+                        </div>
+                      </div>
+                      {explorer?.sql_preview?.include_eab && (
+                        <div className="mt-1.5 rounded border border-accent-teal/20 bg-accent-teal/8 px-2 py-1.5 text-[10px]">
+                          <span className="text-accent-teal font-semibold block mb-0.5">TRAN Date Balance active — EAB join explained</span>
+                          <span className="text-text-muted">
+                            <code className="text-accent-teal">select_inner</code> adds <code>acid</code> to GROUP BY so the outer query can join.{' '}
+                            <code className="text-accent-teal">select_outer</code> pulls <code>e.tran_date_bal</code> from the production eab table (not schema.rb).{' '}
+                            The procedure result includes <code>tran_date_bal</code> from the eab table — the account balance snapshot on the transaction date.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  {explorer?.sql_preview?.include_eab && (
-                    <div className="mt-1.5 rounded border border-accent-teal/20 bg-accent-teal/8 px-2 py-1.5 text-[10px]">
-                      <span className="text-accent-teal font-semibold block mb-0.5">TRAN Date Balance active — EAB join explained</span>
-                      <span className="text-text-muted">
-                        <code className="text-accent-teal">select_inner</code> adds <code>acid</code> to GROUP BY so the outer query can join.{' '}
-                        <code className="text-accent-teal">select_outer</code> pulls <code>e.tran_date_bal</code> from the production eab table (not schema.rb).{' '}
-                        The procedure result includes <code>tran_date_bal</code> from the eab table — the account balance snapshot on the transaction date.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Empty periods notice */}
@@ -2059,6 +2354,7 @@ export default function PivotDashboard() {
                     : `${backendTotal.toLocaleString()} raw rows · ${pivotData.rows.length.toLocaleString()} pivoted rows on this page · page ${page} of ${totalPages}`
                 }
                 filters={filters}
+                pivotDimKeys={partitionDimensions}
               />
             ) : (
               <RecordTable
