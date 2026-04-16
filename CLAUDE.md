@@ -155,6 +155,8 @@ Every available GROUP BY field. Adding a new field = add to this hash.
 ```ruby
 DIMENSIONS = {
   'gam_branch'     => { label: 'GAM Branch',    sql: 'gam_branch' },
+  'eod_balance'    => { label: 'GAM Balance', sql: 'g.eod_balance',
+                         gam_required: true, outer_join_field: true },
   'tran_date_bal'  => { label: 'TRAN Date Balance', sql: 'e.tran_date_bal',
                          eab_required: true, outer_join_field: true },
   # ... see service file for full list
@@ -162,7 +164,10 @@ DIMENSIONS = {
 ```
 
 - `eab_required: true` → adds `LEFT JOIN eab ON ...` to the query
+- `gam_required: true` → adds `LEFT JOIN gam g ON g.acid = tb2.acid` to the query
 - `outer_join_field: true` → field lives in outer SELECT only (cannot be in GROUP BY)
+
+When either flag is set, `acid` is automatically injected into the inner SELECT/GROUP BY so the outer join has something to match on. The two flags compose: both joins are concatenated and passed through the `eab_join` procedure parameter.
 
 ### MEASURES hash
 
@@ -178,14 +183,17 @@ MEASURES = {
   'dr_count'        => { label: 'DR Count',           ... },
   'tran_acct_count' => { label: 'TRAN Acct Count',   select_sql: 'COUNT(DISTINCT acct_num) AS tran_acct_count', ... },
   'tran_maxdate'    => { label: 'TRAN Max Date',      select_sql: 'MAX(tran_date) AS tran_maxdate',       ... },
+  # RFM composite (formula from data dictionary.xlsx) — higher = more valuable customer:
+  # SUM(count)·0.001 + SUM(amt)·0.0001 − days_since_last_tx·0.001
+  'rfm_score'       => { label: 'RFM Score',          select_sql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) AS rfm_score', ... },
   # Legacy aliases kept for backwards compatibility:
   # 'total_amount', 'transaction_count', 'unique_accounts', 'unique_customers',
   # 'credit_amount', 'debit_amount', 'net_flow'
 }
 ```
 
-All 9 canonical keys exist as columns in `tran_summary` (confirmed from `information_schema`).
-`tran_date_bal` is a DIMENSION (EAB join), not a MEASURE — do not add it to MEASURES.
+All 9 direct-column keys exist in `tran_summary` (confirmed from `information_schema`); `rfm_score` is a composite formula (not a raw column) — 10 canonical measure keys total.
+`tran_date_bal` is a **display-as-measure dimension**: listed under Dimensions in the sidebar and sent to the backend as a DIMENSION (outer_join_field path), but RENDERED under pivoted column headings as a measure cell (so users see the daily balance alongside tran_amt, cr_amt, etc.). It is never aggregated — the backend's `outer_join_field: true` flag keeps it out of the inner GROUP BY and injects the raw `e.tran_date_bal` value into `select_outer` after the EAB LEFT JOIN. The frontend uses `DISPLAY_AS_MEASURE_DIMS` in `pivot/page.tsx` to exclude it from `rowDims` and append it to the pivot measure axis. Do not add it to the backend MEASURES hash.
 
 ### Period WHERE generation
 
@@ -249,7 +257,7 @@ Each pivot row has a `+`/`−` toggle in the first column. Clicking `+` fetches 
 - **Stored procedure**: `public.get_tran_detail(join_clause text, page int, page_size int)` — builds `htd h JOIN gam g ON g.acid = h.acid AND <join_clause>`, applies `ROW_NUMBER()` pagination, joins with `eab` for `tran_date_bal`, and drops results into TEMP TABLE `tran_detail` with a `total_rows` column for pagination.
 - **Service method**: `ProductionDataService#htd_detail` — builds a boolean `join_clause` string from filters + row_dims, calls the procedure inside a transaction (temp table is connection-scoped), then `SELECT * FROM tran_detail` and maps the result columns to the stable frontend names.
 - **Columns returned to frontend**: `cif_id, acid, acct_num, acct_name, tran_date, tran_type, part_tran_type, tran_branch, gl_sub_head_code, entry_user, vfd_user, tran_amt, opening_bal, running_bal`
-  - `opening_bal` is `eab.tran_date_bal` (same period start balance) — frontend renders it ONLY on the first row of each date in the page (subsequent rows of the same date show empty).
+  - `opening_bal` is `eab.tran_date_bal` (same period start balance) — frontend renders it ONLY on the first row of each `(tran_date, acct_num)` pair (subsequent rows within the same date AND acct_num show empty). Grouping on acct_num matters because a cif_id may have multiple acct_nums, each with its own daily opening balance.
   - `running_bal` is `opening_bal + sum(signed_tran_amt) over (partition by acid, date order by tran_date)` — accumulated balance per row, shown on every row.
   - Both are right-aligned + NPR-formatted via `HTD_AMOUNT_COLS` set + `htdDateKey()` helper in `pivot/page.tsx`.
 - **Column mapping**: Procedure returns raw HTD/GAM columns (`entry_user_id`, `vfd_user_id`, `sol_id`). Service renames them to the stable frontend keys (`entry_user`, `vfd_user`, `tran_branch`). Frontend-requested columns that do not exist in HTD or GAM (e.g. `tran_source`, `product`, `merchant`, `service`) are NOT included — they only exist in `tran_summary`.
@@ -483,6 +491,17 @@ bundle exec rails db:migrate
 
 **Join pattern:** `tran_summary` ← `acid` → `eab` (LEFT JOIN, only when `tran_date_bal` selected)
 
+**EAB as-of reference date:** The `LEFT JOIN eab` uses a reference date that is compared against `eod_date` / `end_eod_date`. When a coarse date dimension is in the GROUP BY the reference is automatically switched to that row's period-end column so every pivot row shows the balance at the end of ITS own period:
+
+| Date dim selected | EAB reference (main query) |
+|---|---|
+| `year_month`   | `tb2.month_enddate` |
+| `year_quarter` | `tb2.quarter_enddate` |
+| `year`         | `tb2.year_enddate` |
+| *none of the above (or `tran_date` only)* | `calc_end_date` (global filter end) |
+
+When one of these dims is selected, the service injects its matching `*_enddate` column into `select_inner` and `groupby_clause` so `tb2.*_enddate` is available for the join. The enddate columns are stripped from the response rows before returning (`SUPPRESSED_OUTER_COLUMNS`) — they are an internal implementation detail, not user-visible columns. Finest-granularity wins if several are selected (`year_month` > `year_quarter` > `year`). Comparison queries always use `calc_end_date` because their GROUP BY excludes the date dim, so tb2 does not contain the `*_enddate` column.
+
 ---
 
 ## Available Skills (Superpowers v5.0.7)
@@ -557,7 +576,12 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 
 - Shared aggregate interfaces (`BranchMetrics`, `ProvinceMetrics`, `ChannelMetrics`, `TrendData`, `SegmentData`) extend `Record<string, unknown>` so they are directly assignable to chart `data` props that read via dynamic keys. If you add a new shape that's consumed by `PremiumBarChart`, `PremiumLineChart`, `PremiumAreaChart`, `PremiumComposedChart`, or `PremiumScatterChart`, extend the same way — or cast at call site.
 - `eod_balance` was removed from `DIMENSIONS` in the service and pivot page — it does not exist in `tran_summary` directly; use `tran_date_bal` (from EAB outer join) instead
-- **Sidebar dimensions are sourced from `data dictionary.xlsx`** (rows where `type = "dimension"`) — 23 entries. `gam_solid` and `tran_date_bal` were removed from the sidebar (gam_solid is not in the dict, tran_date_bal is a measure in the dict). `acid` was added. The backend `DIMENSIONS` hash still contains `gam_solid` and `tran_date_bal` for URL-param backward compatibility (so old shareable links don't 404), but they are not shown as user-selectable options.
+- **Sidebar dimensions are sourced from `data dictionary.xlsx`** (rows where `type = "dimension"`) — 25 entries (`tran_date_bal` and `eod_balance` are additions on top of the 23 raw dict dims). `gam_solid` is not in the dimension sidebar (not in the dict); the backend `DIMENSIONS` hash retains it for URL-param backward compatibility. `tran_date_bal` is listed in the Dimensions sidebar but renders as a measure column under pivoted headings (via `DISPLAY_AS_MEASURE_DIMS` in `pivot/page.tsx`). `eod_balance` (GAM Balance) is a normal dimension that renders as a row label.
+- **Dimension prerequisites** (`DIM_PREREQS` in `pivot/page.tsx`) gate dims that depend on a companion selection:
+  - `tran_date_bal` → requires a date dim (year / quarter / month / day) to resolve the EAB as-of date
+  - `eod_balance` → requires an account identifier (`cif_id` / `acid` / `acct_num`) for the GAM join to be unique
+  The UI disables the sidebar row with an explanatory tooltip when the prereq isn't met, and `toggleDimension` cascades the drop so deselecting the last companion removes any dependent dim automatically.
+- **Pivot defaults are empty.** `selectedDimensions` and `selectedMeasures` start as `[]`. The pivot hook is gated on `dimensions.length > 0` only — **measures are optional**. When no measure is selected the query becomes `SELECT <dims> GROUP BY <dims>` (distinct dim-value combinations). The backend `tran_summary_explorer` handles this: it strips the leading `, ` before measures in `select_inner`, falls back to ORDER BY first dim when no measure exists, and skips the comparison block entirely when `selected_measures` is empty (comparisons are measure-dependent). The pivot page shows a "Select at least one dimension to start" empty-state card when `selectedDimensions.length === 0`.
 - `DATE_FIELD_ORDER` enforces fixed date ordering: `year → year_quarter → year_month → tran_date`
 - Legacy measure aliases (`total_amount`, `transaction_count`, `unique_accounts`, `unique_customers`, `credit_amount`, `debit_amount`, `net_flow`) remain in the backend MEASURES hash for backwards compatibility but are no longer shown in the pivot sidebar — canonical data-dictionary keys are used instead (`tran_amt`, `tran_count`, etc.)
 - `AdvancedDataTable.tsx` still uses hand-rolled table primitives — future work to migrate internals to shadcn `Table` components

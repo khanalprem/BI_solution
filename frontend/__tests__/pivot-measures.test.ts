@@ -24,6 +24,7 @@ const CANONICAL_MEASURE_KEYS = [
   'dr_count',
   'tran_acct_count',
   'tran_maxdate',
+  'rfm_score',
 ] as const;
 
 // ─── parsePivotHeader logic (inline — mirrors function in pivot/page.tsx) ─────
@@ -95,8 +96,8 @@ function periodStampDate(period: string, referenceDate: string): string {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('Canonical measure key registry', () => {
-  it('has exactly 9 canonical keys (matching data dictionary)', () => {
-    expect(CANONICAL_MEASURE_KEYS.length).toBe(9);
+  it('has exactly 10 canonical keys (matching data dictionary)', () => {
+    expect(CANONICAL_MEASURE_KEYS.length).toBe(10);
   });
 
   it('includes all CR/DR split measures', () => {
@@ -110,7 +111,10 @@ describe('Canonical measure key registry', () => {
     expect(CANONICAL_MEASURE_KEYS).toContain('signed_tranamt');
   });
 
-  it('does NOT include tran_date_bal (that is a DIMENSION, not a measure)', () => {
+  it('does NOT include tran_date_bal (display-as-measure dimension — not an aggregation)', () => {
+    // tran_date_bal is listed in the Dimensions sidebar and sent to the backend as a
+    // DIMENSION (outer_join_field path), but renders under pivoted headings as a
+    // measure column. It is a daily balance snapshot and cannot be aggregated.
     expect(CANONICAL_MEASURE_KEYS).not.toContain('tran_date_bal');
   });
 

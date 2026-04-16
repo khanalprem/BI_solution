@@ -148,8 +148,29 @@ class ProductionDataService
     # tran_date_bal comes from the eab table via the outer LEFT JOIN.
     # outer_join_field: true means it cannot be in the inner GROUP BY; it is injected
     # into select_outer so the column is available in the final result set.
-    'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true }
+    'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true },
+    # ── GAM outer-join dimension ──────────────────────────────────────────────
+    # eod_balance comes from the gam table via `LEFT JOIN gam g ON g.acid = tb2.acid`.
+    # It is a static per-account value (does NOT vary by date), unlike tran_date_bal.
+    'eod_balance'      => { label: 'GAM Balance',        sql: 'g.eod_balance',   gam_required: true, outer_join_field: true }
   }.freeze
+
+  # When one of these coarse date dimensions is in the GROUP BY, we inject the
+  # matching period-end column into the inner SELECT + GROUP BY so the EAB outer
+  # join can reference tb2.<enddate> as its as-of date. This makes the balance
+  # snapshot align with each row's own period (e.g. a monthly pivot row shows the
+  # balance as of that month's last day) instead of a fixed global end date.
+  #
+  # Priority (finest → coarsest): month wins over quarter wins over year.
+  # The enddate columns themselves are stripped from the response rows before
+  # returning to the frontend — they are an internal implementation detail.
+  DATE_DIM_ENDDATE_MAP = {
+    'year_month'   => 'month_enddate',
+    'year_quarter' => 'quarter_enddate',
+    'year'         => 'year_enddate'
+  }.freeze
+  DATE_DIM_ENDDATE_PRIORITY = %w[year_month year_quarter year].freeze
+  SUPPRESSED_OUTER_COLUMNS  = DATE_DIM_ENDDATE_MAP.values.freeze
 
   MEASURES = {
     # ── Data-dictionary measures (canonical keys, match tran_summary columns) ──
@@ -197,6 +218,16 @@ class ProductionDataService
       label: 'TRAN Max Date',
       select_sql: 'MAX(tran_date) AS tran_maxdate',
       order_sql:  'MAX(tran_date) DESC'
+    },
+    # RFM (Recency-Frequency-Monetary) composite score — higher is better.
+    #   Frequency: SUM(tran_count) × 0.001
+    #   Monetary:  SUM(tran_amt)   × 0.0001
+    #   Recency:   (CURRENT_DATE − MAX(tran_date)) × −0.001  (more recent → less negative)
+    # Formula sourced from `data dictionary.xlsx`.
+    'rfm_score' => {
+      label: 'RFM Score',
+      select_sql: 'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)) * (-0.001) AS rfm_score',
+      order_sql:  'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)) * (-0.001) DESC'
     },
     # ── Legacy aliases — kept for backwards compatibility ──────────────────────
     'total_amount' => {
@@ -499,7 +530,8 @@ class ProductionDataService
       value = measure.to_s
       value if MEASURES.key?(value)
     end
-    raise ArgumentError, 'At least one valid measure is required' if measure_keys.empty?
+    # Measure-less queries are allowed — they produce "SELECT <dims> GROUP BY <dims>"
+    # which returns the distinct dimension-value combinations (no aggregation).
 
     normalized_page = [page.to_i, 1].max
     normalized_page_size = [[page_size.to_i, 1].max, 100].min
@@ -523,22 +555,45 @@ class ProductionDataService
     dim_sqls    = inner_dim_keys.map { |k| DIMENSIONS.fetch(k).fetch(:sql) }
     dim_selects = inner_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
 
-    # Force EAB join when any selected dimension has eab_required: true (e.g. tran_date_bal)
-    eab_dim_required = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:eab_required] }
+    # Force outer join when any selected dimension requires it.
+    # tran_date_bal → LEFT JOIN eab; eod_balance → LEFT JOIN gam.
+    include_eab = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:eab_required] }
+    include_gam = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:gam_required] }
 
-    # Include acid in select/groupby whenever an EAB-sourced dimension is selected so the
-    # outer query can join eab on acid.
-    include_eab  = eab_dim_required
-    acid_select  = include_eab ? ', acid' : ''
-    acid_groupby = include_eab ? ', acid' : ''
+    # Include acid in inner select/groupby whenever ANY outer join is needed, so the
+    # outer query can join on acid.
+    include_acid = include_eab || include_gam
+    acid_select  = include_acid ? ', acid' : ''
+    acid_groupby = include_acid ? ', acid' : ''
 
-    select_inner   = "SELECT #{dim_selects.join(', ')}#{acid_select}, #{selected_measures.map { |m| m[:select_sql] }.join(', ')}"
+    # If the user selected a coarse date dim (year_month / year_quarter / year),
+    # pull its matching *_enddate column through the inner query so the EAB join
+    # can use it as the as-of reference date. Only the finest-grained selection
+    # is materialised (month beats quarter beats year). Columns are stripped from
+    # the response later — they are not meant to be shown in the report.
+    active_enddate_dim = DATE_DIM_ENDDATE_PRIORITY.find { |k| inner_dim_keys.include?(k) }
+    active_enddate_col = active_enddate_dim ? DATE_DIM_ENDDATE_MAP[active_enddate_dim] : nil
+    enddate_select     = active_enddate_col ? ", #{active_enddate_col}" : ''
+    enddate_groupby    = active_enddate_col ? ", #{active_enddate_col}" : ''
+
+    measure_select_sql = selected_measures.map { |m| m[:select_sql] }.join(', ')
+    measures_prefix    = selected_measures.any? ? ', ' : ''
+
+    select_inner   = "SELECT #{dim_selects.join(', ')}#{acid_select}#{enddate_select}#{measures_prefix}#{measure_select_sql}"
     where_clause   = explorer_where_clause(filters: filters, start_date: start_date, end_date: end_date)
-    groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}"
+    groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}#{enddate_groupby}"
     having_clause  = ''
-    # Use the user-supplied ORDER BY clause if provided; fall back to measure-based default.
-    orderby_clause = orderby_clause.to_s.strip.presence ||
-                     "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+    # ORDER BY fallback: use the first measure when any, else fall back to the first
+    # dimension alias (so measure-less "select dims / group by dims" queries still
+    # paginate deterministically).
+    default_orderby = if selected_measures.any?
+      "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+    elsif inner_dim_keys.any?
+      "ORDER BY #{inner_dim_keys.first} ASC"
+    else
+      ''
+    end
+    orderby_clause = orderby_clause.to_s.strip.presence || default_orderby
     # Add tiebreaker for deterministic pagination (prevents duplicate/missing rows on tied values).
     # Only add acct_num when it's actually in the GROUP BY (selected dimensions), otherwise
     # the tiebreaker would break grouped queries with a "must appear in GROUP BY" error.
@@ -553,18 +608,36 @@ class ProductionDataService
     # Non-empty = per-group ROW_NUMBER — the procedure uses it verbatim inside OVER(...).
     partitionby_clause = partitionby_clause.to_s.strip
 
-    # EAB join: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
-    eab_join = if include_eab
-      quoted_end = @connection.quote(calc_end_date.to_s)
-      "LEFT JOIN eab e ON e.acid = tb2.acid AND #{quoted_end} >= e.eod_date::date AND #{quoted_end} < e.end_eod_date::date"
+    # Outer joins — concatenated and passed to the procedure as a single clause.
+    # EAB: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
+    #   Main query: if a coarse date dim was selected, use that row's period-end column
+    #               (tb2.month_enddate / quarter_enddate / year_enddate) as the as-of date,
+    #               so every pivot row shows the balance at the end of ITS own period.
+    #   Otherwise: fall back to the global filter end date (calc_end_date) — unchanged.
+    #   Comparison query always uses calc_end_date because its GROUP BY excludes the date
+    #   dim, so tb2 won't contain the *_enddate column.
+    # GAM: simple join on acid — g.eod_balance is a static per-account value.
+    quoted_end_date = @connection.quote(calc_end_date.to_s)
+    eab_join_main = if include_eab
+      reference = active_enddate_col ? "tb2.#{active_enddate_col}" : quoted_end_date
+      "LEFT JOIN eab e ON e.acid = tb2.acid AND #{reference} >= e.eod_date::date AND #{reference} < e.end_eod_date::date"
     else
       ''
     end
+    eab_join_comparison = if include_eab
+      "LEFT JOIN eab e ON e.acid = tb2.acid AND #{quoted_end_date} >= e.eod_date::date AND #{quoted_end_date} < e.end_eod_date::date"
+    else
+      ''
+    end
+    gam_join = include_gam ? 'LEFT JOIN gam g ON g.acid = tb2.acid' : ''
+
+    eab_join            = [eab_join_main, gam_join].reject(&:blank?).join(' ')
+    comparison_eab_join = [eab_join_comparison, gam_join].reject(&:blank?).join(' ')
 
     # select_outer: always selects tb2.*, then appends any outer_join_field dimensions
     # (e.g. e.tran_date_bal AS tran_date_bal from the eab join).
     outer_dim_selects = outer_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
-    select_outer = if include_eab && outer_dim_selects.any?
+    select_outer = if (include_eab || include_gam) && outer_dim_selects.any?
       "SELECT tb2.*, #{outer_dim_selects.join(', ')}"
     else
       'SELECT tb2.*'
@@ -651,7 +724,7 @@ class ProductionDataService
     # Add _period marker so comparison rows are always distinguishable from main rows.
     # When has_comparisons is true we tag all main rows 'main'; comparison rows get their period label.
     main_sanitized = main_rows.map do |row|
-      r = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
+      r = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN', *SUPPRESSED_OUTER_COLUMNS)
       r['_period'] = 'main' if has_comparisons
       r
     end
@@ -659,8 +732,10 @@ class ProductionDataService
     # ── CALL 2: Comparison periods — only if requested ────────────────────────
     # Fetch comparison data for the SAME dimension values as the paginated main rows.
     # This keeps memory bounded: only page_size * num_periods rows.
+    # Comparisons require at least one aggregation measure in the main query — otherwise
+    # there is nothing to compare period-over-period.
     comparison_sanitized = []
-    if has_comparisons && main_sanitized.any?
+    if has_comparisons && main_sanitized.any? && selected_measures.any?
       date_dim_keys = %w[tran_date year_month year_quarter year]
       non_date_dims = dimension_keys.reject { |k| date_dim_keys.include?(k) }
 
@@ -765,7 +840,7 @@ class ProductionDataService
             having_clause => '',
             orderby_clause => #{conn.quote(comparison_orderby_clause)},
             partitionby_clause => '',
-            eab_join => #{conn.quote(eab_join)},
+            eab_join => #{conn.quote(comparison_eab_join)},
             user_id => '',
             page => 1,
             page_size => #{comparison_page_size}
@@ -785,7 +860,7 @@ class ProductionDataService
         end
 
         comp_rows.each do |row|
-          sanitized = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN')
+          sanitized = row.except('rn', 'pivoted_totalrows', 'total_rows', 'RN', *SUPPRESSED_OUTER_COLUMNS)
           sanitized['_period'] = period_label
           # Stamp the date dimension so the frontend pivot creates exactly ONE distinct
           # column per comparison period. The date portion is the natural period label

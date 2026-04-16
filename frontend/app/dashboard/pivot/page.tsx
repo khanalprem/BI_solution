@@ -186,6 +186,8 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'acid',             label: 'ACID',             type: 'text',                                    description: 'Internal account identifier' },
   { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Account number (exact match)' },
   { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name' },
+  { key: 'tran_date_bal',    label: 'TRAN Date Balance', type: 'text',                                   description: 'Balance snapshot from EAB — renders under pivoted headings as a value column; requires a date dimension' },
+  { key: 'eod_balance',      label: 'GAM Balance',      type: 'text',                                    description: 'Current balance from GAM — static per account (does not vary by date); requires an account identifier' },
 
   // ── Transaction (geo, then channel / type, then accounting / product) ────
   { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical',                             description: 'Province of the transaction branch' },
@@ -228,7 +230,37 @@ const STANDARD_MEASURES: MeasureDef[] = [
   // Distinct counts & date
   { key: 'tran_acct_count', label: 'TRAN Acct Count',   description: 'COUNT(DISTINCT acct_num)',                             group: 'standard' },
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      description: 'MAX(tran_date)',                                       group: 'standard' },
+  // Composite Recency–Frequency–Monetary score. Formula from data dictionary.xlsx.
+  { key: 'rfm_score',       label: 'RFM Score',          description: 'SUM(count)·0.001 + SUM(amt)·0.0001 − days_since_last_tx·0.001 — higher = better',                               group: 'standard' },
 ];
+
+// Dimensions that are LISTED in the Dimensions sidebar but RENDERED as measure
+// columns in the pivot (under the pivoted column headings) instead of as row
+// labels. They are balance snapshots pulled via the EAB LEFT JOIN (outer_join_field)
+// and are never aggregated — values change every day so SUM would be meaningless.
+// Requires at least one date dimension to provide the EAB as-of reference date.
+const DISPLAY_AS_MEASURE_DIMS = new Set(['tran_date_bal']);
+
+// Dimension prerequisites: a dim can only be selected when at least one of the listed
+// companion dims is already chosen. The companion provides the join key / context
+// needed for the dim to be meaningful.
+//   • tran_date_bal: needs a date dim to resolve the EAB as-of date.
+//   • eod_balance:  needs an account identifier for the GAM join to be unique.
+const DIM_PREREQS: Record<string, { keys: string[]; label: string }> = {
+  tran_date_bal: {
+    keys: DATE_FIELD_ORDER as unknown as string[],
+    label: 'a date dimension (year / quarter / month / day)',
+  },
+  eod_balance: {
+    keys: ['cif_id', 'acid', 'acct_num'],
+    label: 'an account identifier (CIF Id / ACID / ACCT Num)',
+  },
+};
+
+function prereqSatisfied(dimKey: string, selected: string[]): boolean {
+  const req = DIM_PREREQS[dimKey];
+  return !req || req.keys.some((k) => selected.includes(k));
+}
 
 // Order strategy: grouped by time scale (Day → Month → Year), and within each
 // scale "current" comes first, then full-prior, then to-date, then same-date.
@@ -451,7 +483,7 @@ function buildPivotData(
 // ─── Excel-style PivotTable component ────────────────────────────────────────
 
 const AMOUNT_MEASURES = new Set([
-  'tran_amt', 'cr_amt', 'dr_amt', 'signed_tranamt',
+  'tran_amt', 'cr_amt', 'dr_amt', 'signed_tranamt', 'tran_date_bal', 'eod_balance',
   'total_amount', 'credit_amount', 'debit_amount', 'net_flow',
 ]);
 
@@ -511,6 +543,13 @@ const HTD_PAGE_SIZE = 10;
 // Columns that should be right-aligned + NPR-formatted in the HTD detail table.
 const HTD_AMOUNT_COLS = new Set(['tran_amt', 'opening_bal', 'running_bal']);
 
+// Balance columns (opening/running) only make sense when the drill-down is scoped
+// to a single account/customer — otherwise the values are aggregated across many
+// accounts and are meaningless. Show them only when at least one of these row-dim
+// keys is present.
+const HTD_BALANCE_COLS = new Set(['opening_bal', 'running_bal']);
+const HTD_ACCOUNT_DIM_KEYS = new Set(['cif_id', 'acid', 'acct_num']);
+
 // Extract YYYY-MM-DD from a tran_date value (timestamp string or Date) for grouping rows by date.
 function htdDateKey(v: unknown): string {
   if (v == null) return '';
@@ -535,6 +574,13 @@ function HtdDetailPanel({
 
   const totalRows = data?.total_rows ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / HTD_PAGE_SIZE));
+
+  // Hide balance columns unless the drill-down is scoped by cif_id / acid / acct_num.
+  const showBalanceCols = Object.keys(rowDims).some((k) => HTD_ACCOUNT_DIM_KEYS.has(k));
+  const displayColumns = useMemo(
+    () => (data?.columns ?? []).filter((c) => showBalanceCols || !HTD_BALANCE_COLS.has(c)),
+    [data, showBalanceCols],
+  );
 
   const procLines = useMemo((): SqlLine[] => {
     if (!data?.sql_preview) return [];
@@ -620,7 +666,7 @@ function HtdDetailPanel({
             <table className="w-full border-separate border-spacing-0 text-[11px]">
               <thead>
                 <tr className="border-b border-border">
-                  {data.columns.map((col) => (
+                  {displayColumns.map((col) => (
                     <th
                       key={col}
                       className={`px-3 py-1.5 text-[9px] font-bold text-text-muted uppercase tracking-wider ${HTD_AMOUNT_COLS.has(col) ? 'text-right' : 'text-left'}`}
@@ -635,7 +681,7 @@ function HtdDetailPanel({
                 {isFetching
                   ? Array.from({ length: HTD_PAGE_SIZE }).map((_, ri) => (
                       <tr key={`skeleton-${ri}`} className="border-b border-border/30 last:border-0">
-                        {data.columns.map((col) => (
+                        {displayColumns.map((col) => (
                           <td key={col} className="px-3 py-1.5">
                             <Skeleton className={`h-4 ${HTD_AMOUNT_COLS.has(col) ? 'w-20 ml-auto' : 'w-full'}`} />
                           </td>
@@ -644,15 +690,24 @@ function HtdDetailPanel({
                     ))
                   : data.rows.map((row, ri) => {
                       const dateKey = htdDateKey(row.tran_date);
-                      const prevDateKey = ri > 0 ? htdDateKey(data.rows[ri - 1].tran_date) : null;
-                      const isFirstOfDate = ri === 0 || dateKey !== prevDateKey;
+                      const acctKey = String(row.acct_num ?? '');
+                      const prev    = ri > 0 ? data.rows[ri - 1] : null;
+                      const prevDateKey = prev ? htdDateKey(prev.tran_date) : null;
+                      const prevAcctKey = prev ? String(prev.acct_num ?? '') : null;
+                      // Show opening_bal on the first row of each (date, acct_num) pair —
+                      // a cif_id may have multiple acct_nums, each with its own opening
+                      // balance per day. Grouping by date alone would hide balances for
+                      // all but the first account encountered on that date.
+                      const isFirstOfDateAcct = ri === 0
+                        || dateKey !== prevDateKey
+                        || acctKey !== prevAcctKey;
                       return (
                         <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
-                          {data.columns.map((col) => {
+                          {displayColumns.map((col) => {
                             const isAmount = HTD_AMOUNT_COLS.has(col);
                             let display: string;
                             if (col === 'opening_bal') {
-                              display = isFirstOfDate ? formatNPR(row[col] == null ? null : Number(row[col])) : '';
+                              display = isFirstOfDateAcct ? formatNPR(row[col] == null ? null : Number(row[col])) : '';
                             } else if (isAmount) {
                               display = formatNPR(row[col] == null ? null : Number(row[col]));
                             } else {
@@ -1131,14 +1186,17 @@ export default function PivotDashboard() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Read initial state from URL search params (enables shareable analysis links)
+  // Read initial state from URL search params (enables shareable analysis links).
+  // Defaults are empty — the user must explicitly pick at least one dimension before
+  // the pivot fires. Measures are optional: when no measure is selected, the query
+  // becomes "SELECT <dims> GROUP BY <dims>" (distinct dim-value combinations).
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>(() => {
     const dims = searchParams.get('dims');
-    return dims ? dims.split(',').filter(Boolean) : ['gam_branch'];
+    return dims ? dims.split(',').filter(Boolean) : [];
   });
   const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(() => {
     const m = searchParams.get('measures');
-    return m ? m.split(',').filter(Boolean) : ['tran_amt', 'tran_count'];
+    return m ? m.split(',').filter(Boolean) : [];
   });
   const [datePivotEnabled, setDatePivotEnabled] = useState(false);
   const [dateSortEnabled, setDateSortEnabled]   = useState(false);
@@ -1158,11 +1216,11 @@ export default function PivotDashboard() {
     year:         'multi',
   });
 
-  // Sync state to URL for shareable pivot configuration
+  // Sync state to URL for shareable pivot configuration.
   useEffect(() => {
     const params = new URLSearchParams();
-    if (selectedDimensions.join(',') !== 'gam_branch') params.set('dims', selectedDimensions.join(','));
-    if (selectedMeasures.join(',') !== 'tran_amt,tran_count') params.set('measures', selectedMeasures.join(','));
+    if (selectedDimensions.length > 0) params.set('dims', selectedDimensions.join(','));
+    if (selectedMeasures.length > 0)   params.set('measures', selectedMeasures.join(','));
     if (page > 1) params.set('page', String(page));
     const qs = params.toString();
     const newUrl = qs ? `?${qs}` : '/dashboard/pivot';
@@ -1172,12 +1230,10 @@ export default function PivotDashboard() {
   const { data: filterValues } = useFilterValues();
   const { data: catalog }      = useProductionCatalog();
 
-  // All selected dimensions are sent to the backend as true GROUP BY dimensions.
-  // tran_date_bal is an EAB outer-join dimension (not a measure).
-  const backendDimensions = useMemo(
-    () => selectedDimensions,
-    [selectedDimensions],
-  );
+  // All selected dimensions (including display-as-measure dims like tran_date_bal)
+  // are sent to the backend as true GROUP BY dimensions. The backend routes ones
+  // with outer_join_field: true (e.g. tran_date_bal) through the EAB outer join.
+  const backendDimensions = useMemo(() => selectedDimensions, [selectedDimensions]);
 
   const standardMeasures = useMemo(
     () => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)),
@@ -1187,11 +1243,9 @@ export default function PivotDashboard() {
     () => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)),
     [selectedMeasures],
   );
-  // Measures come only from the Measures panel — tran_date_bal is a dimension (EAB join).
-  const measures = useMemo(
-    () => standardMeasures.length > 0 ? standardMeasures : ['tran_amt'],
-    [standardMeasures],
-  );
+  // Aggregation measures sent to the backend. Empty is allowed: the backend produces
+  // a "SELECT <dims> GROUP BY <dims>" query in that case (distinct dim-value list).
+  const measures = useMemo(() => standardMeasures, [standardMeasures]);
 
   // Selected date dimensions in fixed order
   const selectedDateDims = useMemo(
@@ -1220,10 +1274,20 @@ export default function PivotDashboard() {
     [datePivotFields, nonDatePartitions, selectedDimensions],
   );
 
+  // Display-as-measure dimensions (e.g. tran_date_bal): selected as dimensions in
+  // the sidebar but rendered as MEASURE columns in the pivot (under pivoted headings).
+  const displayAsMeasureDims = useMemo(
+    () => selectedDimensions.filter((k) => DISPLAY_AS_MEASURE_DIMS.has(k)),
+    [selectedDimensions],
+  );
+
   // rowDims: the dimensions that become the LEFT-SIDE row keys in the pivot table.
-  // = all backend dimensions EXCEPT the ones the user chose as pivot (column-header) fields.
+  // = all backend dimensions EXCEPT pivot (column-header) fields AND display-as-measure
+  //   dims (those render as measure columns instead of row labels).
   const rowDims = useMemo(
-    () => backendDimensions.filter((k) => !partitionDimensions.includes(k)),
+    () => backendDimensions.filter(
+      (k) => !partitionDimensions.includes(k) && !DISPLAY_AS_MEASURE_DIMS.has(k),
+    ),
     [backendDimensions, partitionDimensions],
   );
 
@@ -1320,10 +1384,11 @@ export default function PivotDashboard() {
     // Apply pivot:
     //   index   = rowDims
     //   columns = pivotField (distinct values become column-group headers)
-    //   values  = measures
-    const pd = buildPivotData(pivotRows, pivotField, rowDims, measures);
+    //   values  = measures + display-as-measure dims (e.g. tran_date_bal)
+    const pivotMeasures = [...measures, ...displayAsMeasureDims];
+    const pd = buildPivotData(pivotRows, pivotField, rowDims, pivotMeasures);
     return { pivotData: pd, flatColumns: [], flatRows: [], isPivoted: true };
-  }, [explorer, rowDims, partitionDimensions, measures]);
+  }, [explorer, rowDims, partitionDimensions, measures, displayAsMeasureDims]);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -1400,9 +1465,6 @@ export default function PivotDashboard() {
     const isCurrentlySelected = selectedDimensions.includes(key);
 
     if (isCurrentlySelected) {
-      // Guard: must keep at least one dimension selected
-      if (selectedDimensions.length === 1) return;
-
       // ── Clear the filter for this field when deselecting ──────────────────
       const fieldDef = DIMENSION_FIELDS.find((f) => f.key === key);
       if (fieldDef) {
@@ -1415,7 +1477,7 @@ export default function PivotDashboard() {
         });
       }
 
-      // ── Update pivot / sort / order state ─────────────────────────────────
+      // ── Update pivot state for date-field removal ─────────────────────────
       if (isDateField) {
         const remainingDate = DATE_FIELD_ORDER.filter(
           (k) => k !== key && selectedDimensions.includes(k),
@@ -1427,9 +1489,21 @@ export default function PivotDashboard() {
       } else {
         setNonDatePartitions((pp) => pp.filter((k) => k !== key));
       }
-      setOrderFields((of) => of.filter((k) => k !== key));
-      setSelectedDimensions((prev) => prev.filter((k) => k !== key));
+
+      // Remove the dim itself, then cascade-drop any OTHER selected dim whose
+      // prerequisites become unsatisfied (e.g. removing the last date dim drops
+      // tran_date_bal; removing the last account-id dim drops eod_balance).
+      const nextSelection = selectedDimensions.filter((k) => k !== key);
+      const afterCascade  = nextSelection.filter((k) => prereqSatisfied(k, nextSelection));
+      const dropped       = new Set(selectedDimensions.filter((k) => !afterCascade.includes(k)));
+
+      setSelectedDimensions(afterCascade);
+      setOrderFields((of) => of.filter((k) => !dropped.has(k)));
+      setNonDatePartitions((pp) => pp.filter((k) => !dropped.has(k)));
     } else {
+      // Guard: prerequisites must be satisfied by the CURRENT selection.
+      if (!prereqSatisfied(key, selectedDimensions)) return;
+
       // Selecting — auto-enable pivot on first date field
       if (isDateField) {
         const currentDateDims = DATE_FIELD_ORDER.filter((k) => selectedDimensions.includes(k));
@@ -1486,11 +1560,8 @@ export default function PivotDashboard() {
   const toggleMeasure = useCallback((key: string) => {
     setSelectedMeasures((prev) => {
       if (prev.includes(key)) {
-        const next = prev.filter((k) => k !== key);
-        const hasStandard = next.some((k) => STANDARD_MEASURES.some((m) => m.key === k));
-        if (!hasStandard) return prev; // keep at least one standard measure
-        setOrderFields((of) => of.filter((k) => k !== key)); // drop from ORDER BY
-        return next;
+        setOrderFields((of) => of.filter((k) => k !== key));
+        return prev.filter((k) => k !== key);
       }
       return [...prev, key];
     });
@@ -1826,13 +1897,19 @@ export default function PivotDashboard() {
                   const badge       = TYPE_BADGE[field.type];
                   const isMeasure   = field.type === 'measure_dim';
                   const hasFilter   = !isMeasure && field.filterKey;
+                  // Dims with prerequisites (tran_date_bal, eod_balance) are disabled
+                  // until a companion dim is selected — the tooltip explains which.
+                  const prereq      = DIM_PREREQS[field.key];
+                  const prereqOk    = !prereq || prereq.keys.some((k) => selectedDimensions.includes(k));
+                  const disabled    = !prereqOk && !selected;
 
                   return (
-                    <li key={field.key} className={`transition-colors border-l-2 ${selected ? (partitioned ? 'bg-accent-purple/5 border-accent-purple' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
+                    <li key={field.key} className={`transition-colors border-l-2 ${selected ? (partitioned ? 'bg-accent-purple/5 border-accent-purple' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'} ${disabled ? 'opacity-40' : ''}`}>
                       {/* Row */}
                       <div
-                        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none"
-                        onClick={() => toggleDimension(field.key)}
+                        className={`flex items-center gap-3 px-4 py-2.5 select-none ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        onClick={disabled ? undefined : () => toggleDimension(field.key)}
+                        title={disabled && prereq ? `Select ${prereq.label} first` : undefined}
                       >
                         {/* Dimension checkbox */}
                         <Checkbox
@@ -2016,7 +2093,6 @@ export default function PivotDashboard() {
               <ul className="divide-y divide-border">
                 {STANDARD_MEASURES.map((measure) => {
                   const active   = selectedMeasures.includes(measure.key);
-                  const isLast   = active && measures.length === 1 && measures[0] === measure.key;
                   const ordered  = orderFields.includes(measure.key);
                   const orderIdx = orderFields.indexOf(measure.key);
                   return (
@@ -2024,12 +2100,10 @@ export default function PivotDashboard() {
                       {/* Select checkbox — div wrapper avoids button-in-button (Radix Checkbox renders as button) */}
                       <div
                         role="button"
-                        tabIndex={isLast ? -1 : 0}
-                        aria-disabled={isLast}
-                        title={isLast ? 'At least one standard measure is required' : undefined}
-                        onClick={isLast ? undefined : () => toggleMeasure(measure.key)}
-                        onKeyDown={isLast ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMeasure(measure.key); }}
-                        className={`flex items-center gap-2.5 flex-1 min-w-0 text-left ${isLast ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                        tabIndex={0}
+                        onClick={() => toggleMeasure(measure.key)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleMeasure(measure.key); }}
+                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
                       >
                         <Checkbox
                           checked={active}
@@ -2343,8 +2417,16 @@ export default function PivotDashboard() {
               </div>
             )}
 
-            {/* Result table — PivotTable when partition active, RecordTable otherwise */}
-            {isPivoted && pivotData ? (
+            {/* Result table — PivotTable when partition active, RecordTable otherwise.
+                Empty state: nothing runs until at least one dimension is selected. */}
+            {selectedDimensions.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-bg-surface p-10 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
+                <p className="text-[13px] font-semibold text-text-primary">Select at least one dimension to start</p>
+                <p className="mt-1 text-[11px] text-text-muted">
+                  Pick one or more fields from the <span className="text-accent-blue font-medium">Dimensions</span> panel on the left. Measures are optional — leave them unselected for a plain <span className="font-mono">SELECT dims · GROUP BY dims</span> query.
+                </p>
+              </div>
+            ) : isPivoted && pivotData ? (
               <PivotTable
                 data={pivotData}
                 title={`Results — ${dimensionLabels}`}

@@ -150,7 +150,7 @@ const FACT_TABLES = [
       { name: 'entry_user_id',    type: 'string',          note: 'Numeric ID of entry user' },
       { name: 'vfd_user',         type: 'string',          note: 'User who verified — dimension' },
       { name: 'vfd_user_id',      type: 'string',          note: 'Numeric ID of verified user' },
-      { name: 'eod_balance',      type: 'decimal(18,2)',   note: '⚠ Not in tran_summary — only in gam & eab tables. Use tran_date_bal dimension for EAB balance.' },
+      { name: 'eod_balance',      type: 'decimal(18,2)',   note: 'Current balance from gam — surfaced as the GAM Balance dimension (static per account). For per-date balance snapshots use the TRAN Date Balance dimension (pulled from eab).' },
       { name: 'merchant',         type: 'string',          note: 'Merchant name — dimension' },
       { name: 'service',          type: 'string',          note: 'Service type — dimension' },
       { name: 'product',          type: 'string',          note: 'Banking product — dimension' },
@@ -450,6 +450,8 @@ const DIMENSIONS = [
   { key: 'acid',             label: 'ACID',               type: 'text',        sql: 'acid',              description: 'Internal account identifier' },
   { key: 'acct_num',         label: 'ACCT Num',           type: 'text',        sql: 'acct_num',          description: 'Full or partial account number (ILIKE pattern)' },
   { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name' },
+  { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'text',        sql: 'e.tran_date_bal',   description: 'Balance snapshot from EAB via acid LEFT JOIN — listed as a dimension but rendered under pivoted headings as a measure column. Never aggregated. Requires a date dimension to resolve the EAB as-of date.' },
+  { key: 'eod_balance',      label: 'GAM Balance',        type: 'text',        sql: 'g.eod_balance',     description: 'Current balance from GAM via acid LEFT JOIN — normal dimension, static per account (does not vary by date). Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique.' },
   // ── Transaction (geo broad → narrow, then channel / type, then accounting) ──
   { key: 'tran_province',    label: 'TRAN Province',      type: 'categorical', sql: 'tran_province',     description: 'Province of the transaction branch' },
   { key: 'tran_cluster',     label: 'TRAN Cluster',       type: 'categorical', sql: 'tran_cluster',      description: 'Cluster of the transaction branch' },
@@ -483,7 +485,8 @@ const MEASURES = [
   { key: 'tran_acct_count', label: 'TRAN Acct Count',   selectSql: 'COUNT(DISTINCT acct_num) tran_acct_count',                                                             orderSql: 'COUNT(DISTINCT acct_num) DESC' },
   // Date / EAB
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      selectSql: 'MAX(tran_date) tran_maxdate',                                                                          orderSql: 'MAX(tran_date) DESC' },
-  { key: 'tran_date_bal',   label: 'TRAN Date Balance',  selectSql: 'e.tran_date_bal',                                                                                      orderSql: 'e.tran_date_bal DESC',   note: 'From EAB table via acid LEFT JOIN — surfaced inside the Transaction Details modal as opening_bal / running_bal.' },
+  // Composite RFM score — higher = more valuable customer
+  { key: 'rfm_score',       label: 'RFM Score',          selectSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) rfm_score',       orderSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) DESC', note: 'Recency–Frequency–Monetary composite (formula from data dictionary). Higher = better customer.' },
 ];
 // Note: eod_balance does NOT exist in tran_summary directly.
 // Account balance data comes from the EAB table via the tran_date_bal column,
@@ -771,7 +774,7 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (23)"
+            label="Pivot Dimensions (25)"
             sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
