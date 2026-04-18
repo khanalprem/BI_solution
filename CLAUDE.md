@@ -453,6 +453,9 @@ KPICard accepts an optional `drillDownUrl` string. When provided, an invisible `
 ### ORDER BY tiebreaker
 The service adds `acct_num ASC` as a pagination tiebreaker ONLY when `acct_num` is in the selected dimensions (GROUP BY). Without this guard, the tiebreaker breaks grouped queries like `GROUP BY gam_branch` with a "must appear in GROUP BY" error.
 
+### ORDER BY — outer_join_field stripping
+`outer_join_field: true` dim keys (`tran_date_bal`, `eod_balance`) are stripped from the incoming `orderby_clause` before the procedure is called. The procedure applies ORDER BY inside `ROW_NUMBER() OVER(...)` in the inner CTE, where outer-join columns don't yet exist — they only resolve after the LEFT JOINs at the outer SELECT. Leaving them in produces `column "eod_balance" does not exist`. If stripping empties the clause, it falls back to `default_orderby`. Frontend may still send them; the service is the authoritative filter.
+
 ### `build_summary` — single aggregate query
 `dashboards_controller.rb#build_summary` uses a SINGLE `SELECT` with `SUM(CASE WHEN ...)` for all metrics (was 8 separate queries). Returns: `total_amount`, `transaction_count`, `credit_amount`, `debit_amount`, `credit_count`, `debit_count`, `unique_accounts`, `unique_customers`, `avg_transaction_size`, `net_flow`, `credit_ratio`.
 
@@ -532,6 +535,7 @@ Invoke with the `Skill` tool before any significant task:
 | `/dashboard/branch/[code]` | ✅ Live | Branch detail |
 | `/dashboard/customer` | ✅ Live | Customer portfolio |
 | `/dashboard/customer/[cifId]` | ✅ Live | Customer detail |
+| `/dashboard/segmentation` | ✅ Live | Customer Segmentation — RFM score ranking (fixed dims: `acct_num, acct_name, cif_id, acid, gam_branch, gam_province`; measures: `rfm_score, tran_amt, tran_count, tran_maxdate`). Uses `production/explorer` with `ORDER BY <rfm formula> DESC` and page_size 200. |
 | `/dashboard/skills` | ✅ Live | Platform Guide / Data Dictionary |
 | `/dashboard/financial` | ✅ Live | Financial summary — CR/DR/net, monthly trend, GL breakdown |
 | `/dashboard/digital` | ✅ Live | Digital channels — `digital_channels` endpoint |
@@ -584,6 +588,7 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - **Pivot defaults are empty.** `selectedDimensions` and `selectedMeasures` start as `[]`. The pivot hook is gated on `dimensions.length > 0` only — **measures are optional**. When no measure is selected the query becomes `SELECT <dims> GROUP BY <dims>` (distinct dim-value combinations). The backend `tran_summary_explorer` handles this: it strips the leading `, ` before measures in `select_inner`, falls back to ORDER BY first dim when no measure exists, and skips the comparison block entirely when `selected_measures` is empty (comparisons are measure-dependent). The pivot page shows a "Select at least one dimension to start" empty-state card when `selectedDimensions.length === 0`.
 - `DATE_FIELD_ORDER` enforces fixed date ordering: `year → year_quarter → year_month → tran_date`
 - Legacy measure aliases (`total_amount`, `transaction_count`, `unique_accounts`, `unique_customers`, `credit_amount`, `debit_amount`, `net_flow`) remain in the backend MEASURES hash for backwards compatibility but are no longer shown in the pivot sidebar — canonical data-dictionary keys are used instead (`tran_amt`, `tran_count`, etc.)
+- `rfm_score` is no longer in the Pivot sidebar's `STANDARD_MEASURES`. It is still a valid backend measure (used by `/dashboard/segmentation`), but intentionally hidden from generic pivoting because it's a composite formula — mixing it with other aggregates in arbitrary pivot layouts produces meaningless column comparisons. To add RFM elsewhere, call `production/explorer` with `measures=rfm_score` directly.
 - `AdvancedDataTable.tsx` still uses hand-rolled table primitives — future work to migrate internals to shadcn `Table` components
 - `Select.tsx` / `SearchableMultiSelect` kept as-is (complex search+checkbox multi-select not achievable with shadcn Select); shadcn `select.tsx` is available for new simple single-select usage going forward
 - API auth is optional (`authenticate_user_optional!` in BaseController) — TODO: switch to required auth once frontend auth flow is fully hardened

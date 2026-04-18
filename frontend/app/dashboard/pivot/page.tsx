@@ -230,8 +230,8 @@ const STANDARD_MEASURES: MeasureDef[] = [
   // Distinct counts & date
   { key: 'tran_acct_count', label: 'TRAN Acct Count',   description: 'COUNT(DISTINCT acct_num)',                             group: 'standard' },
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      description: 'MAX(tran_date)',                                       group: 'standard' },
-  // Composite Recency–Frequency–Monetary score. Formula from data dictionary.xlsx.
-  { key: 'rfm_score',       label: 'RFM Score',          description: 'SUM(count)·0.001 + SUM(amt)·0.0001 − days_since_last_tx·0.001 — higher = better',                               group: 'standard' },
+  // NOTE: rfm_score is exposed only through the Customer Segmentation page — kept out of
+  // the generic pivot sidebar since it is a composite formula, not an aggregate measure.
 ];
 
 // Dimensions that are LISTED in the Dimensions sidebar but RENDERED as measure

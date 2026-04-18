@@ -199,6 +199,21 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
                 }
               />
               <NavItem
+                href="/dashboard/segmentation"
+                label="Customer Segmentation"
+                active={pathname === '/dashboard/segmentation'}
+                onClick={handleClose}
+                collapsed={collapsed}
+                icon={
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <circle cx="5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.4"/>
+                    <circle cx="11" cy="5" r="1.6" stroke="currentColor" strokeWidth="1.3"/>
+                    <circle cx="5" cy="11" r="1.6" stroke="currentColor" strokeWidth="1.3"/>
+                    <circle cx="11" cy="11" r="2.2" stroke="currentColor" strokeWidth="1.4" fill="currentColor" fillOpacity="0.25"/>
+                  </svg>
+                }
+              />
+              <NavItem
                 href="/dashboard/employer"
                 label="Staff & Operations"
                 active={pathname === '/dashboard/employer'}

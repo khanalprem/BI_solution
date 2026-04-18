@@ -149,10 +149,9 @@ class ProductionDataService
     # outer_join_field: true means it cannot be in the inner GROUP BY; it is injected
     # into select_outer so the column is available in the final result set.
     'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true },
-    # ── GAM outer-join dimension ──────────────────────────────────────────────
-    # eod_balance comes from the gam table via `LEFT JOIN gam g ON g.acid = tb2.acid`.
-    # It is a static per-account value (does NOT vary by date), unlike tran_date_bal.
-    'eod_balance'      => { label: 'GAM Balance',        sql: 'g.eod_balance',   gam_required: true, outer_join_field: true }
+    # eod_balance lives directly in tran_summary (confirmed via information_schema).
+    # No GAM join required — treated as a regular inner dimension.
+    'eod_balance'      => { label: 'GAM Balance',        sql: 'eod_balance' }
   }.freeze
 
   # When one of these coarse date dimensions is in the GROUP BY, we inject the
@@ -594,6 +593,16 @@ class ProductionDataService
       ''
     end
     orderby_clause = orderby_clause.to_s.strip.presence || default_orderby
+    # Strip outer_join_field dim keys (e.g. eod_balance, tran_date_bal) from the ORDER BY.
+    # The procedure applies this clause inside ROW_NUMBER() OVER(...) in the inner CTE,
+    # where outer-join columns are not yet available — they only resolve after the LEFT JOINs
+    # at the outer SELECT level. Leaving them in produces "column does not exist" at runtime.
+    if outer_dim_keys.any? && orderby_clause.present?
+      stripped = orderby_clause.sub(/\AORDER BY\s+/i, '').split(',').map(&:strip).reject do |tok|
+        outer_dim_keys.include?(tok.split(/\s+/).first.to_s)
+      end
+      orderby_clause = stripped.any? ? "ORDER BY #{stripped.join(', ')}" : default_orderby
+    end
     # Add tiebreaker for deterministic pagination (prevents duplicate/missing rows on tied values).
     # Only add acct_num when it's actually in the GROUP BY (selected dimensions), otherwise
     # the tiebreaker would break grouped queries with a "must appear in GROUP BY" error.

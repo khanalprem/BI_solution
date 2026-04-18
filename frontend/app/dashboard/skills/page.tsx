@@ -485,8 +485,10 @@ const MEASURES = [
   { key: 'tran_acct_count', label: 'TRAN Acct Count',   selectSql: 'COUNT(DISTINCT acct_num) tran_acct_count',                                                             orderSql: 'COUNT(DISTINCT acct_num) DESC' },
   // Date / EAB
   { key: 'tran_maxdate',    label: 'TRAN Max Date',      selectSql: 'MAX(tran_date) tran_maxdate',                                                                          orderSql: 'MAX(tran_date) DESC' },
-  // Composite RFM score — higher = more valuable customer
-  { key: 'rfm_score',       label: 'RFM Score',          selectSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) rfm_score',       orderSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) DESC', note: 'Recency–Frequency–Monetary composite (formula from data dictionary). Higher = better customer.' },
+  // Composite RFM score — higher = more valuable customer.
+  // Exposed only through the Customer Segmentation page (/dashboard/segmentation);
+  // removed from the generic Pivot sidebar because it is a composite formula, not a direct aggregate.
+  { key: 'rfm_score',       label: 'RFM Score',          selectSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) rfm_score',       orderSql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) DESC', note: 'Recency–Frequency–Monetary composite (formula from data dictionary). Surfaced only in Customer Segmentation. Higher = better customer.' },
 ];
 // Note: eod_balance does NOT exist in tran_summary directly.
 // Account balance data comes from the EAB table via the tran_date_bal column,
