@@ -39,6 +39,17 @@ module Api
         # Empty string means fall back to the default measure-based ORDER BY in the service.
         orderby_clause = sanitize_sql_clause(params[:orderby_clause].to_s.strip, 'ORDER BY')
 
+        # having: structured measure-level comparison filters. Frontend sends
+        #   having[<measure_key>][op]=>=    having[<measure_key>][value]=1000
+        # The controller validates each pair and assembles a safe HAVING clause — we never
+        # accept a raw HAVING string from the client.
+        having_clause = build_having_clause(params[:having])
+
+        # disable_tiebreaker: when true, skip the `, acct_num ASC` pagination tiebreaker the
+        # service normally appends. Used by /dashboard/segmentation where the user's chosen
+        # sort (e.g. rfm_score DESC) must stand alone without a secondary sort column.
+        disable_tiebreaker = ActiveModel::Type::Boolean.new.cast(params[:disable_tiebreaker])
+
         render json: production_service.tran_summary_explorer(
           start_date:        explicit_start,
           end_date:          explicit_end,
@@ -48,8 +59,10 @@ module Api
           time_comparisons:  time_comparisons,
           partitionby_clause: partitionby_clause,
           orderby_clause:    orderby_clause,
+          having_clause:     having_clause,
           page:              params[:page],
-          page_size:         params[:page_size]
+          page_size:         params[:page_size],
+          disable_tiebreaker: disable_tiebreaker
         )
       end
 
@@ -71,6 +84,49 @@ module Api
       end
 
       private
+
+      # Aggregate expression per measure used when building the HAVING clause.
+      # Must mirror the aggregate from MEASURES[key][:select_sql]. Numeric kinds
+      # accept a numeric literal; date kinds accept an ISO date string.
+      HAVING_EXPR = {
+        'tran_amt'        => { expr: 'SUM(tran_amt)',        kind: :numeric },
+        'tran_count'      => { expr: 'SUM(tran_count)',      kind: :numeric },
+        'signed_tranamt'  => { expr: 'SUM(signed_tranamt)',  kind: :numeric },
+        'cr_amt'          => { expr: "SUM(CASE WHEN part_tran_type='CR' THEN tran_amt ELSE 0 END)",   kind: :numeric },
+        'cr_count'        => { expr: "SUM(CASE WHEN part_tran_type='CR' THEN tran_count ELSE 0 END)", kind: :numeric },
+        'dr_amt'          => { expr: "SUM(CASE WHEN part_tran_type='DR' THEN tran_amt ELSE 0 END)",   kind: :numeric },
+        'dr_count'        => { expr: "SUM(CASE WHEN part_tran_type='DR' THEN tran_count ELSE 0 END)", kind: :numeric },
+        'tran_acct_count' => { expr: 'COUNT(DISTINCT acct_num)', kind: :numeric },
+        'tran_maxdate'    => { expr: 'MAX(tran_date)',       kind: :date },
+        'rfm_score'       => { expr: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date)::date)*(-0.001)', kind: :numeric }
+      }.freeze
+      HAVING_OPS = %w[= <= >= < >].freeze
+
+      def build_having_clause(raw)
+        return '' if raw.blank?
+        hash = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
+        clauses = hash.filter_map do |key, spec|
+          meta = HAVING_EXPR[key.to_s]
+          next unless meta
+          next unless spec.is_a?(Hash) || spec.is_a?(ActionController::Parameters)
+          op    = spec['op'].to_s
+          value = spec['value'].to_s.strip
+          next if value.blank?
+          next unless HAVING_OPS.include?(op)
+
+          literal =
+            case meta[:kind]
+            when :numeric
+              next unless value.match?(/\A-?\d+(\.\d+)?\z/)
+              value
+            when :date
+              next unless value.match?(/\A\d{4}-\d{2}-\d{2}\z/)
+              ActiveRecord::Base.connection.quote(value)
+            end
+          "#{meta[:expr]} #{op} #{literal}"
+        end
+        clauses.empty? ? '' : "HAVING #{clauses.join(' AND ')}"
+      end
 
       # Sanitize ORDER BY / PARTITION BY clauses to only allow known dimension/measure keys
       # and SQL keywords (ASC, DESC, ORDER BY, PARTITION BY). Prevents SQL injection.

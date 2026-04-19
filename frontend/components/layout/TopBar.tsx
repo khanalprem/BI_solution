@@ -20,6 +20,7 @@ interface TopBarProps {
   maxDate?: string;
   showFiltersButton?: boolean;
   showExportButton?: boolean;
+  showPeriodSelector?: boolean;
   filtersOpen?: boolean;
   onToggleFilters?: () => void;
   onExport?: () => void;
@@ -37,6 +38,7 @@ export function TopBar({
   maxDate,
   showFiltersButton = true,
   showExportButton = true,
+  showPeriodSelector = true,
   filtersOpen = false,
   onToggleFilters,
   onExport,
@@ -100,6 +102,8 @@ export function TopBar({
         <div className="flex flex-wrap items-center gap-2">
 
           {/* Period picker */}
+          {showPeriodSelector && (
+          <>
           <div className="flex items-center rounded-lg border border-border bg-bg-input p-0.5 gap-px overflow-x-auto">
             {BASE_PERIOD_OPTIONS.map((p) => (
               <button
@@ -145,6 +149,8 @@ export function TopBar({
               handlePeriodChange('CUSTOM');
             }}
           />
+          </>
+          )}
 
           {showFiltersButton && onToggleFilters && (
             <button

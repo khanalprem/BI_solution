@@ -88,8 +88,10 @@ module Api
           vfd_user: parse_multi_value_param(param_value(:vfd_user, :vfdUser)),
           min_amount: parse_decimal(param_value(:min_amount, :minAmount)),
           max_amount: parse_decimal(param_value(:max_amount, :maxAmount)),
-          acct_num: param_value(:acct_num, :acctNum),
-          cif_id: param_value(:cif_id, :cifId),
+          acct_num: parse_multi_value_param(param_value(:acct_num, :acctNum)),
+          cif_id: parse_multi_value_param(param_value(:cif_id, :cifId)),
+          acct_name: parse_multi_value_param(param_value(:acct_name, :acctName)),
+          acid: parse_multi_value_param(param_value(:acid)),
           # Date dimension exact-match filters (pivot explorer)
           tran_date:         parse_multi_value_param(param_value(:tran_date, :tranDate)),
           year_month:        parse_multi_value_param(param_value(:year_month, :yearMonth)),

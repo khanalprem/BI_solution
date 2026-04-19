@@ -69,10 +69,11 @@ class TranSummary < ApplicationRecord
   end
 
   def self.apply_partial_text_filter(scope, column, value)
-    term = value.to_s.strip
-    return scope if term.blank?
+    terms = Array.wrap(value).map { |v| v.to_s.strip }.reject(&:blank?)
+    return scope if terms.empty?
 
-    pattern = "%#{ActiveRecord::Base.sanitize_sql_like(term)}%"
-    scope.where("#{table_name}.#{column}::text ILIKE ?", pattern)
+    patterns = terms.map { |t| "%#{ActiveRecord::Base.sanitize_sql_like(t)}%" }
+    placeholders = patterns.map { "#{table_name}.#{column}::text ILIKE ?" }.join(' OR ')
+    scope.where(placeholders, *patterns)
   end
 end

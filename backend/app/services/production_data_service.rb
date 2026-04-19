@@ -223,10 +223,13 @@ class ProductionDataService
     #   Monetary:  SUM(tran_amt)   × 0.0001
     #   Recency:   (CURRENT_DATE − MAX(tran_date)) × −0.001  (more recent → less negative)
     # Formula sourced from `data dictionary.xlsx`.
+    # tran_date is cast to varchar(15) in the procedure's inner CTE, so MAX(tran_date) is text.
+    # We cast back to date before subtracting from CURRENT_DATE, otherwise Postgres errors with
+    # "operator does not exist: date - text".
     'rfm_score' => {
       label: 'RFM Score',
-      select_sql: 'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)) * (-0.001) AS rfm_score',
-      order_sql:  'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)) * (-0.001) DESC'
+      select_sql: 'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)::date) * (-0.001) AS rfm_score',
+      order_sql:  'SUM(tran_count) * 0.001 + SUM(tran_amt) * 0.0001 + (CURRENT_DATE - MAX(tran_date)::date) * (-0.001) DESC'
     },
     # ── Legacy aliases — kept for backwards compatibility ──────────────────────
     'total_amount' => {
@@ -511,7 +514,7 @@ class ProductionDataService
 
   public
 
-  def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', orderby_clause: '', page: 1, page_size: 10)
+  def tran_summary_explorer(start_date: nil, end_date: nil, dimensions:, measures:, filters:, time_comparisons: [], partitionby_clause: '', orderby_clause: '', having_clause: '', page: 1, page_size: 10, disable_tiebreaker: false)
     # Fallback dates used for internal calculations (EAB join, period comparisons).
     # start_date / end_date may be nil when frontend sends no date params (ALL period before
     # filter-stats loads) — in that case we skip the tran_date WHERE clause but still need
@@ -581,7 +584,9 @@ class ProductionDataService
     select_inner   = "SELECT #{dim_selects.join(', ')}#{acid_select}#{enddate_select}#{measures_prefix}#{measure_select_sql}"
     where_clause   = explorer_where_clause(filters: filters, start_date: start_date, end_date: end_date)
     groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}#{enddate_groupby}"
-    having_clause  = ''
+    # HAVING is opt-in: caller builds the validated expression (see ProductionController#build_having_clause).
+    # Pass empty string when absent so the procedure's placeholder remains harmless.
+    having_clause  = having_clause.to_s.strip
     # ORDER BY fallback: use the first measure when any, else fall back to the first
     # dimension alias (so measure-less "select dims / group by dims" queries still
     # paginate deterministically).
@@ -593,6 +598,18 @@ class ProductionDataService
       ''
     end
     orderby_clause = orderby_clause.to_s.strip.presence || default_orderby
+    # Expand measure aliases (e.g. "rfm_score") to their aggregate expression
+    # (e.g. "SUM(tran_count)*0.001 + ..."). The stored procedure applies ORDER BY
+    # inside a window function (ROW_NUMBER() OVER(ORDER BY ...)) in the SAME SELECT
+    # list where the alias is defined — Postgres does NOT resolve SELECT-list aliases
+    # in that position, so we must substitute the full expression. Only expand
+    # measures the caller actually selected (they're guaranteed to be in the SELECT).
+    if orderby_clause.present? && measure_keys.any?
+      measure_keys.each do |key|
+        agg = MEASURES.fetch(key).fetch(:order_sql).sub(/\s+(?:ASC|DESC)\s*\z/i, '')
+        orderby_clause = orderby_clause.gsub(/\b#{Regexp.escape(key)}\b/, agg)
+      end
+    end
     # Strip outer_join_field dim keys (e.g. eod_balance, tran_date_bal) from the ORDER BY.
     # The procedure applies this clause inside ROW_NUMBER() OVER(...) in the inner CTE,
     # where outer-join columns are not yet available — they only resolve after the LEFT JOINs
@@ -606,8 +623,10 @@ class ProductionDataService
     # Add tiebreaker for deterministic pagination (prevents duplicate/missing rows on tied values).
     # Only add acct_num when it's actually in the GROUP BY (selected dimensions), otherwise
     # the tiebreaker would break grouped queries with a "must appear in GROUP BY" error.
+    # Callers (e.g. /dashboard/segmentation) can opt out via disable_tiebreaker when they
+    # want the ORDER BY to appear exactly as the user specified (no extra sort columns).
     has_acct_num_dim = inner_dim_keys.include?('acct_num')
-    if has_acct_num_dim && !orderby_clause.downcase.include?('acct_num')
+    if !disable_tiebreaker && has_acct_num_dim && !orderby_clause.downcase.include?('acct_num')
       orderby_clause = "#{orderby_clause}, acct_num ASC"
     end
 
@@ -713,7 +732,7 @@ class ProductionDataService
         prevmonthsamedate_where => '',
         prevyearsamedate_where => '',
         groupby_clause => #{conn.quote(groupby_clause)},
-        having_clause => '',
+        having_clause => #{conn.quote(having_clause)},
         orderby_clause => #{conn.quote(orderby_clause)},
         partitionby_clause => #{conn.quote(partitionby_clause)},
         eab_join => #{conn.quote(eab_join)},
@@ -1038,21 +1057,32 @@ class ProductionDataService
       end
     end
 
-    if filters[:acct_num].present?
-      clauses << "acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
+    # Multi-value IDENTITY filters: exact match via IN, supports single-string legacy callers.
+    { 'acct_num' => filters[:acct_num], 'acid' => filters[:acid] }.each do |column, value|
+      normalized = normalize_filter_values(value)
+      next if normalized.empty?
+      clauses << "#{column}::text IN (#{quoted_values(normalized)})"
     end
 
-    if filters[:cif_id].present?
-      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
-      clauses << "cif_id::text ILIKE #{conn.quote(pattern)}"
+    # Multi-value NAME filters: partial match via ILIKE, OR-joined when multiple values.
+    { 'cif_id' => filters[:cif_id], 'acct_name' => filters[:acct_name] }.each do |column, value|
+      normalized = normalize_filter_values(value)
+      next if normalized.empty?
+      patterns = normalized.map { |v| "%#{ActiveRecord::Base.sanitize_sql_like(v)}%" }
+      ors      = patterns.map { |p| "#{column}::text ILIKE #{conn.quote(p)}" }
+      clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
 
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
     clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
 
-    return 'WHERE 1=1' if clauses.empty?
+    # Trailing space: the stored procedure concatenates this directly with "union all" in
+    # its internal SQL template (no space between). Postgres 16+ rejects patterns like
+    # "1=1union" as "trailing junk after numeric literal". Always end with a space so the
+    # procedure's template renders valid SQL regardless of the last token.
+    return 'WHERE 1=1 ' if clauses.empty?
 
-    "WHERE #{clauses.join(' AND ')}"
+    "WHERE #{clauses.join(' AND ')} "
   end
 
   # Resolve the reference date for period comparisons.
@@ -1181,7 +1211,9 @@ class ProductionDataService
     return '' unless date_clause
 
     clauses = [date_clause] + non_date_filter_clauses(filters)
-    "WHERE #{clauses.join(' AND ')}"
+    # Trailing space — see rationale in explorer_where_clause. The procedure pastes
+    # these period WHEREs into its internal SQL without space padding.
+    "WHERE #{clauses.join(' AND ')} "
   end
 
   # Returns the date portion of a comparison WHERE clause.
@@ -1331,12 +1363,17 @@ class ProductionDataService
     conn = @connection
     clauses = categorical_filter_clauses(filters)
 
-    if filters[:acct_num].present?
-      clauses << "acct_num::text = #{conn.quote(filters[:acct_num].to_s.strip)}"
+    { 'acct_num' => filters[:acct_num], 'acid' => filters[:acid] }.each do |column, value|
+      normalized = normalize_filter_values(value)
+      next if normalized.empty?
+      clauses << "#{column}::text IN (#{quoted_values(normalized)})"
     end
-    if filters[:cif_id].present?
-      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(filters[:cif_id].to_s.strip)}%"
-      clauses << "cif_id::text ILIKE #{conn.quote(pattern)}"
+    { 'cif_id' => filters[:cif_id], 'acct_name' => filters[:acct_name] }.each do |column, value|
+      normalized = normalize_filter_values(value)
+      next if normalized.empty?
+      patterns = normalized.map { |v| "%#{ActiveRecord::Base.sanitize_sql_like(v)}%" }
+      ors      = patterns.map { |p| "#{column}::text ILIKE #{conn.quote(p)}" }
+      clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
     clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?

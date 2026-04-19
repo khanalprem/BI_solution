@@ -21,8 +21,10 @@ export interface DashboardFilters {
   vfdUser?: MultiValueFilter;
   minAmount?: number;
   maxAmount?: number;
-  acctNum?: string;
-  cifId?: string;
+  acctNum?: MultiValueFilter;
+  cifId?: MultiValueFilter;
+  acctName?: MultiValueFilter;
+  acid?: MultiValueFilter;
   // Date dimension exact-match filters (pivot explorer)
   tranDate?: MultiValueFilter;    // specific YYYY-MM-DD date(s) on tran_date column
   yearMonth?: MultiValueFilter;   // e.g., ['2024-01', '2024-02']

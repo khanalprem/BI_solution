@@ -54,8 +54,10 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['gl_sub_head_code', serializeFilterValue(filters.glSubHeadCode)],
     ['entry_user',       serializeFilterValue(filters.entryUser)],
     ['vfd_user',         serializeFilterValue(filters.vfdUser)],
-    ['acct_num',         filters.acctNum],
-    ['cif_id',           filters.cifId],
+    ['acct_num',         serializeFilterValue(filters.acctNum)],
+    ['cif_id',           serializeFilterValue(filters.cifId)],
+    ['acct_name',        serializeFilterValue(filters.acctName)],
+    ['acid',             serializeFilterValue(filters.acid)],
     // Date dimension exact-match filters
     ['tran_date',         serializeFilterValue(filters.tranDate)],
     ['year_month',        serializeFilterValue(filters.yearMonth)],
@@ -207,6 +209,8 @@ export function useProductionTable(tableName: string, page = 1, pageSize = 25) {
   });
 }
 
+export type MeasureHavingFilter = { op: '=' | '<=' | '>=' | '<' | '>'; value: string };
+
 export function useProductionExplorer(
   filters: DashboardFilters,
   dimensions: string[],
@@ -216,20 +220,31 @@ export function useProductionExplorer(
   pageSize = 10,
   partitionbyClause = '',
   orderbyClause = '',
+  havingFilters: Record<string, MeasureHavingFilter> = {},
+  disableTiebreaker = false,
 ) {
   const params = useMemo(
-    () => ({
-      ...toApiFilters(filters),
-      dimensions: dimensions.join(','),
-      measures: measures.join(','),
-      ...(timeComparisons.length > 0 ? { time_comparisons: timeComparisons.join(',') } : {}),
-      ...(partitionbyClause ? { partitionby_clause: partitionbyClause } : {}),
-      ...(orderbyClause     ? { orderby_clause: orderbyClause }         : {}),
-      page,
-      page_size: pageSize,
-    }),
+    () => {
+      const base: Record<string, string | number> = {
+        ...toApiFilters(filters),
+        dimensions: dimensions.join(','),
+        measures: measures.join(','),
+        ...(timeComparisons.length > 0 ? { time_comparisons: timeComparisons.join(',') } : {}),
+        ...(partitionbyClause ? { partitionby_clause: partitionbyClause } : {}),
+        ...(orderbyClause     ? { orderby_clause: orderbyClause }         : {}),
+        ...(disableTiebreaker ? { disable_tiebreaker: 'true' }            : {}),
+        page,
+        page_size: pageSize,
+      };
+      for (const [key, spec] of Object.entries(havingFilters)) {
+        if (!spec?.value) continue;
+        base[`having[${key}][op]`]    = spec.op;
+        base[`having[${key}][value]`] = spec.value;
+      }
+      return base;
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, JSON.stringify(dimensions), JSON.stringify(measures), JSON.stringify(timeComparisons), partitionbyClause, orderbyClause, page, pageSize],
+    [filters, JSON.stringify(dimensions), JSON.stringify(measures), JSON.stringify(timeComparisons), partitionbyClause, orderbyClause, page, pageSize, JSON.stringify(havingFilters), disableTiebreaker],
   );
   return useQuery<ProductionExplorerResponse>({
     queryKey: ['production-explorer', params],

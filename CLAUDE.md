@@ -185,7 +185,9 @@ MEASURES = {
   'tran_maxdate'    => { label: 'TRAN Max Date',      select_sql: 'MAX(tran_date) AS tran_maxdate',       ... },
   # RFM composite (formula from data dictionary.xlsx) — higher = more valuable customer:
   # SUM(count)·0.001 + SUM(amt)·0.0001 − days_since_last_tx·0.001
-  'rfm_score'       => { label: 'RFM Score',          select_sql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date))*(-0.001) AS rfm_score', ... },
+  # NOTE: MAX(tran_date) must be cast `::date` because the stored procedure's inner CTE
+  # casts tran_date to varchar(15); without the cast Postgres errors on `date - text`.
+  'rfm_score'       => { label: 'RFM Score',          select_sql: 'SUM(tran_count)*0.001 + SUM(tran_amt)*0.0001 + (CURRENT_DATE-MAX(tran_date)::date)*(-0.001) AS rfm_score', ... },
   # Legacy aliases kept for backwards compatibility:
   # 'total_amount', 'transaction_count', 'unique_accounts', 'unique_customers',
   # 'credit_amount', 'debit_amount', 'net_flow'
@@ -413,6 +415,8 @@ const { filters, ... } = useDashboardPage({ extraFilters });
 <TopBar title="Page Title" subtitle="..." {...topBarProps} />
 ```
 
+**Exception: self-contained pages that build their own filter UI** (currently `/dashboard/segmentation`) skip `useDashboardPage` entirely and hide the TopBar period/filter chrome with `showPeriodSelector={false}` + `showFiltersButton={false}`. Use this escape hatch only when the page's filter model is genuinely different from the shared period + AdvancedFilters model — otherwise use `useDashboardPage`.
+
 ### `formatNPR` — null vs zero distinction
 
 `formatNPR(null)` returns `'—'` (em dash), `formatNPR(0)` returns `'Rs. 0'`. This distinguishes missing data from actual zero. All KPI cards should NOT use `?? 0` fallback — let null propagate so the dash shows.
@@ -452,6 +456,12 @@ KPICard accepts an optional `drillDownUrl` string. When provided, an invisible `
 
 ### ORDER BY tiebreaker
 The service adds `acct_num ASC` as a pagination tiebreaker ONLY when `acct_num` is in the selected dimensions (GROUP BY). Without this guard, the tiebreaker breaks grouped queries like `GROUP BY gam_branch` with a "must appear in GROUP BY" error.
+
+Callers can opt out by sending `disable_tiebreaker=true` to `/production/explorer` (maps to `disable_tiebreaker: true` kwarg on `tran_summary_explorer`). The segmentation page uses this so RFM ranking isn't diluted by a secondary alphabetical sort on `acct_num` when scores tie. Pivot analysis leaves it unset — determinism across pages matters more than ranking purity there.
+
+### WHERE clauses must end with a trailing space
+
+`explorer_where_clause` and `build_period_where` both return strings that end with a space (e.g. `"WHERE 1=1 "`, `"WHERE tran_date BETWEEN ... "`). The stored procedure's internal SQL template concatenates these clauses directly with `union all` and other keywords without space padding — Postgres 16+ rejects patterns like `1=1union` (`trailing junk after numeric literal`). Any new clause-builder that feeds into `get_tran_summary` must preserve this trailing-space invariant.
 
 ### ORDER BY — outer_join_field stripping
 `outer_join_field: true` dim keys (`tran_date_bal`, `eod_balance`) are stripped from the incoming `orderby_clause` before the procedure is called. The procedure applies ORDER BY inside `ROW_NUMBER() OVER(...)` in the inner CTE, where outer-join columns don't yet exist — they only resolve after the LEFT JOINs at the outer SELECT. Leaving them in produces `column "eod_balance" does not exist`. If stripping empties the clause, it falls back to `default_orderby`. Frontend may still send them; the service is the authoritative filter.
@@ -535,7 +545,7 @@ Invoke with the `Skill` tool before any significant task:
 | `/dashboard/branch/[code]` | ✅ Live | Branch detail |
 | `/dashboard/customer` | ✅ Live | Customer portfolio |
 | `/dashboard/customer/[cifId]` | ✅ Live | Customer detail |
-| `/dashboard/segmentation` | ✅ Live | Customer Segmentation — RFM score ranking (fixed dims: `acct_num, acct_name, cif_id, acid, gam_branch, gam_province`; measures: `rfm_score, tran_amt, tran_count, tran_maxdate`). Uses `production/explorer` with `ORDER BY <rfm formula> DESC` and page_size 200. |
+| `/dashboard/segmentation` | ✅ Live | Customer Segmentation — RFM score ranking. Self-contained page (NO TopBar period / AdvancedFilters). Inline pivot-style controls: dim checkboxes (`acct_num, acct_name, cif_id, acid, gam_branch, gam_province`) with per-dim multi-value filters, + measure checkboxes (`rfm_score, tran_amt, tran_count, tran_maxdate`) with per-measure comparison filter (`= <= >= < >`) and asc/desc sort. Uses `production/explorer`; omits `orderby_clause` when sort = default `rfm_score DESC` so the full composite `order_sql` applies. `TopBar` invoked with `showPeriodSelector={false} showFiltersButton={false}`. |
 | `/dashboard/skills` | ✅ Live | Platform Guide / Data Dictionary |
 | `/dashboard/financial` | ✅ Live | Financial summary — CR/DR/net, monthly trend, GL breakdown |
 | `/dashboard/digital` | ✅ Live | Digital channels — `digital_channels` endpoint |
@@ -603,5 +613,8 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - Brand / avatar gradients must use `var(--gradient-brand)` and `var(--gradient-avatar)` tokens (globals.css), not inline hex gradients.
 - **Default theme is LIGHT.** The inline script in `app/layout.tsx` sets `data-theme="light"` unless the user has saved a preference in `localStorage('bankbi-theme')`. Does NOT follow OS `prefers-color-scheme`.
 - **Placeholder pages pattern** (for features awaiting data-source integration): use `PlaceholderBanner` at the top of the page and `PlaceholderPanel` for individual "not connected" cards. Pages `/loans`, `/deposits`, `/regulatory` follow this pattern with sector-average sample data. Sample constants are all named `SAMPLE_*` so replacing them with live feeds is a search-and-replace. Do NOT delete the sample constants until the replacement feed is tested — the placeholder UI relies on them to render the layout.
-- **Filter set is fixed by what the backend WHERE clauses support.** Valid filter keys (DashboardFilters + backend `filter_params`): `province, branchCode, cluster, solid, tranType, partTranType, tranSource, product, service, merchant, glSubHeadCode, entryUser, vfdUser, acctNum, cifId, minAmount, maxAmount` + date-dimension filters (`tranDate, yearMonth, yearQuarter, year` with exact + from/to). `district`, `municipality`, `schemeType` were removed — they were rendered but produced no SQL. Adding a new filter requires adding it to: (1) `DashboardFilters` type, (2) `toApiFilters()` serializer, (3) backend `filter_params`, (4) `explorer_where_clause` WHERE generation, (5) `AdvancedFilters.tsx` (if needed in the UI), (6) `filter_values` endpoint + `FilterValuesResponse` type (if it needs a dropdown).
+- **Filter set is fixed by what the backend WHERE clauses support.** Valid filter keys (DashboardFilters + backend `filter_params`): `province, branchCode, cluster, solid, tranType, partTranType, tranSource, product, service, merchant, glSubHeadCode, entryUser, vfdUser, acctNum, cifId, acctName, acid, minAmount, maxAmount` + date-dimension filters (`tranDate, yearMonth, yearQuarter, year` with exact + from/to). `district`, `municipality`, `schemeType` were removed — they were rendered but produced no SQL. Adding a new filter requires adding it to: (1) `DashboardFilters` type, (2) `toApiFilters()` serializer, (3) backend `filter_params`, (4) `explorer_where_clause` WHERE generation, (5) `AdvancedFilters.tsx` (if needed in the UI), (6) `filter_values` endpoint + `FilterValuesResponse` type (if it needs a dropdown).
+- **Account-scoped filters are all multi-value.** `acctNum`, `cifId`, `acctName`, `acid` accept `string | string[]`. Exact-match on numeric-like columns (`acct_num::text IN (...)`, `acid::text IN (...)`). Partial-match on text columns (`cif_id::text ILIKE 'a%' OR cif_id::text ILIKE 'b%' ...`, same for `acct_name`). `tran_summary.rb#apply_partial_text_filter` handles array values via OR'd ILIKE placeholders — keep it array-safe when adding text-filter columns.
+- **Measure-level HAVING filters via structured params.** `production/explorer` accepts `having[<measure_key>][op]=<op>&having[<measure_key>][value]=<val>` where `<op>` is one of `= <= >= < >` and `<val>` is numeric (or ISO date for `tran_maxdate`). Whitelist lives in `HAVING_EXPR` in `production_controller.rb` and must mirror each measure's `select_sql` aggregate. Frontend sends these through the `havingFilters` param of `useProductionExplorer`. The controller builds a safe `HAVING ...` string — raw HAVING input from the client is never accepted. Used by `/dashboard/segmentation` and `/dashboard/pivot` for per-measure thresholds (standard measures only — comparison measures like `thismonth_amt` are not in `HAVING_EXPR`).
+- **Pivot per-measure sort direction.** Pivot page `orderFields: string[]` tracks which keys are in the ORDER BY list; companion `orderDirs: Record<string, 'asc' | 'desc'>` tracks direction per key. The sort button on each measure row cycles OFF → DESC → ASC → OFF. `orderbyClause` appends ` DESC` only for keys flipped to desc (ASC is the implicit SQL default, leaving it off keeps the sanitizer's token whitelist happy). The backend also substitutes measure aliases (e.g. `rfm_score`, `tran_amt`) with their `order_sql` aggregate expression before passing the clause to `get_tran_summary`, because PG doesn't resolve SELECT-list aliases inside window-function ORDER BY at the inner CTE level.
 - **Detail pages use `useDashboardPage({ extraFilters })`** to pin a dimension (e.g., `cifId`, `branchCode`). This keeps the period/filter panel state identical to list pages while preventing accidental clearing of the pinned filter. Pages using this pattern: `branch/[branchCode]`, `customer/[cifId]`. Do NOT build custom period state on detail pages.

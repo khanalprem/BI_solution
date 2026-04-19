@@ -70,6 +70,7 @@ interface AdvancedDataTableProps<TData> {
   enableColumnVisibility?: boolean;
   showTextColumnFilters?: boolean;
   initialHidden?: VisibilityState;
+  initialSorting?: SortingState;
 }
 
 export function AdvancedDataTable<TData>({
@@ -85,8 +86,9 @@ export function AdvancedDataTable<TData>({
   enableColumnVisibility = true,
   showTextColumnFilters = false,
   initialHidden = {},
+  initialSorting = [],
 }: AdvancedDataTableProps<TData>) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>(initialSorting);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialHidden);
   const [globalFilter, setGlobalFilter] = React.useState('');

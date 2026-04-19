@@ -4,10 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { RecordTable } from '@/components/ui/RecordTable';
-import { SearchableMultiSelect } from '@/components/ui/Select';
+import { SearchableMultiSelect, Select } from '@/components/ui/Select';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
-import { useFilterValues, useHtdDetail, useProductionCatalog, useProductionExplorer } from '@/lib/hooks/useDashboardData';
+import {
+  useFilterValues, useHtdDetail, useProductionCatalog, useProductionExplorer,
+  type MeasureHavingFilter,
+} from '@/lib/hooks/useDashboardData';
 import { formatNPR } from '@/lib/formatters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -215,6 +219,18 @@ interface MeasureDef {
   group: 'standard' | 'comparison';
   period?: string;
 }
+
+// Per-measure HAVING filter & sort-direction types.
+// Kept local to the pivot page — matches the segmentation page's pattern so users
+// get the same op/value/asc-desc UX across both pages.
+type MeasureOp  = '=' | '<=' | '>=' | '<' | '>';
+type SortDir    = 'asc' | 'desc';
+const MEASURE_OPS: MeasureOp[]   = ['=', '<=', '>=', '<', '>'];
+const MEASURE_OP_OPTIONS         = MEASURE_OPS.map((op) => ({ value: op, label: op }));
+
+// Measures where HAVING comparison expects an ISO date rather than a numeric literal.
+// Must mirror the backend controller's HAVING_EXPR[...].kind === :date mapping.
+const DATE_MEASURE_KEYS = new Set<string>(['tran_maxdate']);
 
 const STANDARD_MEASURES: MeasureDef[] = [
   // Core totals
@@ -1204,6 +1220,13 @@ export default function PivotDashboard() {
   // orderFields: ordered list of dimension/measure keys checked for "Sort"
   // Combines dimension keys and measure keys into a single ORDER BY field1, field2 clause.
   const [orderFields, setOrderFields]                 = useState<string[]>([]);
+  // orderDirs: per-field sort direction. Keys missing from this map default to ASC
+  // (ASC is the implicit SQL default, so we only emit DESC when the user explicitly flips it).
+  const [orderDirs, setOrderDirs]                     = useState<Record<string, SortDir>>({});
+  // havingFilters: per-measure threshold (op + numeric/date literal). Only measures listed
+  // in backend HAVING_EXPR (all STANDARD_MEASURES) can be filtered; comparison measures
+  // don't have a stable aggregate alias and are intentionally excluded.
+  const [havingFilters, setHavingFilters]             = useState<Record<string, { op: MeasureOp; value: string }>>({});
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
@@ -1323,16 +1346,30 @@ export default function PivotDashboard() {
     return [...autoOrderFields, ...extra];
   }, [autoOrderFields, orderFields]);
 
-  // orderby_clause sent to the backend.
-  const orderbyClause = useMemo(
-    () => effectiveOrderList.length > 0
-      ? `ORDER BY ${effectiveOrderList.join(', ')}`
-      : '',
-    [effectiveOrderList],
-  );
+  // orderby_clause sent to the backend. ASC is implicit so we only emit the DESC
+  // suffix when the user flipped that field — keeps the clause tidy and lets the
+  // backend sanitizer's token whitelist continue matching.
+  const orderbyClause = useMemo(() => {
+    if (effectiveOrderList.length === 0) return '';
+    const parts = effectiveOrderList.map((k) => orderDirs[k] === 'desc' ? `${k} DESC` : k);
+    return `ORDER BY ${parts.join(', ')}`;
+  }, [effectiveOrderList, orderDirs]);
+
+  // HAVING payload — only send entries for currently-selected STANDARD measures
+  // with a non-empty value. The hook serialises these into having[<key>][op/value]
+  // query params, which the controller validates against HAVING_EXPR.
+  const havingPayload = useMemo<Record<string, MeasureHavingFilter>>(() => {
+    const out: Record<string, MeasureHavingFilter> = {};
+    for (const [k, spec] of Object.entries(havingFilters)) {
+      if (!spec.value.trim()) continue;
+      if (!selectedMeasures.includes(k)) continue;
+      out[k] = { op: spec.op, value: spec.value.trim() };
+    }
+    return out;
+  }, [havingFilters, selectedMeasures]);
 
   const { data: explorer, isLoading, isFetching } = useProductionExplorer(
-    filters, backendDimensions, measures, timeComparisons, page, pageSize, partitionbyClause, orderbyClause,
+    filters, backendDimensions, measures, timeComparisons, page, pageSize, partitionbyClause, orderbyClause, havingPayload,
   );
 
   // ── Date options generated from filter stats ──────────────────────────────
@@ -1546,14 +1583,23 @@ export default function PivotDashboard() {
 
   // ── Sort toggle — maintains check order ──────────────────────────────────
 
+  // Sort button cycle: OFF → DESC → ASC → OFF. DESC is the first state because
+  // analysts usually want the highest values on top of a ranking list.
   const toggleOrderField = useCallback((key: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setOrderFields((prev) => {
-      if (prev.includes(key)) return prev.filter((k) => k !== key);
-      return [...prev, key];
-    });
+    const inList = orderFields.includes(key);
+    const dir    = orderDirs[key];
+    if (!inList) {
+      setOrderFields((prev) => [...prev, key]);
+      setOrderDirs((prev) => ({ ...prev, [key]: 'desc' }));
+    } else if (dir !== 'asc') {
+      setOrderDirs((prev) => ({ ...prev, [key]: 'asc' }));
+    } else {
+      setOrderFields((prev) => prev.filter((k) => k !== key));
+      setOrderDirs((prev) => { const n = { ...prev }; delete n[key]; return n; });
+    }
     setPage(1);
-  }, []);
+  }, [orderFields, orderDirs]);
 
   // ── Measure toggle ────────────────────────────────────────────────────────
 
@@ -1561,10 +1607,19 @@ export default function PivotDashboard() {
     setSelectedMeasures((prev) => {
       if (prev.includes(key)) {
         setOrderFields((of) => of.filter((k) => k !== key));
+        setOrderDirs((od) => { const n = { ...od }; delete n[key]; return n; });
+        setHavingFilters((hf) => { const n = { ...hf }; delete n[key]; return n; });
         return prev.filter((k) => k !== key);
       }
       return [...prev, key];
     });
+  }, []);
+
+  // HAVING filter update — keeps an empty-value row so the UI controls stay mounted
+  // between re-renders; the payload memo filters those out before sending to the API.
+  const setHavingFilter = useCallback((key: string, spec: { op: MeasureOp; value: string }) => {
+    setHavingFilters((prev) => ({ ...prev, [key]: spec }));
+    setPage(1);
   }, []);
 
   // ── Date filter mode switch ───────────────────────────────────────────────
@@ -2095,6 +2150,9 @@ export default function PivotDashboard() {
                   const active   = selectedMeasures.includes(measure.key);
                   const ordered  = orderFields.includes(measure.key);
                   const orderIdx = orderFields.indexOf(measure.key);
+                  const dir      = orderDirs[measure.key];
+                  const spec     = havingFilters[measure.key] ?? { op: '>=' as MeasureOp, value: '' };
+                  const isDate   = DATE_MEASURE_KEYS.has(measure.key);
                   return (
                     <li key={measure.key} className={`flex items-center gap-2 px-4 py-2.5 transition-colors border-l-2 ${active ? (ordered ? 'bg-accent-amber/5 border-accent-amber' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
                       {/* Select checkbox — div wrapper avoids button-in-button (Radix Checkbox renders as button) */}
@@ -2116,35 +2174,44 @@ export default function PivotDashboard() {
                             <p className={`text-[12px] font-medium ${active ? 'text-accent-blue' : 'text-text-primary'}`}>{measure.label}</p>
                             {ordered && (
                               <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
-                                sort #{orderIdx + 1}
+                                sort #{orderIdx + 1} {dir === 'desc' ? '↓' : '↑'}
                               </span>
                             )}
                           </div>
                           <p className="text-[10px] text-text-muted mt-0.5 font-mono">{measure.description}</p>
                         </div>
                       </div>
-                      {/* Sort button */}
+                      {/* HAVING op dropdown */}
+                      <div className="w-14 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Select
+                          value={spec.op}
+                          onChange={(op) => setHavingFilter(measure.key, { op: op as MeasureOp, value: spec.value })}
+                          options={MEASURE_OP_OPTIONS}
+                        />
+                      </div>
+                      {/* HAVING value input */}
+                      <Input
+                        value={spec.value}
+                        onChange={(e) => setHavingFilter(measure.key, { op: spec.op, value: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        placeholder={isDate ? 'YYYY-MM-DD' : '0'}
+                        className="w-20 h-7 text-[10px] flex-shrink-0"
+                      />
+                      {/* Direction-cycling sort button */}
                       <button
                         type="button"
                         onClick={(e) => {
                           if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
                           toggleOrderField(measure.key, e);
                         }}
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
+                        className={`flex-shrink-0 h-7 px-2 rounded-md border text-[11px] font-mono flex items-center justify-center transition-colors ${
                           ordered
                             ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
                             : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
                         }`}
-                        title="Include this measure in ORDER BY"
+                        title={`Sort by ${measure.label} — ${ordered ? (dir === 'desc' ? 'DESC' : 'ASC') : 'off'} (click to cycle)`}
                       >
-                        <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
-                          {ordered && (
-                            <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="1,4 3,6 7,1.5" />
-                            </svg>
-                          )}
-                        </span>
-                        Sort
+                        {ordered ? (dir === 'desc' ? '↓' : '↑') : '↕'}
                       </button>
                     </li>
                   );
@@ -2189,6 +2256,7 @@ export default function PivotDashboard() {
                         const on          = selectedMeasures.includes(m.key);
                         const ordered     = orderFields.includes(m.key);
                         const orderIdx    = orderFields.indexOf(m.key);
+                        const dir         = orderDirs[m.key];
                         const metricLabel = m.key.endsWith('_amt') ? 'tran_amt' : 'tran_count';
                         return (
                           <div key={m.key} className="flex items-center gap-1">
@@ -2212,32 +2280,25 @@ export default function PivotDashboard() {
                               <span className="font-mono">{metricLabel}</span>
                               {ordered && (
                                 <span className="text-[8px] font-bold px-1 rounded bg-accent-amber/20 text-accent-amber">
-                                  #{orderIdx + 1}
+                                  #{orderIdx + 1} {dir === 'desc' ? '↓' : '↑'}
                                 </span>
                               )}
                             </button>
-                            {/* Sort button */}
+                            {/* Direction-cycling sort button */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
                                 toggleOrderField(m.key, e);
                               }}
-                              className={`flex items-center gap-1 px-1.5 py-1 rounded-md border text-[9px] font-semibold transition-colors ${
+                              className={`h-6 px-1.5 rounded-md border text-[11px] font-mono flex items-center justify-center transition-colors ${
                                 ordered
                                   ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
                                   : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
                               }`}
-                              title={`Sort by ${m.label}`}
+                              title={`Sort by ${m.label} — ${ordered ? (dir === 'desc' ? 'DESC' : 'ASC') : 'off'} (click to cycle)`}
                             >
-                              <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
-                                {ordered && (
-                                  <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <polyline points="1,4 3,6 7,1.5" />
-                                  </svg>
-                                )}
-                              </span>
-                              ↕
+                              {ordered ? (dir === 'desc' ? '↓' : '↑') : '↕'}
                             </button>
                           </div>
                         );
