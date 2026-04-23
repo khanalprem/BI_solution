@@ -110,7 +110,7 @@ export default function UsersPage() {
             <table className="w-full text-[11px]">
               <thead className="border-b border-border bg-bg-base">
                 <tr>
-                  <th className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px]">Permission</th>
+                  <th className="px-4 py-2 text-left text-[10.5px] font-bold text-text-secondary uppercase tracking-[0.5px]">Permission</th>
                   {ROLES.map(r => (
                     <th key={r} className="px-3 py-2 text-center text-[9.5px] font-bold uppercase tracking-[0.5px]" style={{ color: roleColor(r) }}>
                       {ROLE_LABELS[r]}
@@ -193,7 +193,7 @@ export default function UsersPage() {
                 <thead className="border-b border-border bg-bg-base">
                   <tr>
                     {['Name', 'Email', 'Role', 'Status', 'Branch Access', 'Created', ''].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[10.5px] font-bold text-text-secondary uppercase tracking-[0.5px] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>

@@ -394,12 +394,12 @@ export default function RiskDashboard() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Account</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Total Amount</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Txn Count</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Z-Score</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Last Txn</th>
-                    <th className="text-center py-2 px-3 font-display font-semibold text-text-muted uppercase tracking-wider text-[9px]">Risk</th>
+                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Account</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Total Amount</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Txn Count</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Z-Score</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Last Txn</th>
+                    <th className="text-center py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Risk</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -67,7 +67,7 @@ export function TableRow({
 
 export function TableHeader({ children }: { children: React.ReactNode }) {
   return (
-    <th className="px-4 py-2 text-left text-[10px] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap">
+    <th className="px-4 py-2 text-left text-[11px] font-semibold text-text-secondary uppercase tracking-wider whitespace-nowrap">
       {children}
     </th>
   );

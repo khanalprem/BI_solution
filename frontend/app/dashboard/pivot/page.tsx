@@ -685,7 +685,7 @@ function HtdDetailPanel({
                   {displayColumns.map((col) => (
                     <th
                       key={col}
-                      className={`px-3 py-1.5 text-[9px] font-bold text-text-muted uppercase tracking-wider ${HTD_AMOUNT_COLS.has(col) ? 'text-right' : 'text-left'}`}
+                      className={`px-3 py-1.5 text-[10px] font-bold text-text-secondary uppercase tracking-wider ${HTD_AMOUNT_COLS.has(col) ? 'text-right' : 'text-left'}`}
                       style={{ background: 'var(--bg-base)' }}
                     >
                       {col.replaceAll('_', ' ')}
@@ -944,7 +944,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                 <th
                   key={k}
                   rowSpan={totalHeaderRows}
-                  className="px-4 py-2 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap border-r border-border"
+                  className="px-4 py-2 text-left text-[10.5px] font-bold text-text-secondary uppercase tracking-[0.5px] whitespace-nowrap border-r border-border"
                   style={{
                     position: 'sticky',
                     left: stickyLeft[i],

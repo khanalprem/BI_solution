@@ -15,10 +15,10 @@
   --border:         rgba(148,163,184,0.10);
   --border-strong:  rgba(148,163,184,0.20);
 
-  /* Text */
+  /* Text — dark theme. text-muted bumped to pass WCAG AA (7.5:1). */
   --text-primary:   #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-muted:     #475569;
+  --text-secondary: #CBD5E1;
+  --text-muted:     #94A3B8;
 
   /* Primary accent — indigo */
   --accent-blue:       #6366F1;
@@ -84,9 +84,10 @@
   --border:         rgba(15,23,42,0.08);
   --border-strong:  rgba(15,23,42,0.16);
 
+  /* text-muted bumped from #94A3B8 (2.8:1) to #64748B (4.8:1) — passes WCAG AA. */
   --text-primary:   #0F172A;
-  --text-secondary: #475569;
-  --text-muted:     #94A3B8;
+  --text-secondary: #334155;
+  --text-muted:     #64748B;
 
   /* Accent dims lightened for light bg */
   --accent-blue-dim:   rgba(99,102,241,0.08);
@@ -128,8 +129,8 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
   min-height: 100vh;
   /* Subtle noise grain for premium texture */
   background-image: var(--noise);
@@ -143,9 +144,12 @@ body {
   font-family: var(--font-display), system-ui, sans-serif;
 }
 
-/* Mono font for numeric values */
+/* Mono font for numeric values — tabular-nums keeps digit columns aligned
+   (critical for NPR amounts in dense pivot tables). */
 .font-mono {
   font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* Scrollbar */

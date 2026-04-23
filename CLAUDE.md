@@ -312,12 +312,15 @@ Pre-existing errors exist in `board/`, `branch/`, `customer/`, `executive/` page
 - Body text: Inter → `font-sans` (CSS var `--font-sans`)
 - Headings / KPI labels: Plus Jakarta Sans → `font-display` (CSS var `--font-display`)
 - Numeric cells / amounts: JetBrains Mono → `font-mono` (CSS var `--font-mono`)
+- `.font-mono` applies `font-variant-numeric: tabular-nums` + `letter-spacing: -0.01em` globally — do NOT override these (tabular-nums keeps NPR columns aligned across rows)
 - Use `font-mono text-xs` for numeric cells in tables (NOT `text-[11px]`)
+- Body font-size is **14px** (`globals.css`); Tailwind fontSize scale: `3xs=9/13` `2xs=11/15` `xs=12/16` `sm=13/19` `base=14/21` `lg=18/26` `xl=22/30` `2xl=28/36` `3xl=36/44` (size/line-height in px)
+- **Table headers (`<th>`)** use `text-text-secondary` (NOT `text-text-muted`) — muted is reserved for metadata/placeholders/axis labels, secondary is for structural labels like column headings
 
 **Design tokens** — always use Tailwind token classes, never `style={{ color: '...' }}`
 - Backgrounds: `bg-bg-base`, `bg-bg-surface`, `bg-bg-card`, `bg-bg-card-hover`, `bg-bg-input`
 - Borders: `border-border`, `border-border-strong`
-- Text: `text-text-primary`, `text-text-secondary`, `text-text-muted`
+- Text: `text-text-primary`, `text-text-secondary`, `text-text-muted` — all three tuned to pass WCAG AA in both themes (light muted = `#64748B` 4.8:1; dark muted = `#94A3B8` 7.5:1)
 - Accents: `text-accent-blue`, `bg-accent-blue-dim`, etc.
 
 **Color palette** (updated — indigo primary, not blue)

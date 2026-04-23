@@ -115,7 +115,7 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
               <div className="font-display text-sm font-bold tracking-tight leading-none">BankBI</div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-live-pulse flex-shrink-0" />
-                <span className="text-2xs text-text-muted tracking-wide uppercase">Live · Nepal · NPR</span>
+                <span className="text-[10px] text-text-muted tracking-wide uppercase">Live · Nepal · NPR</span>
               </div>
             </div>
           )}
@@ -473,9 +473,9 @@ export function Sidebar({ isOpen: isOpenProp, onClose }: SidebarProps) {
 
 function SidebarSection({ label, children, collapsed = false }: { label: string; children: React.ReactNode; collapsed?: boolean }) {
   return (
-    <div className="mb-0.5">
+    <div className="mb-1">
       {label && !collapsed && (
-        <div className="text-2xs font-bold tracking-[0.8px] text-text-muted uppercase px-4 pt-3.5 pb-1 select-none">
+        <div className="text-[10px] font-bold tracking-[0.8px] text-text-muted uppercase px-4 pt-4 pb-1.5 select-none">
           {label}
         </div>
       )}
@@ -506,7 +506,7 @@ function NavItem({
       href={href}
       onClick={onClick}
       className={`
-        flex items-center gap-2.5 py-[5px] mx-1 rounded-lg transition-all duration-150 relative select-none
+        flex items-center gap-2.5 py-[7px] mx-1 my-[1px] rounded-lg transition-all duration-150 relative select-none
         ${collapsed ? 'px-0 justify-center w-10 mx-auto' : 'px-3.5'}
         ${active
           ? 'bg-accent-blue/[0.13] text-text-primary font-semibold'
@@ -522,9 +522,9 @@ function NavItem({
           {icon}
         </span>
       )}
-      {!collapsed && <span className="truncate text-sm">{label}</span>}
+      {!collapsed && <span className="truncate text-[12px]">{label}</span>}
       {!collapsed && badge && (
-        <span className="ml-auto text-2xs font-bold bg-accent-red/15 text-accent-red px-1.5 py-[2px] rounded-full leading-none">
+        <span className="ml-auto text-[10px] font-bold bg-accent-red/15 text-accent-red px-1.5 py-[2px] rounded-full leading-none">
           {badge}
         </span>
       )}

@@ -208,7 +208,7 @@ export function RecordTable({ title, subtitle, columns, rows, actions }: RecordT
                 {shownCols.map(col => (
                   <th
                     key={col}
-                    className="px-4 py-2.5 text-left text-[9.5px] font-bold text-text-muted uppercase tracking-[0.5px] whitespace-nowrap"
+                    className="px-4 py-2.5 text-left text-[10.5px] font-bold text-text-secondary uppercase tracking-[0.5px] whitespace-nowrap"
                   >
                     {col.replaceAll('_', ' ')}
                   </th>

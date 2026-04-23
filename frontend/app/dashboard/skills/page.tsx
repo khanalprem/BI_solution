@@ -82,7 +82,7 @@ function ScrollTable({ headers, rows }: { headers: string[]; rows: (string | Rea
         <thead>
           <tr className="bg-bg-input border-b border-border">
             {headers.map((h) => (
-              <th key={h} className="px-4 py-2 text-[9.5px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">{h}</th>
+              <th key={h} className="px-4 py-2 text-[10.5px] font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
