@@ -187,22 +187,26 @@ RSpec.describe ProductionDataService, type: :service do
   # explorer_where_clause — TRAN-side categorical filter support
   # ─────────────────────────────────────────────────────────────────────────────
   describe '#explorer_where_clause' do
+    # Uses a real AR connection so @connection.quote works; the method itself
+    # only constructs a string (no procedure call, no DB round-trip).
+    let(:service_with_conn) { described_class.new(connection: ActiveRecord::Base.connection) }
+
     it 'emits IN clause for tran_branch filter' do
-      result = service.send(:explorer_where_clause,
+      result = service_with_conn.send(:explorer_where_clause,
         filters: { tran_branch: ['001', '002'] },
         start_date: nil, end_date: nil)
-      expect(result).to include("tran_branch IN ('001','002')")
+      expect(result).to include("tran_branch IN ('001', '002')")
     end
 
     it 'emits IN clause for tran_cluster filter' do
-      result = service.send(:explorer_where_clause,
+      result = service_with_conn.send(:explorer_where_clause,
         filters: { tran_cluster: ['north'] },
         start_date: nil, end_date: nil)
       expect(result).to include("tran_cluster IN ('north')")
     end
 
     it 'emits IN clause for tran_province filter' do
-      result = service.send(:explorer_where_clause,
+      result = service_with_conn.send(:explorer_where_clause,
         filters: { tran_province: ['Bagmati'] },
         start_date: nil, end_date: nil)
       expect(result).to include("tran_province IN ('Bagmati')")
