@@ -108,7 +108,7 @@ class ProductionDataService
     }
   }.freeze
 
-  LOOKUP_TYPES = %w[branch cluster gsh merchant product province service].freeze
+  LOOKUP_TYPES = %w[branch cluster gsh merchant product province service acctnum acid cifid user].freeze
 
   PROCEDURES = {
     'get_static_data' => 'Production lookup procedure used for static dimensions.',
@@ -390,6 +390,19 @@ class ProductionDataService
         data_type: type,
         rows: rows
       }
+    end
+  end
+
+  # Fetch a name/value lookup list from the `get_static_data` procedure.
+  # Returns [{ 'name' => ..., 'value' => ... }, ...]. Used by the shared
+  # filter_values endpoint to populate UI dropdowns with canonical labels.
+  def static_lookup(type)
+    type = type.to_s
+    raise ArgumentError, "Unsupported lookup type: #{type}" unless LOOKUP_TYPES.include?(type)
+
+    with_connection do
+      @connection.execute("CALL public.get_static_data(#{@connection.quote(type)})")
+      @connection.exec_query('SELECT name, value FROM static_data').to_a
     end
   end
 

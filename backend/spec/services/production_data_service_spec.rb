@@ -152,4 +152,61 @@ RSpec.describe ProductionDataService, type: :service do
     end
   end
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # static_lookup — procedure-backed filter dropdown source
+  # ─────────────────────────────────────────────────────────────────────────────
+  describe '#static_lookup' do
+    it 'calls the procedure and returns name/value rows' do
+      connection = double('connection')
+      allow(service).to receive(:with_connection) do |&block|
+        service.instance_variable_set(:@connection, connection)
+        block.call
+      end
+      allow(connection).to receive(:quote).with('branch').and_return("'branch'")
+      expect(connection).to receive(:execute).with("CALL public.get_static_data('branch')")
+      result_double = double('result', to_a: [{ 'name' => 'Kathmandu Main', 'value' => '001' }])
+      expect(connection).to receive(:exec_query)
+        .with('SELECT name, value FROM static_data')
+        .and_return(result_double)
+
+      expect(service.static_lookup('branch')).to eq([{ 'name' => 'Kathmandu Main', 'value' => '001' }])
+    end
+
+    it 'raises ArgumentError for unsupported type' do
+      expect { service.static_lookup('bogus') }.to raise_error(ArgumentError, /Unsupported lookup type/)
+    end
+
+    it 'accepts the newly-added user/acctnum/acid/cifid types' do
+      %w[acctnum acid cifid user].each do |type|
+        expect(described_class::LOOKUP_TYPES).to include(type)
+      end
+    end
+  end
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # explorer_where_clause — TRAN-side categorical filter support
+  # ─────────────────────────────────────────────────────────────────────────────
+  describe '#explorer_where_clause' do
+    it 'emits IN clause for tran_branch filter' do
+      result = service.send(:explorer_where_clause,
+        filters: { tran_branch: ['001', '002'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("tran_branch IN ('001','002')")
+    end
+
+    it 'emits IN clause for tran_cluster filter' do
+      result = service.send(:explorer_where_clause,
+        filters: { tran_cluster: ['north'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("tran_cluster IN ('north')")
+    end
+
+    it 'emits IN clause for tran_province filter' do
+      result = service.send(:explorer_where_clause,
+        filters: { tran_province: ['Bagmati'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("tran_province IN ('Bagmati')")
+    end
+  end
+
 end
