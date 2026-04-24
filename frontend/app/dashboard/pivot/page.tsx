@@ -160,6 +160,7 @@ interface DimensionFieldDef {
   fromKey?: keyof DashboardFilters;
   toKey?: keyof DashboardFilters;
   optionsKey?: keyof FilterValuesResponse;
+  staticOptions?: LookupOption[];
   description: string;
 }
 
@@ -201,7 +202,7 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical', filterKey: 'tranBranch',    optionsKey: 'branches',          description: 'Branch where the transaction was processed' },
   { key: 'tran_source',      label: 'TRAN Source',      type: 'text-multi',  filterKey: 'tranSource',    description: 'Transaction channel (free-text multi-value)' },
   { key: 'tran_type',        label: 'TRAN Type',        type: 'text-multi',  filterKey: 'tranType',      description: 'Transaction type code (free-text multi-value)' },
-  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'text-multi',  filterKey: 'partTranType',  description: 'Credit or debit side (free-text multi-value, typically CR / DR)' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  staticOptions: [{ name: 'CR', value: 'CR' }, { name: 'DR', value: 'DR' }], description: 'Credit or debit side — CR or DR' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
   { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',          type: 'categorical', filterKey: 'service',       optionsKey: 'services',          description: 'Service type applied to the transaction' },
@@ -1476,6 +1477,9 @@ export default function PivotDashboard() {
 
   const getOptions = useCallback(
     (field: DimensionFieldDef) => {
+      if (field.staticOptions) {
+        return field.staticOptions.map(({ name, value }) => ({ value, label: name }));
+      }
       if (field.optionsKey && filterValues) {
         const arr = filterValues[field.optionsKey] as LookupOption[] | undefined;
         return (arr ?? []).map(({ name, value }) => ({ value, label: name }));

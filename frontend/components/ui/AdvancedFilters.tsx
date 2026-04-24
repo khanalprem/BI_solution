@@ -34,9 +34,14 @@ type DropdownFilterKey =
   | 'tranCluster'
   | 'tranProvince';
 
-type ChipFilterKey = 'tranSource' | 'tranType' | 'partTranType';
+type ChipFilterKey = 'tranSource' | 'tranType';
 
-type AnyFilterKey = DropdownFilterKey | ChipFilterKey;
+const PART_TRAN_TYPE_OPTIONS = [
+  { value: 'CR', label: 'CR' },
+  { value: 'DR', label: 'DR' },
+];
+
+type AnyFilterKey = DropdownFilterKey | ChipFilterKey | 'partTranType';
 
 function asArray(value?: MultiValueFilter): string[] {
   if (!value) return [];
@@ -180,9 +185,21 @@ export function AdvancedFilters({
 
     const chipDefs: Array<{ key: ChipFilterKey; label: string }> = [
       { key: 'tranSource',   label: 'Channel' },
-      { key: 'partTranType', label: 'Part Type' },
       { key: 'tranType',     label: 'Transaction Type' },
     ];
+
+    asArray(filters.partTranType).forEach((selectedValue) => {
+      pills.push({
+        id: `partTranType-${selectedValue}`,
+        label: `Part Type: ${selectedValue}`,
+        onRemove: () => {
+          const next = asArray(filters.partTranType).filter((v) => v !== selectedValue);
+          const updated = { ...filters, partTranType: next.length > 0 ? next : undefined };
+          setDraft(updated);
+          onChange(updated);
+        },
+      });
+    });
 
     dropdownDefs.forEach(({ key, label, options }) => {
       asArray(filters[key]).forEach((selectedValue) => {
@@ -295,9 +312,10 @@ export function AdvancedFilters({
 
         <FilterLabel>Part Type</FilterLabel>
         <div className="min-w-0 w-full sm:min-w-[160px] sm:w-auto flex-1 sm:flex-none">
-          <MultiValueChipInput
+          <SearchableMultiSelect
             value={asArray(filters.partTranType)}
             onChange={(v) => setQuickFilter('partTranType', v)}
+            options={PART_TRAN_TYPE_OPTIONS}
             placeholder="CR / DR"
           />
         </div>

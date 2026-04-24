@@ -458,7 +458,7 @@ const DIMENSIONS = [
   { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
   { key: 'tran_source',      label: 'TRAN Source',        type: 'text-multi',  sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc. — free-text chip input (no dropdown)' },
   { key: 'tran_type',        label: 'TRAN Type',          type: 'text-multi',  sql: 'tran_type',         description: 'Transaction type code — free-text chip input, pivot-capable' },
-  { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'text-multi',  sql: 'part_tran_type',    description: 'Credit or debit side (CR / DR) — free-text chip input, pivot-capable' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side — static CR / DR dropdown, pivot-capable' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',        type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code — join to gsh for description — pivot-capable' },
   { key: 'product',          label: 'Product',            type: 'categorical', sql: 'product',           description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',            type: 'categorical', sql: 'service',           description: 'Service type applied to the transaction' },
