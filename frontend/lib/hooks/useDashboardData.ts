@@ -29,10 +29,13 @@ import type {
 
 function serializeFilterValue(value?: string | string[]): string | undefined {
   if (Array.isArray(value)) {
-    const normalized = value.map((v) => v.trim()).filter(Boolean);
+    const normalized = value
+      .map((v) => (v == null ? '' : String(v).trim()))
+      .filter(Boolean);
     return normalized.length > 0 ? normalized.join(',') : undefined;
   }
-  const normalized = value?.trim();
+  if (value == null) return undefined;
+  const normalized = String(value).trim();
   return normalized || undefined;
 }
 
