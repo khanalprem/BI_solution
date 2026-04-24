@@ -2,28 +2,20 @@ module Api
   module V1
     class FiltersController < BaseController
       def values
-        # Filter options returned to the UI. Only filters whose values produce
-        # SQL WHERE clauses downstream are included. District/municipality were
-        # always empty and scheme_type had no live WHERE support, so they were
-        # removed from the response to avoid populating dead dropdowns.
-        data = Rails.cache.fetch('filter_values_v2', expires_in: 1.hour) do
-          {
-            provinces: distinct_values(:gam_province),
-            branches: distinct_values(:gam_branch, limit: 100),
-            clusters: distinct_values(:gam_cluster),
-            solids: distinct_values(:gam_solid, limit: 100),
-            tran_types: distinct_values(:tran_type),
-            part_tran_types: distinct_values(:part_tran_type),
-            tran_sources: distinct_values(:tran_source),
-            products: distinct_values(:product, limit: 50),
-            services: distinct_values(:service, limit: 50),
-            merchants: distinct_values(:merchant, limit: 50),
-            gl_sub_head_codes: distinct_values(:gl_sub_head_code, limit: 100),
-            entry_users: distinct_values(:entry_user, limit: 50),
-            vfd_users: distinct_values(:vfd_user, limit: 50)
-          }
-        end
-        render json: data
+        svc = ProductionDataService.new
+        render json: {
+          branches:          svc.static_lookup('branch'),
+          clusters:          svc.static_lookup('cluster'),
+          provinces:         svc.static_lookup('province'),
+          gl_sub_head_codes: svc.static_lookup('gsh'),
+          products:          svc.static_lookup('product'),
+          services:          svc.static_lookup('service'),
+          merchants:         svc.static_lookup('merchant'),
+          acct_nums:         svc.static_lookup('acctnum'),
+          acids:             svc.static_lookup('acid'),
+          cif_ids:           svc.static_lookup('cifid'),
+          users:             svc.static_lookup('user')
+        }
       end
 
       def branches
@@ -52,9 +44,9 @@ module Api
         render json: branches
       end
 
-      # Cached: runs 7 aggregate queries which are expensive on large tables.
+      # Cached: runs aggregate queries which are expensive on large tables.
       def statistics
-        stats = Rails.cache.fetch('filter_statistics', expires_in: 30.minutes) do
+        stats = Rails.cache.fetch('filter_statistics_v2', expires_in: 30.minutes) do
           {
             date_range: {
               min: TranSummary.minimum(:tran_date),
@@ -67,21 +59,11 @@ module Api
             counts: {
               total_transactions: TranSummary.count,
               unique_accounts: TranSummary.distinct.count(:acct_num),
-              unique_customers: TranSummary.distinct.count(:cif_id),
-              provinces: TranSummary.distinct.count(:gam_province),
-              branches: TranSummary.distinct.count(:gam_branch)
+              unique_customers: TranSummary.distinct.count(:cif_id)
             }
           }
         end
         render json: stats
-      end
-
-      private
-
-      def distinct_values(column, limit: nil)
-        relation = TranSummary.where.not(column => [nil, '']).distinct.order(column)
-        relation = relation.limit(limit) if limit
-        relation.pluck(column).map(&:to_s)
       end
     end
   end
