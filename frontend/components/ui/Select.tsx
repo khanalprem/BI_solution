@@ -204,12 +204,20 @@ export function SearchableMultiSelect({
     };
   }, [isOpen]);
 
+  const RENDER_CAP = 500;
+
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return options;
 
     return options.filter((option) => option.label.toLowerCase().includes(normalizedQuery));
   }, [options, query]);
+
+  const visibleOptions = useMemo(
+    () => (filteredOptions.length > RENDER_CAP ? filteredOptions.slice(0, RENDER_CAP) : filteredOptions),
+    [filteredOptions],
+  );
+  const hiddenCount = filteredOptions.length - visibleOptions.length;
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
@@ -308,7 +316,7 @@ export function SearchableMultiSelect({
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-3 text-xs text-text-muted">No results found</div>
             ) : (
-              filteredOptions.map((option) => {
+              visibleOptions.map((option) => {
                 const checked = selectedSet.has(option.value);
 
                 return (
@@ -326,6 +334,11 @@ export function SearchableMultiSelect({
                   </label>
                 );
               })
+            )}
+            {hiddenCount > 0 && (
+              <div className="px-3 py-2 text-[10.5px] text-text-muted border-t border-border">
+                Showing first {visibleOptions.length.toLocaleString()} of {filteredOptions.length.toLocaleString()} — type to narrow results.
+              </div>
             )}
           </div>
 
