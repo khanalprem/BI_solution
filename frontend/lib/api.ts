@@ -5,7 +5,11 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  // 60s — production stored-procedure calls (get_tran_summary, get_deposit,
+  // get_tran_detail) can run several seconds on broad windows. Lowering this
+  // causes spurious AxiosError: timeout exceeded on the /deposits page
+  // when the default period covers multiple years of EAB history.
+  timeout: 60000,
 });
 
 // Request interceptor

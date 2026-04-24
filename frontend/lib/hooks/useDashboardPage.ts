@@ -9,6 +9,12 @@ export type DashboardPeriod = 'ALL' | '1D' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | 'PY
 
 interface UseDashboardPageOptions {
   extraFilters?: Partial<DashboardFilters>;
+  /**
+   * Initial period on first mount. Defaults to 'ALL'. Override for pages where
+   * the underlying query is expensive over multi-year windows — e.g. /deposits
+   * hits public.get_deposit which scans EAB × GAM × DATES and times out on ALL.
+   */
+  defaultPeriod?: DashboardPeriod;
 }
 
 /**
@@ -17,7 +23,7 @@ interface UseDashboardPageOptions {
  * Eliminates ~40 lines of boilerplate duplicated across 14 pages.
  */
 export function useDashboardPage(options: UseDashboardPageOptions = {}) {
-  const [period, setPeriod] = useState<DashboardPeriod>('ALL');
+  const [period, setPeriod] = useState<DashboardPeriod>(options.defaultPeriod ?? 'ALL');
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Default to production data range until filterStats loads
   const [filters, setFilters] = useState<DashboardFilters>({

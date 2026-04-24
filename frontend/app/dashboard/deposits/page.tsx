@@ -78,7 +78,12 @@ const PAGE_SIZE = 50;
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DepositsDashboard() {
-  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } = useDashboardPage();
+  // Default to YTD rather than ALL — get_deposit scans EAB × GAM × DATES and
+  // consistently times out on a 5-year window (ALL = full production data
+  // range). YTD gives a useful multi-month trend with sub-30s response times
+  // for typical sessions. Users can widen via the TopBar period selector.
+  const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, topBarProps } =
+    useDashboardPage({ defaultPeriod: 'YTD' });
 
   // ── Snapshot date: pin to end of selected window so KPI/top-lists read as
   // "balance as of the report end date". Fallback to startDate when endDate
@@ -166,8 +171,11 @@ export default function DepositsDashboard() {
   );
 
   // ── Ad-hoc breakdown explorer state (unchanged from previous implementation)
-  // Default to gam_branch so the explorer renders something useful on first load.
-  const [selectedDims, setSelectedDims] = useState<DepositDimKey[]>(['gam_branch']);
+  // Start empty so the explorer doesn't fire a 4th concurrent get_deposit call
+  // on mount — the overview section already shows the gam_branch breakdown.
+  // Users opt in by ticking dims, matching the pivot page's "pick to start"
+  // pattern.
+  const [selectedDims, setSelectedDims] = useState<DepositDimKey[]>([]);
   const [explorerPage, setExplorerPage] = useState(1);
 
   const toggleDim = (key: DepositDimKey) => {
@@ -224,7 +232,10 @@ export default function DepositsDashboard() {
   const explorerInitialLoad = (explorerLoading || explorerFetching) && !dimsMatch;
 
   const overviewLoading = branchLoading || trendLoading || topDepLoading;
-  const overviewError   = branchError  || trendError   || topDepError;
+  // Any-error flag for the single page-level hint below the KPI row. Each chart
+  // / table renders its own inline error state so a timeout on one query never
+  // blacks out the whole page.
+  const overviewAnyError = branchError || trendError || topDepError;
 
   return (
     <>
@@ -280,11 +291,11 @@ export default function DepositsDashboard() {
           />
         </div>
 
-        {overviewError && (
-          <div className="rounded-xl border border-accent-red/30 bg-accent-red/5 px-4 py-3 text-[11px] text-accent-red">
-            One or more overview queries failed. This usually means the deposit
-            query timed out on a broad date window — try narrowing the period
-            (e.g. a single month) or adding a branch / customer filter.
+        {overviewAnyError && (
+          <div className="rounded-xl border border-accent-amber/30 bg-accent-amber/5 px-4 py-3 text-[11px] text-accent-amber">
+            Some overview queries timed out. The page shows what loaded; narrow
+            the period (e.g. a single month) or add a branch / customer filter
+            to recover the rest.
           </div>
         )}
 
@@ -298,6 +309,14 @@ export default function DepositsDashboard() {
             {trendLoading ? (
               <div className="flex items-center justify-center h-[260px] text-[11px] text-text-muted">
                 Loading trend…
+              </div>
+            ) : trendError ? (
+              <div className="flex flex-col items-center justify-center gap-1 h-[260px] text-center px-4">
+                <p className="text-[11px] font-semibold text-accent-red">Trend query timed out</p>
+                <p className="text-[10.5px] text-text-muted max-w-[360px]">
+                  year_month × eab over a multi-year window is expensive.
+                  Narrow the period to load this chart.
+                </p>
               </div>
             ) : trendSeries.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-[11px] text-text-muted">
@@ -318,6 +337,13 @@ export default function DepositsDashboard() {
             {branchLoading ? (
               <div className="flex items-center justify-center h-[260px] text-[11px] text-text-muted">
                 Loading branches…
+              </div>
+            ) : branchError ? (
+              <div className="flex flex-col items-center justify-center gap-1 h-[260px] text-center px-4">
+                <p className="text-[11px] font-semibold text-accent-red">Branch query timed out</p>
+                <p className="text-[10.5px] text-text-muted max-w-[260px]">
+                  Try a narrower period or apply a branch filter.
+                </p>
               </div>
             ) : topBranches.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-[11px] text-text-muted">
@@ -357,6 +383,13 @@ export default function DepositsDashboard() {
           {topDepLoading ? (
             <div className="p-4">
               <StandardDashboardSkeleton />
+            </div>
+          ) : topDepError ? (
+            <div className="p-8 text-center space-y-2">
+              <p className="text-[12px] font-semibold text-accent-red">Top depositors query timed out</p>
+              <p className="text-[11px] text-text-muted max-w-md mx-auto">
+                cif_id × acct_name over the full account book is heavy. Try a narrower period or add a customer / branch filter.
+              </p>
             </div>
           ) : topDepositors.length === 0 ? (
             <div className="p-8 text-center text-[12px] text-text-muted">
