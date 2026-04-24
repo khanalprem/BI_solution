@@ -7,6 +7,14 @@ import { MultiValueChipInput } from './MultiValueChipInput';
 import { useFilterStatistics, useFilterValues } from '@/lib/hooks/useDashboardData';
 import { formatNPR, parseISODateToLocal } from '@/lib/formatters';
 import type { DashboardFilters, LookupOption, MultiValueFilter } from '@/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './dialog';
 
 interface AdvancedFiltersProps {
   filters: DashboardFilters;
@@ -375,103 +383,112 @@ export function AdvancedFilters({
         </div>
       )}
 
-      {showAdvanced && (
-        <div className="space-y-4 rounded-xl border border-border bg-bg-card p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-text-primary">Advanced Filters</h3>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Stage your selections below, then click <strong className="text-text-primary">Apply Filters</strong> to load results.
-              </p>
+      <Dialog open={showAdvanced} onOpenChange={setShowAdvanced}>
+        <DialogContent
+          className="max-w-4xl w-[95vw] max-h-[min(85vh,720px)] flex flex-col p-0 [&>div:first-child]:pr-10"
+        >
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <DialogTitle className="text-xs font-semibold uppercase tracking-[0.16em]">
+                  Advanced Filters
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-[11px] text-text-secondary">
+                  Stage your selections below, then click{' '}
+                  <strong className="text-text-primary">Apply Filters</strong> to load results.
+                </DialogDescription>
+              </div>
+              {hasPendingChanges && (
+                <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-accent-amber/30 bg-accent-amber/10 px-2.5 py-1 text-[10.5px] font-medium text-accent-amber">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-amber" />
+                  Unapplied changes
+                </span>
+              )}
             </div>
-            {hasPendingChanges && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-amber/30 bg-accent-amber/10 px-2.5 py-1 text-[10.5px] font-medium text-accent-amber">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-amber" />
-                Unapplied changes
-              </span>
-            )}
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <FilterLabel>Transaction Type</FilterLabel>
+                <MultiValueChipInput value={asArray(draft.tranType)} onChange={(v) => setDraftMulti('tranType', v)} placeholder="Add codes (Enter or ,)" />
+              </div>
+              <div>
+                <FilterLabel>Cluster</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.cluster)} onChange={(v) => setDraftMulti('cluster', v)} options={clusterOptions} placeholder="All clusters" />
+              </div>
+              <div>
+                <FilterLabel>Product</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.product)} onChange={(v) => setDraftMulti('product', v)} options={productOptions} placeholder="All products" />
+              </div>
+              <div>
+                <FilterLabel>Service</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.service)} onChange={(v) => setDraftMulti('service', v)} options={serviceOptions} placeholder="All services" />
+              </div>
+              <div>
+                <FilterLabel>Merchant</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.merchant)} onChange={(v) => setDraftMulti('merchant', v)} options={merchantOptions} placeholder="All merchants" />
+              </div>
+              <div>
+                <FilterLabel>GL Sub Head</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.glSubHeadCode)} onChange={(v) => setDraftMulti('glSubHeadCode', v)} options={glOptions} placeholder="All GL codes" />
+              </div>
+              <div>
+                <FilterLabel>Entry User</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.entryUser)} onChange={(v) => setDraftMulti('entryUser', v)} options={userOptions} placeholder="All entry users" />
+              </div>
+              <div>
+                <FilterLabel>Verified User</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.vfdUser)} onChange={(v) => setDraftMulti('vfdUser', v)} options={userOptions} placeholder="All verified users" />
+              </div>
+              <div>
+                <FilterLabel>TRAN Province</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.tranProvince)} onChange={(v) => setDraftMulti('tranProvince', v)} options={provinceOptions} placeholder="All TRAN provinces" />
+              </div>
+              <div>
+                <FilterLabel>TRAN Cluster</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.tranCluster)} onChange={(v) => setDraftMulti('tranCluster', v)} options={clusterOptions} placeholder="All TRAN clusters" />
+              </div>
+              <div>
+                <FilterLabel>TRAN Branch</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.tranBranch)} onChange={(v) => setDraftMulti('tranBranch', v)} options={branchOptions} placeholder="All TRAN branches" />
+              </div>
+              <div>
+                <FilterLabel>Account Number</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.acctNum)} onChange={(v) => setDraftMulti('acctNum', v)} options={acctNumOptions} placeholder="All accounts" />
+              </div>
+              <div>
+                <FilterLabel>CIF</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.cifId)} onChange={(v) => setDraftMulti('cifId', v)} options={cifIdOptions} placeholder="All CIFs" />
+              </div>
+              <div>
+                <FilterLabel>ACID</FilterLabel>
+                <SearchableMultiSelect value={asArray(draft.acid)} onChange={(v) => setDraftMulti('acid', v)} options={acidOptions} placeholder="All ACIDs" />
+              </div>
+              <div>
+                <FilterLabel>Min Amount (NPR)</FilterLabel>
+                <input
+                  type="number"
+                  value={draft.minAmount ?? ''}
+                  onChange={(e) => setDraftNumber('minAmount', e.target.value)}
+                  className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <FilterLabel>Max Amount (NPR)</FilterLabel>
+                <input
+                  type="number"
+                  value={draft.maxAmount ?? ''}
+                  onChange={(e) => setDraftNumber('maxAmount', e.target.value)}
+                  className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+                  placeholder="No limit"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <FilterLabel>Transaction Type</FilterLabel>
-              <MultiValueChipInput value={asArray(draft.tranType)} onChange={(v) => setDraftMulti('tranType', v)} placeholder="Add codes (Enter or ,)" />
-            </div>
-            <div>
-              <FilterLabel>Cluster</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.cluster)} onChange={(v) => setDraftMulti('cluster', v)} options={clusterOptions} placeholder="All clusters" />
-            </div>
-            <div>
-              <FilterLabel>Product</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.product)} onChange={(v) => setDraftMulti('product', v)} options={productOptions} placeholder="All products" />
-            </div>
-            <div>
-              <FilterLabel>Service</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.service)} onChange={(v) => setDraftMulti('service', v)} options={serviceOptions} placeholder="All services" />
-            </div>
-            <div>
-              <FilterLabel>Merchant</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.merchant)} onChange={(v) => setDraftMulti('merchant', v)} options={merchantOptions} placeholder="All merchants" />
-            </div>
-            <div>
-              <FilterLabel>GL Sub Head</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.glSubHeadCode)} onChange={(v) => setDraftMulti('glSubHeadCode', v)} options={glOptions} placeholder="All GL codes" />
-            </div>
-            <div>
-              <FilterLabel>Entry User</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.entryUser)} onChange={(v) => setDraftMulti('entryUser', v)} options={userOptions} placeholder="All entry users" />
-            </div>
-            <div>
-              <FilterLabel>Verified User</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.vfdUser)} onChange={(v) => setDraftMulti('vfdUser', v)} options={userOptions} placeholder="All verified users" />
-            </div>
-            <div>
-              <FilterLabel>TRAN Province</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.tranProvince)} onChange={(v) => setDraftMulti('tranProvince', v)} options={provinceOptions} placeholder="All TRAN provinces" />
-            </div>
-            <div>
-              <FilterLabel>TRAN Cluster</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.tranCluster)} onChange={(v) => setDraftMulti('tranCluster', v)} options={clusterOptions} placeholder="All TRAN clusters" />
-            </div>
-            <div>
-              <FilterLabel>TRAN Branch</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.tranBranch)} onChange={(v) => setDraftMulti('tranBranch', v)} options={branchOptions} placeholder="All TRAN branches" />
-            </div>
-            <div>
-              <FilterLabel>Account Number</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.acctNum)} onChange={(v) => setDraftMulti('acctNum', v)} options={acctNumOptions} placeholder="All accounts" />
-            </div>
-            <div>
-              <FilterLabel>CIF</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.cifId)} onChange={(v) => setDraftMulti('cifId', v)} options={cifIdOptions} placeholder="All CIFs" />
-            </div>
-            <div>
-              <FilterLabel>ACID</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.acid)} onChange={(v) => setDraftMulti('acid', v)} options={acidOptions} placeholder="All ACIDs" />
-            </div>
-            <div>
-              <FilterLabel>Min Amount (NPR)</FilterLabel>
-              <input
-                type="number"
-                value={draft.minAmount ?? ''}
-                onChange={(e) => setDraftNumber('minAmount', e.target.value)}
-                className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <FilterLabel>Max Amount (NPR)</FilterLabel>
-              <input
-                type="number"
-                value={draft.maxAmount ?? ''}
-                onChange={(e) => setDraftNumber('maxAmount', e.target.value)}
-                className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                placeholder="No limit"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-border pt-3">
+          <DialogFooter className="justify-between">
             <button
               type="button"
               onClick={handleClear}
@@ -502,9 +519,9 @@ export function AdvancedFilters({
                 Apply Filters
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
