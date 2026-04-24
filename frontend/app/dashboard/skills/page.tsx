@@ -860,6 +860,42 @@ export default function SkillsPage() {
           </div>
         </section>
 
+        {/* ── Supporting Procedures ────────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            label="Supporting Procedures (2)"
+            sub="Secondary procedures called by non-pivot endpoints. Both drop results into connection-scoped TEMP TABLEs, so callers must reuse the same DB connection."
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-border bg-bg-card p-5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1">Filter Dropdowns</p>
+              <p className="text-sm font-semibold text-text-primary mb-2">get_static_data(type)</p>
+              <pre className="text-[10.5px] leading-relaxed text-accent-green font-mono whitespace-pre-wrap bg-bg-input rounded-lg p-3 border border-border overflow-x-auto mb-3">{`CALL public.get_static_data('acid');
+SELECT name, value FROM static_data;`}</pre>
+              <p className="text-[10.5px] text-text-muted leading-relaxed">
+                Populates filter dropdowns. Called by <Mono>FiltersController#values</Mono> for each type: <Mono>branch, cluster, province, gsh, product, service, merchant, acctnum, acid, cifid, user</Mono>.
+                Returns <Mono>{'{'}name, value{'}'}</Mono> — UI displays <Mono>name</Mono> and submits <Mono>value</Mono>. Cached client-side with <Mono>staleTime: Infinity</Mono>.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-bg-card p-5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1">HTD Drill-down</p>
+              <p className="text-sm font-semibold text-text-primary mb-2">get_tran_detail(join_clause, page, page_size)</p>
+              <pre className="text-[10.5px] leading-relaxed text-accent-green font-mono whitespace-pre-wrap bg-bg-input rounded-lg p-3 border border-border overflow-x-auto mb-3">{`CALL public.get_tran_detail(
+  join_clause => 'g.acct_num=''100011''
+                 AND h.tran_date=''2024-02-19''',
+  page        => 1,
+  page_size   => 10
+);
+SELECT * FROM tran_detail;`}</pre>
+              <p className="text-[10.5px] text-text-muted leading-relaxed">
+                Raw ledger rows for pivot row-level drill-down. Joins <Mono>htd</Mono> ↔ <Mono>gam</Mono> ↔ <Mono>eab</Mono>, applies <Mono>ROW_NUMBER()</Mono> pagination, returns opening / running balances.
+                Called by <Mono>ProductionDataService#htd_detail</Mono> when the user clicks a pivot row or cell.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* ── Period Comparisons ───────────────────────────────────────────── */}
         <section>
           <SectionHeader
