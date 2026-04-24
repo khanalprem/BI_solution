@@ -403,12 +403,14 @@ class ProductionDataService
     with_connection do
       @connection.execute("CALL public.get_static_data(#{@connection.quote(type)})")
       rows = @connection.exec_query('SELECT name, value FROM static_data').to_a
-      rows.each_with_object([]) do |r, acc|
+      seen = {}
+      rows.each do |r|
         value = r['value'].to_s.strip
-        next if value.empty?
+        next if value.empty? || seen.key?(value)
         name = r['name'].to_s.strip
-        acc << { 'name' => name.empty? ? value : name, 'value' => value }
+        seen[value] = { 'name' => name.empty? ? value : name, 'value' => value }
       end
+      seen.values
     end
   end
 
