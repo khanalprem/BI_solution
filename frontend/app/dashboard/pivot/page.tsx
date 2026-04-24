@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { RecordTable } from '@/components/ui/RecordTable';
 import { SearchableMultiSelect, Select } from '@/components/ui/Select';
+import { MultiValueChipInput } from '@/components/ui/MultiValueChipInput';
 import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import {
   useFilterValues, useHtdDetail, useProductionCatalog, useProductionExplorer,
@@ -16,7 +17,7 @@ import { formatNPR } from '@/lib/formatters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse } from '@/types';
+import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, LookupOption } from '@/types';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -147,7 +148,7 @@ function HowItWorksPanel() {
 
 // ─── Dimension field definitions ──────────────────────────────────────────────
 
-type FieldType = 'categorical' | 'text' | 'date' | 'month' | 'quarter' | 'year' | 'measure_dim';
+type FieldType = 'categorical' | 'text' | 'text-multi' | 'date' | 'month' | 'quarter' | 'year' | 'measure_dim';
 type DateFilterMode = 'single' | 'range' | 'multi';
 
 interface DimensionFieldDef {
@@ -186,28 +187,28 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'gam_province',     label: 'GAM Province',     type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch (GAM)' },
   { key: 'gam_cluster',      label: 'GAM Cluster',      type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Account branch cluster (GAM)' },
   { key: 'gam_branch',       label: 'GAM Branch',       type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Account registration branch (GAM)' },
-  { key: 'cif_id',           label: 'CIF Id',           type: 'text',        filterKey: 'cifId',         description: 'Full or partial customer CIF ID (ILIKE search)' },
-  { key: 'acid',             label: 'ACID',             type: 'text',                                    description: 'Internal account identifier' },
-  { key: 'acct_num',         label: 'ACCT Num',         type: 'text',        filterKey: 'acctNum',       description: 'Account number (exact match)' },
-  { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name' },
+  { key: 'cif_id',           label: 'CIF Id',           type: 'categorical', filterKey: 'cifId',         optionsKey: 'cif_ids',           description: 'Customer CIF ID' },
+  { key: 'acid',             label: 'ACID',             type: 'categorical', filterKey: 'acid',          optionsKey: 'acids',             description: 'Internal account identifier' },
+  { key: 'acct_num',         label: 'ACCT Num',         type: 'categorical', filterKey: 'acctNum',       optionsKey: 'acct_nums',         description: 'Account number' },
+  { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name (partial match)' },
   { key: 'tran_date_bal',    label: 'TRAN Date Balance', type: 'text',                                   description: 'Balance snapshot from EAB — renders under pivoted headings as a value column; requires a date dimension' },
   { key: 'eod_balance',      label: 'GAM Balance',      type: 'text',                                    description: 'Current balance from GAM — static per account (does not vary by date); requires an account identifier' },
 
   // ── Transaction (geo, then channel / type, then accounting / product) ────
-  { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical',                             description: 'Province of the transaction branch' },
-  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical',                             description: 'Transaction branch cluster' },
-  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical',                             description: 'Branch where the transaction was processed' },
-  { key: 'tran_source',      label: 'TRAN Source',      type: 'categorical', filterKey: 'tranSource',    optionsKey: 'tran_sources',      description: 'Transaction channel (mobile / internet / branch)' },
-  { key: 'tran_type',        label: 'TRAN Type',        type: 'categorical',                             description: 'Transaction type code' },
-  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  optionsKey: 'part_tran_types',   description: 'Credit or debit side of the transaction (CR / DR)' },
+  { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical', filterKey: 'tranProvince',  optionsKey: 'provinces',         description: 'Province of the transaction branch' },
+  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical', filterKey: 'tranCluster',   optionsKey: 'clusters',          description: 'Transaction branch cluster' },
+  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical', filterKey: 'tranBranch',    optionsKey: 'branches',          description: 'Branch where the transaction was processed' },
+  { key: 'tran_source',      label: 'TRAN Source',      type: 'text-multi',  filterKey: 'tranSource',    description: 'Transaction channel (free-text multi-value)' },
+  { key: 'tran_type',        label: 'TRAN Type',        type: 'text-multi',  filterKey: 'tranType',      description: 'Transaction type code (free-text multi-value)' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'text-multi',  filterKey: 'partTranType',  description: 'Credit or debit side (free-text multi-value, typically CR / DR)' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
   { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',          type: 'categorical', filterKey: 'service',       optionsKey: 'services',          description: 'Service type applied to the transaction' },
   { key: 'merchant',         label: 'Merchant',         type: 'categorical', filterKey: 'merchant',      optionsKey: 'merchants',         description: 'Merchant identifier for payment transactions' },
 
   // ── User ─────────────────────────────────────────────────────────────────
-  { key: 'entry_user',       label: 'ENTRY User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'entry_users',       description: 'User who entered the transaction' },
-  { key: 'vfd_user',         label: 'VFD User',         type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'vfd_users',         description: 'User who verified the transaction' },
+  { key: 'entry_user',       label: 'ENTRY User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'users',             description: 'User who entered the transaction' },
+  { key: 'vfd_user',         label: 'VFD User',         type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'users',             description: 'User who verified the transaction' },
 ];
 
 // ─── Measure definitions ──────────────────────────────────────────────────────
@@ -352,9 +353,10 @@ function padDateOnBlur(value: string, type: DateLikeType): string {
 // ─── Type badge styling ───────────────────────────────────────────────────────
 
 const TYPE_BADGE: Record<FieldType, { label: string; cls: string }> = {
-  categorical: { label: 'list',    cls: 'bg-accent-blue/10 text-accent-blue border-accent-blue/20' },
-  text:        { label: 'text',    cls: 'bg-accent-green/10 text-accent-green border-accent-green/20' },
-  date:        { label: 'date',    cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
+  categorical:  { label: 'list',    cls: 'bg-accent-blue/10 text-accent-blue border-accent-blue/20' },
+  text:         { label: 'text',    cls: 'bg-accent-green/10 text-accent-green border-accent-green/20' },
+  'text-multi': { label: 'chips',   cls: 'bg-accent-green/10 text-accent-green border-accent-green/20' },
+  date:         { label: 'date',    cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
   month:       { label: 'month',   cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
   quarter:     { label: 'quarter', cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
   year:        { label: 'year',    cls: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
@@ -1473,7 +1475,8 @@ export default function PivotDashboard() {
   const getOptions = useCallback(
     (field: DimensionFieldDef) => {
       if (field.optionsKey && filterValues) {
-        return (filterValues[field.optionsKey] as string[]).filter(Boolean).map((v) => ({ value: v, label: v }));
+        const arr = filterValues[field.optionsKey] as LookupOption[] | undefined;
+        return (arr ?? []).map(({ name, value }) => ({ value, label: name }));
       }
       if (field.type === 'month')   return dateOptions.months;
       if (field.type === 'quarter') return dateOptions.quarters;
@@ -2099,6 +2102,27 @@ export default function PivotDashboard() {
                               {!selectedDimensions.includes(field.key) && (
                                 <p className="text-[9.5px] text-text-muted mt-1">
                                   Typing will also add <span className="font-semibold text-text-secondary">{field.label}</span> as a GROUP BY dimension.
+                                </p>
+                              )}
+                            </>
+                          )}
+
+                          {/* Text-multi → free-text chip input (tran_source / tran_type / part_tran_type) */}
+                          {field.type === 'text-multi' && (
+                            <>
+                              <MultiValueChipInput
+                                value={getMultiValue(field)}
+                                onChange={(vals) => {
+                                  setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined);
+                                  if (vals.length > 0 && !selectedDimensions.includes(field.key)) {
+                                    setSelectedDimensions((prev) => [...prev, field.key]);
+                                  }
+                                }}
+                                placeholder={`Add ${field.label.toLowerCase()} (Enter or ,)`}
+                              />
+                              {!selectedDimensions.includes(field.key) && (
+                                <p className="text-[9.5px] text-text-muted mt-1">
+                                  Adding a value will also add <span className="font-semibold text-text-secondary">{field.label}</span> as a GROUP BY dimension.
                                 </p>
                               )}
                             </>
