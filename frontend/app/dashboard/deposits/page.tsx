@@ -95,8 +95,22 @@ export default function DepositsDashboard() {
     PAGE_SIZE,
   );
 
-  const rows   = data?.rows   ?? [];
-  const total  = data?.total_rows ?? 0;
+  // `data` may contain stale rows from a previous query (placeholderData keeps the
+  // table from flashing during pagination). Guard against that when the user
+  // changes dims: if the backend's dims don't match what's currently selected,
+  // treat the response as "not for us" so we don't render rows whose columns
+  // aren't bound to the active selection (e.g. ACCT Num showing "—" because
+  // the previous query only grouped by GAM Branch).
+  const dimsMatch = useMemo(() => {
+    if (!data) return false;
+    const a = data.dimensions ?? [];
+    if (a.length !== orderedDims.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== orderedDims[i]) return false;
+    return true;
+  }, [data, orderedDims]);
+
+  const rows   = dimsMatch ? data!.rows : [];
+  const total  = dimsMatch ? data!.total_rows : 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Page-local total so the KPI card reflects the current view. The procedure
@@ -114,7 +128,9 @@ export default function DepositsDashboard() {
       rows as unknown as Record<string, unknown>[]);
   };
 
-  const initialLoad = isLoading && !data;
+  // "Initial load" — we have nothing to show. Also triggers when the dims
+  // changed and the new query is still in flight (stale prev is discarded).
+  const initialLoad = (isLoading || isFetching) && !dimsMatch;
 
   return (
     <>
@@ -248,9 +264,18 @@ export default function DepositsDashboard() {
                 <StandardDashboardSkeleton />
               </div>
             ) : isError ? (
-              <div className="p-8 text-center text-[12px] text-accent-red">
-                Failed to load deposits
-                {error instanceof Error ? `: ${error.message}` : '.'}
+              <div className="p-8 text-center space-y-2">
+                <p className="text-[12px] font-semibold text-accent-red">Failed to load deposits.</p>
+                <p className="text-[11px] text-text-muted max-w-md mx-auto leading-relaxed">
+                  The deposit query can time out when a broad date range is combined with
+                  high-cardinality dimensions like <code className="font-mono text-[10px]">ACCT Num</code>{' '}
+                  or <code className="font-mono text-[10px]">ACID</code>.
+                  Try narrowing the period (e.g. a single month) or adding a branch /
+                  customer filter before re-running.
+                </p>
+                {error instanceof Error && (
+                  <p className="text-[10px] text-text-muted font-mono">{error.message}</p>
+                )}
               </div>
             ) : rows.length === 0 ? (
               <div className="p-8 text-center text-[12px] text-text-muted">
@@ -280,7 +305,7 @@ export default function DepositsDashboard() {
                         const r = row as Record<string, unknown>;
                         const deposit = coerceNumber(r.deposit);
                         return (
-                          <tr key={i} className="hover:bg-row-hover border-b border-border/60">
+                          <tr key={i} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
                             {orderedDims.map((k) => (
                               <td key={k} className="px-3 py-2 text-text-primary whitespace-nowrap">
                                 {formatDimCell(r[k])}
