@@ -66,6 +66,30 @@ module Api
         )
       end
 
+      def deposits
+        explicit_start = parse_date(param_value(:start_date, :startDate))
+        explicit_end   = parse_date(param_value(:end_date,   :endDate))
+        raw_dims       = param_value(:dimensions, :dimension)
+        dimensions     = Array.wrap(parse_multi_value_param(raw_dims))
+        dimensions     = ['gam_branch'] if dimensions.empty?
+
+        # Sanitize against the deposit-side whitelist (smaller than the pivot one —
+        # only dims/functions that appear inside get_deposit are valid).
+        partitionby_clause = sanitize_deposit_clause(params[:partitionby_clause].to_s.strip)
+        orderby_clause     = sanitize_deposit_clause(params[:orderby_clause].to_s.strip)
+
+        render json: production_service.deposit_explorer(
+          start_date:         explicit_start,
+          end_date:           explicit_end,
+          dimensions:         dimensions,
+          filters:            filter_params,
+          partitionby_clause: partitionby_clause,
+          orderby_clause:     orderby_clause,
+          page:               params[:page],
+          page_size:          params[:page_size]
+        )
+      end
+
       def htd_detail
         explicit_start = parse_date(param_value(:start_date, :startDate))
         explicit_end   = parse_date(param_value(:end_date, :endDate))
@@ -152,6 +176,26 @@ module Api
           return ''
         end
 
+        raw
+      end
+
+      # Tighter whitelist for /production/deposits — only deposit-side dim keys,
+      # SQL keywords, and the single aggregate the procedure itself emits.
+      DEPOSIT_ALLOWED_FUNCS = %w[SUM].freeze
+
+      def sanitize_deposit_clause(raw)
+        return '' if raw.blank?
+        valid = ProductionDataService::DEPOSIT_DIMENSIONS.keys + %w[deposit tran_date_bal e]
+
+        tokens = raw.gsub(/[();.]/, ' ').split(/[\s,]+/).reject(&:blank?)
+        tokens.each do |token|
+          next if ALLOWED_SQL_TOKENS.include?(token.upcase)
+          next if valid.include?(token)
+          next if DEPOSIT_ALLOWED_FUNCS.include?(token.upcase)
+          next if token.match?(/\A\d+\z/)
+          Rails.logger.warn("Rejected deposit clause due to unknown token: #{token.inspect}")
+          return ''
+        end
         raw
       end
 

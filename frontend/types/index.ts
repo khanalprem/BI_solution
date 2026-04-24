@@ -360,6 +360,26 @@ export interface ProductionExplorerResponse {
   };
 }
 
+export interface DepositExplorerResponse {
+  dimensions: string[];
+  rows: Array<Record<string, string | number | null>>;
+  total_rows: number;
+  page: number;
+  page_size: number;
+  sql_preview: {
+    select_clause:      string;
+    groupby_clause:     string;
+    partitionby_clause: string;
+    orderby_clause:     string;
+    gam_where:          string;
+    date_where:         string;
+    date_join:          string;
+    branch_where:       string;
+    province_where:     string;
+    cluster_where:      string;
+  };
+}
+
 export interface HtdDetailResponse {
   columns: string[];
   rows: Array<Record<string, string | number | null>>;

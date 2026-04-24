@@ -12,6 +12,7 @@ import type {
   EmployerSummaryData,
   ExecutiveDashboardData,
   FilterStatisticsResponse,
+  DepositExplorerResponse,
   FilterValuesResponse,
   FinancialSummaryData,
   HtdDetailResponse,
@@ -265,6 +266,39 @@ export function useProductionExplorer(
     enabled: dimensions.length > 0,
     staleTime: 60 * 1000,
     retry: 1, // Limit retries — explorer queries can be expensive stored procedure calls
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useDeposits(
+  filters: DashboardFilters,
+  dimensions: string[],
+  page = 1,
+  pageSize = 25,
+  partitionbyClause = '',
+  orderbyClause = '',
+) {
+  const params = useMemo(
+    () => ({
+      ...toApiFilters(filters),
+      dimensions: dimensions.join(','),
+      ...(partitionbyClause ? { partitionby_clause: partitionbyClause } : {}),
+      ...(orderbyClause     ? { orderby_clause:     orderbyClause }     : {}),
+      page,
+      page_size: pageSize,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, JSON.stringify(dimensions), partitionbyClause, orderbyClause, page, pageSize],
+  );
+  return useQuery<DepositExplorerResponse>({
+    queryKey: ['deposit-explorer', params],
+    queryFn: async () => {
+      const { data } = await apiClient.get<DepositExplorerResponse>('/production/deposits', { params });
+      return data;
+    },
+    enabled: dimensions.length > 0,
+    staleTime: 60 * 1000,
+    retry: 1,
     placeholderData: (prev) => prev,
   });
 }

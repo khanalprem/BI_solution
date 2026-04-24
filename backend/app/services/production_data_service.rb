@@ -154,6 +154,28 @@ class ProductionDataService
     'eod_balance'      => { label: 'GAM Balance',        sql: 'eod_balance' }
   }.freeze
 
+  # Dimensions available to the Deposit Portfolio report (driven by `public.get_deposit`).
+  # The procedure joins gam g → eab e → dates d → branch b → province p → cluster c,
+  # so every dim's sql references one of those aliases. date_join is the ON-clause
+  # fragment that restricts `dates` rows to the matching period-end row (empty for
+  # daily tran_date — the caller's date_where already pins a single day there).
+  DEPOSIT_DIMENSIONS = {
+    'gam_branch'   => { label: 'GAM Branch',   sql: 'b.branch_name' },
+    'gam_province' => { label: 'GAM Province', sql: 'p.name' },
+    'gam_cluster'  => { label: 'GAM Cluster',  sql: 'c.cluster_name' },
+    'acct_num'     => { label: 'ACCT Num',     sql: 'g.acct_num' },
+    'acct_name'    => { label: 'ACCT Name',    sql: 'g.acct_name' },
+    'acid'         => { label: 'ACID',         sql: 'g.acid' },
+    'cif_id'       => { label: 'CIF Id',       sql: 'g.cif_id' },
+    'tran_date'    => { label: 'Date',         sql: 'd.date',         date_join: '' },
+    'year_month'   => { label: 'Year Month',   sql: 'd.year_month',   date_join: 'AND d.date = d.month_enddate' },
+    'year_quarter' => { label: 'Year Quarter', sql: 'd.year_quarter', date_join: 'AND d.date = d.quarter_enddate' },
+    'year'         => { label: 'Year',         sql: 'd.year',         date_join: 'AND d.date = d.year_enddate' }
+  }.freeze
+
+  # Priority when multiple date dims are selected — finest grain wins.
+  DEPOSIT_DATE_DIM_PRIORITY = %w[tran_date year_month year_quarter year].freeze
+
   # When one of these coarse date dimensions is in the GROUP BY, we inject the
   # matching period-end column into the inner SELECT + GROUP BY so the EAB outer
   # join can reference tb2.<enddate> as its as-of date. This makes the balance
@@ -955,6 +977,89 @@ class ProductionDataService
     }
   end
 
+  # Deposit Portfolio report — wraps `public.get_deposit(...)`.
+  #
+  # The procedure sums `eab.tran_date_bal` across a gam → eab → dates → branch → province → cluster
+  # join. The caller supplies the SELECT/GROUP BY/PARTITION BY/ORDER BY clauses plus five ON-clause
+  # fragments (one per joined table). Only date-related filters may remain unset — every other
+  # filter becomes an optional AND-prefixed fragment. date_where MUST always produce a non-empty
+  # string (the procedure's ON clause has no fallback), so we default to the full start→end range.
+  def deposit_explorer(start_date: nil, end_date: nil, dimensions:, filters:, partitionby_clause: '', orderby_clause: '', page: 1, page_size: 10)
+    calc_end_date   = end_date   || Date.today
+    calc_start_date = start_date || calc_end_date
+
+    dim_keys = Array(dimensions).filter_map { |d| d.to_s if DEPOSIT_DIMENSIONS.key?(d.to_s) }
+    dim_keys = ['gam_branch'] if dim_keys.empty?
+
+    dim_selects = dim_keys.map { |k| "#{DEPOSIT_DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
+    dim_sqls    = dim_keys.map { |k| DEPOSIT_DIMENSIONS.fetch(k).fetch(:sql) }
+
+    select_clause      = "SELECT #{dim_selects.join(', ')}"
+    groupby_clause     = "GROUP BY #{dim_sqls.join(', ')}"
+    partitionby_clause = partitionby_clause.to_s.strip
+    default_orderby    = 'ORDER BY sum(e.tran_date_bal) DESC'
+    orderby_clause     = orderby_clause.to_s.strip.presence || default_orderby
+
+    # Finest-grained date dim in the selection controls `date_join`. tran_date pins a
+    # specific day (date_join empty); coarse dims (year_month/quarter/year) rejoin on
+    # the matching period-end column so we get one balance snapshot per period.
+    active_date_dim = DEPOSIT_DATE_DIM_PRIORITY.find { |k| dim_keys.include?(k) }
+    date_join = active_date_dim ? DEPOSIT_DIMENSIONS.fetch(active_date_dim).fetch(:date_join, '') : ''
+
+    date_where     = build_deposit_date_where(filters: filters, start_date: calc_start_date, end_date: calc_end_date)
+    gam_where      = build_deposit_gam_where(filters: filters)
+    branch_where   = build_deposit_branch_where(filters: filters)
+    province_where = build_deposit_province_where(filters: filters)
+    cluster_where  = build_deposit_cluster_where(filters: filters)
+
+    normalized_page      = [page.to_i, 1].max
+    normalized_page_size = [[page_size.to_i, 1].max, 200].min
+
+    conn = ActiveRecord::Base.connection
+    conn.execute('DROP TABLE IF EXISTS deposit')
+    conn.execute(<<~SQL.squish)
+      CALL public.get_deposit(
+        #{conn.quote(select_clause)},
+        #{conn.quote(groupby_clause)},
+        #{conn.quote(partitionby_clause)},
+        #{conn.quote(orderby_clause)},
+        #{conn.quote(gam_where)},
+        #{conn.quote(date_where)},
+        #{conn.quote(date_join)},
+        #{conn.quote(branch_where)},
+        #{conn.quote(province_where)},
+        #{conn.quote(cluster_where)},
+        #{normalized_page},
+        #{normalized_page_size}
+      )
+    SQL
+
+    rows = conn.exec_query('SELECT * FROM deposit').to_a
+    first = rows.first
+    total_rows = (first&.[]('pivoted_totalrows') || first&.[]('total_rows') || rows.length).to_i
+    sanitized_rows = rows.map { |r| r.except('rn', 'RN', 'total_rows', 'pivoted_totalrows') }
+
+    {
+      dimensions: dim_keys,
+      rows: sanitized_rows,
+      page: normalized_page,
+      page_size: normalized_page_size,
+      total_rows: total_rows,
+      sql_preview: {
+        select_clause:      select_clause,
+        groupby_clause:     groupby_clause,
+        partitionby_clause: partitionby_clause,
+        orderby_clause:     orderby_clause,
+        gam_where:          gam_where,
+        date_where:         date_where,
+        date_join:          date_join,
+        branch_where:       branch_where,
+        province_where:     province_where,
+        cluster_where:      cluster_where
+      }
+    }
+  end
+
   private
 
   def table_summaries
@@ -1406,6 +1511,83 @@ class ProductionDataService
 
   def quoted_values(values)
     Array(values).map { |value| @connection.quote(value) }.join(', ')
+  end
+
+  # ── Deposit explorer clause builders ─────────────────────────────────────
+  # Each returns a string ready to splice into the stored procedure's ON-clause
+  # slot. Branch/province/cluster/gam slots expect an "AND ..." prefix (or empty
+  # string); date_where is the primary predicate and must never be empty.
+
+  def build_deposit_date_where(filters:, start_date:, end_date:)
+    td_exact = normalize_filter_values(filters[:tran_date])
+    if td_exact.any?
+      return td_exact.length == 1 \
+        ? "d.date = #{@connection.quote(td_exact.first)}" \
+        : "d.date IN (#{quoted_values(td_exact)})"
+    end
+
+    td_from = filters[:tran_date_from].to_s.strip.presence
+    td_to   = filters[:tran_date_to].to_s.strip.presence
+    if td_from || td_to
+      from = td_from || start_date.to_s
+      to   = td_to   || end_date.to_s
+      return "d.date BETWEEN #{@connection.quote(from)} AND #{@connection.quote(to)}"
+    end
+
+    "d.date BETWEEN #{@connection.quote(start_date.to_s)} AND #{@connection.quote(end_date.to_s)}"
+  end
+
+  def build_deposit_gam_where(filters:)
+    clauses = []
+
+    acct_num = normalize_filter_values(filters[:acct_num])
+    clauses << "g.acct_num::text IN (#{quoted_values(acct_num)})" if acct_num.any?
+
+    acid = normalize_filter_values(filters[:acid])
+    clauses << "g.acid::text IN (#{quoted_values(acid)})" if acid.any?
+
+    cif_id = normalize_filter_values(filters[:cif_id])
+    if cif_id.any?
+      patterns = cif_id.map { |v| "%#{ActiveRecord::Base.sanitize_sql_like(v)}%" }
+      ors = patterns.map { |p| "g.cif_id::text ILIKE #{@connection.quote(p)}" }
+      clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
+    end
+
+    acct_name = normalize_filter_values(filters[:acct_name])
+    if acct_name.any?
+      patterns = acct_name.map { |v| "%#{ActiveRecord::Base.sanitize_sql_like(v)}%" }
+      ors = patterns.map { |p| "g.acct_name ILIKE #{@connection.quote(p)}" }
+      clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
+    end
+
+    clauses.any? ? "AND #{clauses.join(' AND ')}" : ''
+  end
+
+  def build_deposit_branch_where(filters:)
+    clauses = []
+
+    # filters[:branch] uses sol_id values (from static_data type='branch').
+    branch = normalize_filter_values(filters[:branch])
+    clauses << "g.sol_id::text IN (#{quoted_values(branch)})" if branch.any?
+
+    # filters[:solid] is a legacy alias; union with branch when present.
+    solid = normalize_filter_values(filters[:solid])
+    clauses << "g.sol_id::text IN (#{quoted_values(solid)})" if solid.any?
+
+    clauses.any? ? "AND #{clauses.join(' AND ')}" : ''
+  end
+
+  def build_deposit_province_where(filters:)
+    values = normalize_filter_values(filters[:province])
+    return '' if values.empty?
+    "AND p.name IN (#{quoted_values(values)})"
+  end
+
+  def build_deposit_cluster_where(filters:)
+    values = normalize_filter_values(filters[:cluster])
+    return '' if values.empty?
+    # filters[:cluster] uses cluster_id values (from static_data type='cluster').
+    "AND b.cluster_id::text IN (#{quoted_values(values)})"
   end
 
   def normalize_filter_values(value)

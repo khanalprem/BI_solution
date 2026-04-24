@@ -863,10 +863,10 @@ export default function SkillsPage() {
         {/* ── Supporting Procedures ────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Supporting Procedures (2)"
-            sub="Secondary procedures called by non-pivot endpoints. Both drop results into connection-scoped TEMP TABLEs, so callers must reuse the same DB connection."
+            label="Supporting Procedures (3)"
+            sub="Secondary procedures called by non-pivot endpoints. All three drop results into connection-scoped TEMP TABLEs, so callers must reuse the same DB connection."
           />
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-border bg-bg-card p-5">
               <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1">Filter Dropdowns</p>
               <p className="text-sm font-semibold text-text-primary mb-2">get_static_data(type)</p>
@@ -891,6 +891,31 @@ SELECT * FROM tran_detail;`}</pre>
               <p className="text-[10.5px] text-text-muted leading-relaxed">
                 Raw ledger rows for pivot row-level drill-down. Joins <Mono>htd</Mono> ↔ <Mono>gam</Mono> ↔ <Mono>eab</Mono>, applies <Mono>ROW_NUMBER()</Mono> pagination, returns opening / running balances.
                 Called by <Mono>ProductionDataService#htd_detail</Mono> when the user clicks a pivot row or cell.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-bg-card p-5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1">Deposit Portfolio</p>
+              <p className="text-sm font-semibold text-text-primary mb-2">get_deposit(select_clause, groupby_clause, partitionby_clause, orderby_clause, gam_where, date_where, date_join, branch_where, province_where, cluster_where, page, page_size)</p>
+              <pre className="text-[10.5px] leading-relaxed text-accent-green font-mono whitespace-pre-wrap bg-bg-input rounded-lg p-3 border border-border overflow-x-auto mb-3">{`CALL public.get_deposit(
+  select_clause      => 'SELECT b.branch_name AS gam_branch',
+  groupby_clause     => 'GROUP BY b.branch_name',
+  partitionby_clause => '',
+  orderby_clause     => 'ORDER BY sum(e.tran_date_bal) DESC',
+  gam_where          => '',
+  date_where         => 'd.date BETWEEN ''2024-01-01'' AND ''2024-03-31''',
+  date_join          => '',
+  branch_where       => '',
+  province_where     => '',
+  cluster_where      => '',
+  page               => 1,
+  page_size          => 50
+);
+SELECT * FROM deposit;`}</pre>
+              <p className="text-[10.5px] text-text-muted leading-relaxed">
+                Joins <Mono>gam</Mono> ↔ <Mono>eab</Mono> ↔ <Mono>dates</Mono> ↔ <Mono>branch</Mono> ↔ <Mono>province</Mono> ↔ <Mono>cluster</Mono>. Always emits <Mono>deposit = SUM(e.tran_date_bal)</Mono>.
+                Called by <Mono>ProductionDataService#deposit_explorer</Mono> from <Mono>/dashboard/deposits</Mono>.
+                <Mono>date_where</Mono> is mandatory (falls back to the period range); <Mono>date_join</Mono> is empty for <Mono>tran_date</Mono>, <Mono>d.date=d.month_enddate</Mono> for <Mono>year_month</Mono>, etc.
               </p>
             </div>
           </div>

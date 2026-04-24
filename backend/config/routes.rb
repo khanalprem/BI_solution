@@ -36,6 +36,7 @@ Rails.application.routes.draw do
       get 'production/table',    to: 'production#table'
       get 'production/lookup',   to: 'production#lookup'
       get 'production/explorer', to: 'production#explorer'
+      get 'production/deposits', to: 'production#deposits'
       get 'production/htd_detail', to: 'production#htd_detail'
     end
   end
