@@ -45,6 +45,9 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['branch_code',      serializeFilterValue(filters.branchCode)],
     ['cluster',          serializeFilterValue(filters.cluster)],
     ['solid',            serializeFilterValue(filters.solid)],
+    ['tran_branch',      serializeFilterValue(filters.tranBranch)],
+    ['tran_cluster',     serializeFilterValue(filters.tranCluster)],
+    ['tran_province',    serializeFilterValue(filters.tranProvince)],
     ['tran_type',        serializeFilterValue(filters.tranType)],
     ['part_tran_type',   serializeFilterValue(filters.partTranType)],
     ['tran_source',      serializeFilterValue(filters.tranSource)],
@@ -170,6 +173,8 @@ export function useFilterStatistics() {
   });
 }
 
+// Dropdown values are sourced from public.get_static_data and don't change during
+// a browsing session — fetch once per page load, never refetch on window focus.
 export function useFilterValues() {
   return useQuery<FilterValuesResponse>({
     queryKey: ['filter-values'],
@@ -177,8 +182,8 @@ export function useFilterValues() {
       const { data } = await apiClient.get<FilterValuesResponse>('/filters/values');
       return data;
     },
-    staleTime: 60 * 60 * 1000,
-    gcTime: 2 * 60 * 60 * 1000,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 

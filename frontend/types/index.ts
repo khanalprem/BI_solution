@@ -10,6 +10,10 @@ export interface DashboardFilters {
   branchCode?: MultiValueFilter;
   cluster?: MultiValueFilter;
   solid?: MultiValueFilter;
+  // TRAN-side categorical filters (tran_summary.tran_branch / tran_cluster / tran_province)
+  tranBranch?: MultiValueFilter;
+  tranCluster?: MultiValueFilter;
+  tranProvince?: MultiValueFilter;
   tranType?: MultiValueFilter;
   partTranType?: MultiValueFilter;
   tranSource?: MultiValueFilter;
@@ -157,20 +161,25 @@ export interface BranchPerformanceData {
   unique_customers: number;
 }
 
+// A dropdown option backed by public.get_static_data — `name` is the display
+// label, `value` is submitted to the backend filter params.
+export interface LookupOption {
+  name: string;
+  value: string;
+}
+
 export interface FilterValuesResponse {
-  provinces: string[];
-  branches: string[];
-  clusters: string[];
-  solids: string[];
-  tran_types: string[];
-  part_tran_types: string[];
-  tran_sources: string[];
-  products: string[];
-  services: string[];
-  merchants: string[];
-  gl_sub_head_codes: string[];
-  entry_users: string[];
-  vfd_users: string[];
+  branches: LookupOption[];
+  clusters: LookupOption[];
+  provinces: LookupOption[];
+  gl_sub_head_codes: LookupOption[];
+  products: LookupOption[];
+  services: LookupOption[];
+  merchants: LookupOption[];
+  acct_nums: LookupOption[];
+  acids: LookupOption[];
+  cif_ids: LookupOption[];
+  users: LookupOption[];
 }
 
 export interface FinancialSummaryData {
@@ -262,8 +271,6 @@ export interface FilterStatisticsResponse {
     total_transactions: number;
     unique_accounts: number;
     unique_customers: number;
-    provinces: number;
-    branches: number;
   };
 }
 
