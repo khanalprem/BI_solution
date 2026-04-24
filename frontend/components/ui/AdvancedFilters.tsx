@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FilterBar, FilterDivider, FilterLabel } from './FilterBar';
 import { SearchableMultiSelect } from './Select';
+import { MultiValueChipInput } from './MultiValueChipInput';
 import { useFilterStatistics, useFilterValues } from '@/lib/hooks/useDashboardData';
 import { formatNPR, parseISODateToLocal } from '@/lib/formatters';
-import type { DashboardFilters, MultiValueFilter } from '@/types';
+import type { DashboardFilters, LookupOption, MultiValueFilter } from '@/types';
 
 interface AdvancedFiltersProps {
   filters: DashboardFilters;
@@ -16,36 +17,26 @@ interface AdvancedFiltersProps {
   hideStats?: boolean;
 }
 
-// Categorical filter keys that map 1:1 to backend WHERE IN-clauses.
-// Keep this list aligned with DashboardFilters and AdvancedFilters' rendered fields.
-type MultiFilterKey =
+type DropdownFilterKey =
   | 'province'
   | 'branchCode'
   | 'cluster'
-  | 'tranType'
-  | 'partTranType'
-  | 'tranSource'
   | 'product'
   | 'service'
   | 'merchant'
   | 'glSubHeadCode'
   | 'entryUser'
-  | 'vfdUser';
+  | 'vfdUser'
+  | 'acctNum'
+  | 'acid'
+  | 'cifId'
+  | 'tranBranch'
+  | 'tranCluster'
+  | 'tranProvince';
 
-const PROVINCE_LABELS: Record<string, string> = {
-  'province 1': 'Koshi',
-  'province 2': 'Madhesh',
-  'province 3': 'Bagmati',
-  'province 4': 'Gandaki',
-  'province 5': 'Lumbini',
-  'province 6': 'Karnali',
-  'province 7': 'Sudurpashchim',
-};
+type ChipFilterKey = 'tranSource' | 'tranType' | 'partTranType';
 
-const CHANNEL_LABELS: Record<string, string> = {
-  mobile: 'Mobile Banking',
-  internet: 'Internet Banking',
-};
+type AnyFilterKey = DropdownFilterKey | ChipFilterKey;
 
 function asArray(value?: MultiValueFilter): string[] {
   if (!value) return [];
@@ -58,17 +49,14 @@ function formatCoverageDate(value?: string | null): string {
   return parsed.toLocaleDateString('en-NP', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function labelForValue(filterKey: MultiFilterKey, value: string): string {
-  if (filterKey === 'province') {
-    const normalized = value.toLowerCase();
-    return PROVINCE_LABELS[normalized] ? `${PROVINCE_LABELS[normalized]} (${value})` : value;
-  }
-  if (filterKey === 'tranSource') return CHANNEL_LABELS[value] || value;
-  return value;
+function toOptions(arr: LookupOption[] | undefined) {
+  return (arr ?? []).map(({ name, value }) => ({ value, label: name }));
 }
 
-// Extract only the "advanced" (non-quick, non-date) fields from a filter object.
-// Kept in sync with the advanced-panel JSX below so the "dirty" detection works correctly.
+function valueToName(arr: LookupOption[] | undefined, value: string): string {
+  return arr?.find((o) => o.value === value)?.name ?? value;
+}
+
 function advancedFieldsFrom(f: DashboardFilters) {
   return {
     tranType:      f.tranType,
@@ -83,6 +71,10 @@ function advancedFieldsFrom(f: DashboardFilters) {
     maxAmount:     f.maxAmount,
     acctNum:       f.acctNum,
     cifId:         f.cifId,
+    acid:          f.acid,
+    tranBranch:    f.tranBranch,
+    tranCluster:   f.tranCluster,
+    tranProvince:  f.tranProvince,
   };
 }
 
@@ -114,11 +106,8 @@ export function AdvancedFilters({
   const [internalShowAdvanced, setInternalShowAdvanced] = useState(false);
   const showAdvanced = advancedOpen ?? internalShowAdvanced;
 
-  // Draft state — only for the advanced panel fields.
-  // Quick-bar fields (province, branchCode, tranSource, partTranType) apply immediately.
   const [draft, setDraft] = useState<DashboardFilters>(() => ({ ...filters }));
 
-  // When external filters change (e.g. period date range reset, or clear), sync draft.
   useEffect(() => {
     setDraft((prev) => ({ ...prev, ...filters }));
   }, [filters]);
@@ -130,67 +119,91 @@ export function AdvancedFilters({
     if (advancedOpen === undefined) setInternalShowAdvanced(nextOpen);
   };
 
-  // Quick-bar filters: apply immediately
-  const setQuickFilter = useCallback((key: MultiFilterKey, values: string[]) => {
-    const updated = { ...filters, [key]: values.length > 0 ? values : undefined };
-    setDraft(updated);
-    onChange(updated);
-  }, [filters, onChange]);
+  const setQuickFilter = useCallback(
+    (key: AnyFilterKey, values: string[]) => {
+      const updated = { ...filters, [key]: values.length > 0 ? values : undefined };
+      setDraft(updated);
+      onChange(updated);
+    },
+    [filters, onChange],
+  );
 
-  // Draft-only setters (advanced panel)
-  const setDraftMulti = useCallback((key: MultiFilterKey, values: string[]) => {
+  const setDraftMulti = useCallback((key: AnyFilterKey, values: string[]) => {
     setDraft((prev) => ({ ...prev, [key]: values.length > 0 ? values : undefined }));
-  }, []);
-
-  const setDraftText = useCallback((key: 'acctNum' | 'cifId', value: string) => {
-    setDraft((prev) => ({ ...prev, [key]: value.trim() ? value : undefined }));
   }, []);
 
   const setDraftNumber = useCallback((key: 'minAmount' | 'maxAmount', value: string) => {
     const parsed = value.trim() ? Number(value.trim()) : undefined;
-    setDraft((prev) => ({ ...prev, [key]: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined }));
+    setDraft((prev) => ({
+      ...prev,
+      [key]: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
+    }));
   }, []);
 
-  const handleApply = () => {
-    onChange(draft);
-  };
+  const handleApply = () => onChange(draft);
 
   const handleClear = () => {
     setDraft((prev) => ({ startDate: prev.startDate, endDate: prev.endDate } as DashboardFilters));
     onClear();
   };
 
-  const activeFilterCount = useMemo(() => (
-    Object.entries(filters).reduce((count, [key, value]) => {
-      if (key === 'startDate' || key === 'endDate' || value === undefined || value === null || value === '') return count;
-      if (Array.isArray(value)) return count + value.length;
-      return count + 1;
-    }, 0)
-  ), [filters]);
+  const activeFilterCount = useMemo(
+    () =>
+      Object.entries(filters).reduce((count, [key, value]) => {
+        if (key === 'startDate' || key === 'endDate' || value === undefined || value === null || value === '') return count;
+        if (Array.isArray(value)) return count + value.length;
+        return count + 1;
+      }, 0),
+    [filters],
+  );
 
   const activeFilterPills = useMemo(() => {
     const pills: Array<{ id: string; label: string; onRemove: () => void }> = [];
 
-    const multiFilterDefs: Array<{ key: MultiFilterKey; label: string }> = [
-      { key: 'province', label: 'Province' },
-      { key: 'branchCode', label: 'Branch' },
-      { key: 'tranSource', label: 'Channel' },
-      { key: 'partTranType', label: 'Part Type' },
-      { key: 'cluster', label: 'Cluster' },
-      { key: 'tranType', label: 'Transaction Type' },
-      { key: 'product', label: 'Product' },
-      { key: 'service', label: 'Service' },
-      { key: 'merchant', label: 'Merchant' },
-      { key: 'glSubHeadCode', label: 'GL Code' },
-      { key: 'entryUser', label: 'Entry User' },
-      { key: 'vfdUser', label: 'Verified User' },
+    const dropdownDefs: Array<{ key: DropdownFilterKey; label: string; options?: LookupOption[] }> = [
+      { key: 'province',      label: 'Province',       options: filterValues?.provinces },
+      { key: 'branchCode',    label: 'Branch',         options: filterValues?.branches },
+      { key: 'cluster',       label: 'Cluster',        options: filterValues?.clusters },
+      { key: 'product',       label: 'Product',        options: filterValues?.products },
+      { key: 'service',       label: 'Service',        options: filterValues?.services },
+      { key: 'merchant',      label: 'Merchant',       options: filterValues?.merchants },
+      { key: 'glSubHeadCode', label: 'GL Code',        options: filterValues?.gl_sub_head_codes },
+      { key: 'entryUser',     label: 'Entry User',     options: filterValues?.users },
+      { key: 'vfdUser',       label: 'Verified User',  options: filterValues?.users },
+      { key: 'acctNum',       label: 'Account',        options: filterValues?.acct_nums },
+      { key: 'acid',          label: 'ACID',           options: filterValues?.acids },
+      { key: 'cifId',         label: 'CIF',            options: filterValues?.cif_ids },
+      { key: 'tranBranch',    label: 'TRAN Branch',    options: filterValues?.branches },
+      { key: 'tranCluster',   label: 'TRAN Cluster',   options: filterValues?.clusters },
+      { key: 'tranProvince',  label: 'TRAN Province',  options: filterValues?.provinces },
     ];
 
-    multiFilterDefs.forEach(({ key, label }) => {
+    const chipDefs: Array<{ key: ChipFilterKey; label: string }> = [
+      { key: 'tranSource',   label: 'Channel' },
+      { key: 'partTranType', label: 'Part Type' },
+      { key: 'tranType',     label: 'Transaction Type' },
+    ];
+
+    dropdownDefs.forEach(({ key, label, options }) => {
       asArray(filters[key]).forEach((selectedValue) => {
         pills.push({
           id: `${key}-${selectedValue}`,
-          label: `${label}: ${labelForValue(key, selectedValue)}`,
+          label: `${label}: ${valueToName(options, selectedValue)}`,
+          onRemove: () => {
+            const next = asArray(filters[key]).filter((v) => v !== selectedValue);
+            const updated = { ...filters, [key]: next.length > 0 ? next : undefined };
+            setDraft(updated);
+            onChange(updated);
+          },
+        });
+      });
+    });
+
+    chipDefs.forEach(({ key, label }) => {
+      asArray(filters[key]).forEach((selectedValue) => {
+        pills.push({
+          id: `${key}-${selectedValue}`,
+          label: `${label}: ${selectedValue}`,
           onRemove: () => {
             const next = asArray(filters[key]).filter((v) => v !== selectedValue);
             const updated = { ...filters, [key]: next.length > 0 ? next : undefined };
@@ -202,40 +215,48 @@ export function AdvancedFilters({
     });
 
     if (typeof filters.minAmount === 'number') {
-      pills.push({ id: 'min-amount', label: `Min Amount: ${formatNPR(filters.minAmount)}`, onRemove: () => { const u = { ...filters, minAmount: undefined }; setDraft(u); onChange(u); } });
+      pills.push({
+        id: 'min-amount',
+        label: `Min Amount: ${formatNPR(filters.minAmount)}`,
+        onRemove: () => {
+          const u = { ...filters, minAmount: undefined };
+          setDraft(u);
+          onChange(u);
+        },
+      });
     }
     if (typeof filters.maxAmount === 'number') {
-      pills.push({ id: 'max-amount', label: `Max Amount: ${formatNPR(filters.maxAmount)}`, onRemove: () => { const u = { ...filters, maxAmount: undefined }; setDraft(u); onChange(u); } });
-    }
-    if (filters.acctNum) {
-      pills.push({ id: 'acct-num', label: `Account: ${filters.acctNum}`, onRemove: () => { const u = { ...filters, acctNum: undefined }; setDraft(u); onChange(u); } });
-    }
-    if (filters.cifId) {
-      pills.push({ id: 'cif-id', label: `CIF: ${filters.cifId}`, onRemove: () => { const u = { ...filters, cifId: undefined }; setDraft(u); onChange(u); } });
+      pills.push({
+        id: 'max-amount',
+        label: `Max Amount: ${formatNPR(filters.maxAmount)}`,
+        onRemove: () => {
+          const u = { ...filters, maxAmount: undefined };
+          setDraft(u);
+          onChange(u);
+        },
+      });
     }
 
     return pills;
-  }, [filters, onChange]);
+  }, [filters, filterValues, onChange]);
 
   if (error) return <div className="text-accent-red text-xs">{(error as Error)?.message || 'Unable to load filter values'}</div>;
   if (isLoading || !filterValues) return <div className="text-text-secondary text-xs">Loading filters...</div>;
 
-  const provinceOptions = filterValues.provinces.map((p) => ({ value: p, label: labelForValue('province', p) }));
-  const branchOptions = filterValues.branches.map((b) => ({ value: b, label: b }));
-  const channelOptions = filterValues.tran_sources.filter(Boolean).map((c) => ({ value: c, label: labelForValue('tranSource', c) }));
-  const partTypeOptions = filterValues.part_tran_types.map((p) => ({ value: p, label: p }));
-  const tranTypeOptions = filterValues.tran_types.map((t) => ({ value: t, label: t }));
-  const clusterOptions = filterValues.clusters.map((c) => ({ value: c, label: c }));
-  const productOptions = filterValues.products.filter(Boolean).map((p) => ({ value: p, label: p }));
-  const serviceOptions = filterValues.services.filter(Boolean).map((s) => ({ value: s, label: s }));
-  const merchantOptions = filterValues.merchants.filter(Boolean).map((m) => ({ value: m, label: m }));
-  const glOptions = filterValues.gl_sub_head_codes.filter(Boolean).map((g) => ({ value: g, label: g }));
-  const entryUserOptions = filterValues.entry_users.filter(Boolean).map((u) => ({ value: u, label: u }));
-  const vfdUserOptions = filterValues.vfd_users.filter(Boolean).map((u) => ({ value: u, label: u }));
+  const provinceOptions = toOptions(filterValues.provinces);
+  const branchOptions   = toOptions(filterValues.branches);
+  const clusterOptions  = toOptions(filterValues.clusters);
+  const productOptions  = toOptions(filterValues.products);
+  const serviceOptions  = toOptions(filterValues.services);
+  const merchantOptions = toOptions(filterValues.merchants);
+  const glOptions       = toOptions(filterValues.gl_sub_head_codes);
+  const userOptions     = toOptions(filterValues.users);
+  const acctNumOptions  = toOptions(filterValues.acct_nums);
+  const acidOptions     = toOptions(filterValues.acids);
+  const cifIdOptions    = toOptions(filterValues.cif_ids);
 
   return (
     <div className="space-y-3">
-      {/* Quick FilterBar — always first, applies immediately */}
       <FilterBar onClear={handleClear}>
         <FilterLabel>Province</FilterLabel>
         <div className="min-w-0 w-full sm:min-w-[220px] sm:w-auto flex-1 sm:flex-none">
@@ -263,11 +284,10 @@ export function AdvancedFilters({
 
         <FilterLabel>Channel</FilterLabel>
         <div className="min-w-0 w-full sm:min-w-[190px] sm:w-auto flex-1 sm:flex-none">
-          <SearchableMultiSelect
+          <MultiValueChipInput
             value={asArray(filters.tranSource)}
             onChange={(v) => setQuickFilter('tranSource', v)}
-            options={channelOptions}
-            placeholder="All channels"
+            placeholder="Add channel (e.g. mobile)"
           />
         </div>
 
@@ -275,10 +295,9 @@ export function AdvancedFilters({
 
         <FilterLabel>Part Type</FilterLabel>
         <div className="min-w-0 w-full sm:min-w-[160px] sm:w-auto flex-1 sm:flex-none">
-          <SearchableMultiSelect
+          <MultiValueChipInput
             value={asArray(filters.partTranType)}
             onChange={(v) => setQuickFilter('partTranType', v)}
-            options={partTypeOptions}
             placeholder="CR / DR"
           />
         </div>
@@ -302,7 +321,6 @@ export function AdvancedFilters({
         </button>
       </FilterBar>
 
-      {/* Active filter pills */}
       {activeFilterPills.length > 0 && (
         <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-bg-card px-3 py-2.5">
           {activeFilterPills.map((pill) => (
@@ -319,7 +337,6 @@ export function AdvancedFilters({
         </div>
       )}
 
-      {/* Data stats — shown below filter bar, hidden on detail pages */}
       {!hideStats && (
         <div className="grid gap-3 md:grid-cols-3">
           <DataStat
@@ -335,12 +352,11 @@ export function AdvancedFilters({
           <DataStat
             label="Dimensions"
             value={`${filterValues.branches.length} branches · ${filterValues.provinces.length} provinces`}
-            hint={`${clusterOptions.length} clusters · ${glOptions.length} GL codes · ${tranTypeOptions.length} tran types`}
+            hint={`${clusterOptions.length} clusters · ${glOptions.length} GL codes · ${userOptions.length} users`}
           />
         </div>
       )}
 
-      {/* Advanced panel — draft mode, requires Apply */}
       {showAdvanced && (
         <div className="space-y-4 rounded-xl border border-border bg-bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -361,7 +377,7 @@ export function AdvancedFilters({
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <FilterLabel>Transaction Type</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.tranType)} onChange={(v) => setDraftMulti('tranType', v)} options={tranTypeOptions} placeholder="All transaction types" />
+              <MultiValueChipInput value={asArray(draft.tranType)} onChange={(v) => setDraftMulti('tranType', v)} placeholder="Add codes (Enter or ,)" />
             </div>
             <div>
               <FilterLabel>Cluster</FilterLabel>
@@ -385,11 +401,35 @@ export function AdvancedFilters({
             </div>
             <div>
               <FilterLabel>Entry User</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.entryUser)} onChange={(v) => setDraftMulti('entryUser', v)} options={entryUserOptions} placeholder="All entry users" />
+              <SearchableMultiSelect value={asArray(draft.entryUser)} onChange={(v) => setDraftMulti('entryUser', v)} options={userOptions} placeholder="All entry users" />
             </div>
             <div>
               <FilterLabel>Verified User</FilterLabel>
-              <SearchableMultiSelect value={asArray(draft.vfdUser)} onChange={(v) => setDraftMulti('vfdUser', v)} options={vfdUserOptions} placeholder="All verified users" />
+              <SearchableMultiSelect value={asArray(draft.vfdUser)} onChange={(v) => setDraftMulti('vfdUser', v)} options={userOptions} placeholder="All verified users" />
+            </div>
+            <div>
+              <FilterLabel>TRAN Province</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.tranProvince)} onChange={(v) => setDraftMulti('tranProvince', v)} options={provinceOptions} placeholder="All TRAN provinces" />
+            </div>
+            <div>
+              <FilterLabel>TRAN Cluster</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.tranCluster)} onChange={(v) => setDraftMulti('tranCluster', v)} options={clusterOptions} placeholder="All TRAN clusters" />
+            </div>
+            <div>
+              <FilterLabel>TRAN Branch</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.tranBranch)} onChange={(v) => setDraftMulti('tranBranch', v)} options={branchOptions} placeholder="All TRAN branches" />
+            </div>
+            <div>
+              <FilterLabel>Account Number</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.acctNum)} onChange={(v) => setDraftMulti('acctNum', v)} options={acctNumOptions} placeholder="All accounts" />
+            </div>
+            <div>
+              <FilterLabel>CIF</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.cifId)} onChange={(v) => setDraftMulti('cifId', v)} options={cifIdOptions} placeholder="All CIFs" />
+            </div>
+            <div>
+              <FilterLabel>ACID</FilterLabel>
+              <SearchableMultiSelect value={asArray(draft.acid)} onChange={(v) => setDraftMulti('acid', v)} options={acidOptions} placeholder="All ACIDs" />
             </div>
             <div>
               <FilterLabel>Min Amount (NPR)</FilterLabel>
@@ -409,26 +449,6 @@ export function AdvancedFilters({
                 onChange={(e) => setDraftNumber('maxAmount', e.target.value)}
                 className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
                 placeholder="No limit"
-              />
-            </div>
-            <div>
-              <FilterLabel>Account Number</FilterLabel>
-              <input
-                type="text"
-                value={draft.acctNum ?? ''}
-                onChange={(e) => setDraftText('acctNum', e.target.value)}
-                className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                placeholder="Full or partial account number"
-              />
-            </div>
-            <div>
-              <FilterLabel>Customer ID (CIF)</FilterLabel>
-              <input
-                type="text"
-                value={draft.cifId ?? ''}
-                onChange={(e) => setDraftText('cifId', e.target.value)}
-                className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-                placeholder="Full or partial CIF"
               />
             </div>
           </div>
