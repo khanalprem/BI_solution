@@ -16,7 +16,7 @@ import {
 } from '@/lib/hooks/useDashboardData';
 import { exportTableToCsv } from '@/lib/exportCsv';
 import { formatNPR } from '@/lib/formatters';
-import type { DashboardFilters } from '@/types';
+import type { DashboardFilters, LookupOption } from '@/types';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -113,8 +113,8 @@ interface ControlsProps {
   dimFilters:      Record<DimKey, string[]>;
   measureFilters:  Record<MeasureKey, { op: Op; value: string }>;
   sort:            SortState;
-  provinces:       string[];
-  branches:        string[];
+  provinces:       LookupOption[];
+  branches:        LookupOption[];
   onToggleDim:     (k: DimKey) => void;
   onToggleMeasure: (k: MeasureKey) => void;
   onDimFilter:     (k: DimKey, values: string[]) => void;
@@ -127,8 +127,8 @@ function SegmentationControls({
   onToggleDim, onToggleMeasure, onDimFilter, onMeasureFilter, onSort,
 }: ControlsProps) {
   const opts = (key: DimDef['options']) => {
-    if (key === 'provinces') return provinces.filter(Boolean).map((v) => ({ value: v, label: v }));
-    if (key === 'branches')  return branches.filter(Boolean).map((v) => ({ value: v, label: v }));
+    if (key === 'provinces') return provinces.map(({ name, value }) => ({ value, label: name }));
+    if (key === 'branches')  return branches.map(({ name, value }) => ({ value, label: name }));
     return [];
   };
 
@@ -245,8 +245,8 @@ export default function CustomerSegmentationPage() {
   const [sort, setSort] = useState<SortState>({ measure: 'rfm_score', dir: 'desc' });
 
   const { data: filterValues } = useFilterValues();
-  const provinces = (filterValues?.provinces as string[] | undefined) ?? [];
-  const branches  = (filterValues?.branches  as string[] | undefined) ?? [];
+  const provinces: LookupOption[] = filterValues?.provinces ?? [];
+  const branches:  LookupOption[] = filterValues?.branches  ?? [];
 
   // ── Toggles ─────────────────────────────────────────────────────────────────
 
