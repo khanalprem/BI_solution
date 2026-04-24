@@ -149,7 +149,8 @@ function HowItWorksPanel() {
 // ─── Dimension field definitions ──────────────────────────────────────────────
 
 type FieldType = 'categorical' | 'text' | 'text-multi' | 'date' | 'month' | 'quarter' | 'year' | 'measure_dim';
-type DateFilterMode = 'single' | 'range' | 'multi';
+type DateFilterMode = 'range' | 'multi';
+type CategoricalFilterMode = 'single' | 'multi';
 
 interface DimensionFieldDef {
   key: string;
@@ -1235,11 +1236,12 @@ export default function PivotDashboard() {
   // Procedure-call preview panel — collapsed by default (developer-only context).
   const [showProcPreview, setShowProcPreview]       = useState(false);
   const [dateFilterModes, setDateFilterModes]       = useState<Record<string, DateFilterMode>>({
-    tran_date:    'single',
+    tran_date:    'multi',
     year_month:   'multi',
     year_quarter: 'multi',
     year:         'multi',
   });
+  const [categoricalFilterModes, setCategoricalFilterModes] = useState<Record<string, CategoricalFilterMode>>({});
 
   // Sync state to URL for shareable pivot configuration.
   useEffect(() => {
@@ -1631,6 +1633,10 @@ export default function PivotDashboard() {
     setDateFilterModes((prev) => ({ ...prev, [fieldKey]: mode }));
   }, []);
 
+  const setCategoricalMode = useCallback((fieldKey: string, mode: CategoricalFilterMode) => {
+    setCategoricalFilterModes((prev) => ({ ...prev, [fieldKey]: mode }));
+  }, []);
+
   // ── Counts & labels ───────────────────────────────────────────────────────
 
   const activeFilterCount = useMemo(
@@ -1801,7 +1807,7 @@ export default function PivotDashboard() {
                     const expanded  = expandedField === field.key;
                     const filtered  = fieldHasFilter(field);
                     const badge     = TYPE_BADGE[field.type];
-                    const mode      = dateFilterModes[field.key] ?? 'single';
+                    const mode      = dateFilterModes[field.key] ?? 'multi';
                     const hasFilter = !!field.filterKey;
 
                     return (
@@ -1858,29 +1864,14 @@ export default function PivotDashboard() {
                           <div className="px-4 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
                             <div className="space-y-2">
                               <div className="flex gap-1">
-                                {(['single', 'range', 'multi'] as DateFilterMode[]).map((m) => (
+                                {(['multi', 'range'] as DateFilterMode[]).map((m) => (
                                   <button key={m} type="button"
                                     onClick={() => { setDateMode(field.key, m); clearDateRangeFilters(field); }}
                                     className={`px-2.5 py-0.5 rounded text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${mode === m ? 'bg-accent-blue text-white' : 'bg-bg-input text-text-secondary border border-border hover:border-border-strong'}`}>
-                                    {m === 'single' ? 'Single' : m === 'range' ? 'Range' : 'Multi'}
+                                    {m === 'range' ? 'Range' : 'Multi'}
                                   </button>
                                 ))}
                               </div>
-                              {mode === 'single' && (
-                                <input type="text"
-                                  value={getSingleValue(field.filterKey!)}
-                                  onChange={(e) => {
-                                    const v = formatDateValue(e.target.value, field.type as DateLikeType);
-                                    setFieldFilter(field.filterKey!, v || undefined);
-                                  }}
-                                  onBlur={(e) => {
-                                    const v = padDateOnBlur(e.target.value, field.type as DateLikeType);
-                                    setFieldFilter(field.filterKey!, v || undefined);
-                                  }}
-                                  placeholder={field.type === 'date' ? 'YYYY-MM-DD' : field.type === 'month' ? 'YYYY-MM' : field.type === 'quarter' ? 'YYYY-Qn' : 'YYYY'}
-                                  inputMode="numeric"
-                                  className="w-full rounded-md border border-border bg-bg-input px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue font-mono" />
-                              )}
                               {mode === 'range' && field.fromKey && field.toKey && (
                                 <div className="flex gap-2">
                                   <input type="text"
@@ -2066,21 +2057,41 @@ export default function PivotDashboard() {
                       {expanded && hasFilter && (
                         <div className="px-4 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
 
-                          {/* Categorical → multi-select from API values */}
-                          {field.type === 'categorical' && (
-                            <SearchableMultiSelect
-                              value={getMultiValue(field)}
-                              onChange={(vals) => {
-                                setFieldFilter(field.filterKey!, vals.length > 0 ? vals : undefined);
-                                // Auto-add as dimension so filtered rows are immediately visible
-                                if (vals.length > 0 && !selectedDimensions.includes(field.key)) {
-                                  setSelectedDimensions((prev) => [...prev, field.key]);
-                                }
-                              }}
-                              options={getOptions(field)}
-                              placeholder={`Filter by ${field.label.toLowerCase()}…`}
-                            />
-                          )}
+                          {/* Categorical → Single dropdown | Multi-select */}
+                          {field.type === 'categorical' && (() => {
+                            const catMode = categoricalFilterModes[field.key] ?? 'multi';
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex gap-1">
+                                  {(['single', 'multi'] as CategoricalFilterMode[]).map((m) => (
+                                    <button key={m} type="button"
+                                      onClick={() => {
+                                        setCategoricalMode(field.key, m);
+                                        if (field.filterKey) setFieldFilter(field.filterKey, undefined);
+                                      }}
+                                      className={`px-2.5 py-0.5 rounded text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${catMode === m ? 'bg-accent-blue text-white' : 'bg-bg-input text-text-secondary border border-border hover:border-border-strong'}`}>
+                                      {m === 'single' ? 'Single' : 'Multi'}
+                                    </button>
+                                  ))}
+                                </div>
+                                <SearchableMultiSelect
+                                  mode={catMode}
+                                  value={getMultiValue(field)}
+                                  onChange={(vals) => {
+                                    const next = catMode === 'single'
+                                      ? (vals[0] ? vals[0] : undefined)
+                                      : (vals.length > 0 ? vals : undefined);
+                                    setFieldFilter(field.filterKey!, next);
+                                    if (vals.length > 0 && !selectedDimensions.includes(field.key)) {
+                                      setSelectedDimensions((prev) => [...prev, field.key]);
+                                    }
+                                  }}
+                                  options={getOptions(field)}
+                                  placeholder={catMode === 'single' ? `Select a ${field.label.toLowerCase()}…` : `Select ${field.label.toLowerCase()} values…`}
+                                />
+                              </div>
+                            );
+                          })()}
 
                           {/* Text → ILIKE search */}
                           {field.type === 'text' && (

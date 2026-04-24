@@ -169,6 +169,7 @@ interface SearchableMultiSelectProps {
   options: SelectOption[];
   placeholder?: string;
   disabled?: boolean;
+  mode?: 'single' | 'multi';
 }
 
 export function SearchableMultiSelect({
@@ -177,7 +178,9 @@ export function SearchableMultiSelect({
   options,
   placeholder = 'Select...',
   disabled = false,
+  mode = 'multi',
 }: SearchableMultiSelectProps) {
+  const isSingle = mode === 'single';
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -233,6 +236,16 @@ export function SearchableMultiSelect({
   }, [options, placeholder, value]);
 
   const toggleOption = (nextValue: string) => {
+    if (isSingle) {
+      if (selectedSet.has(nextValue)) {
+        onChange([]);
+      } else {
+        onChange([nextValue]);
+      }
+      setIsOpen(false);
+      return;
+    }
+
     if (selectedSet.has(nextValue)) {
       onChange(value.filter((item) => item !== nextValue));
       return;
@@ -295,22 +308,24 @@ export function SearchableMultiSelect({
             />
           </div>
 
-          <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide">
-            <button
-              type="button"
-              onClick={selectAllFiltered}
-              className="text-accent-blue hover:underline"
-            >
-              Select all
-            </button>
-            <button
-              type="button"
-              onClick={clearFiltered}
-              className="text-text-muted hover:text-accent-red hover:underline"
-            >
-              Clear
-            </button>
-          </div>
+          {!isSingle && (
+            <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide">
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="text-accent-blue hover:underline"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={clearFiltered}
+                className="text-text-muted hover:text-accent-red hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           <div className="max-h-60 overflow-y-auto py-1">
             {filteredOptions.length === 0 ? (
