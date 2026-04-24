@@ -446,19 +446,19 @@ const DIMENSIONS = [
   { key: 'gam_province',     label: 'GAM Province',       type: 'categorical', sql: 'gam_province',      description: 'Province of the account branch (GAM)' },
   { key: 'gam_cluster',      label: 'GAM Cluster',        type: 'categorical', sql: 'gam_cluster',       description: 'Cluster grouping of the account branch (GAM)' },
   { key: 'gam_branch',       label: 'GAM Branch',         type: 'categorical', sql: 'gam_branch',        description: 'Branch where the account is registered (GAM)' },
-  { key: 'cif_id',           label: 'CIF Id',             type: 'text',        sql: 'cif_id',            description: 'Full or partial customer CIF ID (ILIKE pattern)' },
-  { key: 'acid',             label: 'ACID',               type: 'text',        sql: 'acid',              description: 'Internal account identifier' },
-  { key: 'acct_num',         label: 'ACCT Num',           type: 'text',        sql: 'acct_num',          description: 'Full or partial account number (ILIKE pattern)' },
-  { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name' },
+  { key: 'cif_id',           label: 'CIF Id',             type: 'categorical', sql: 'cif_id',            description: 'Customer CIF ID — dropdown backed by get_static_data(\'cifid\')' },
+  { key: 'acid',             label: 'ACID',               type: 'categorical', sql: 'acid',              description: 'Internal account identifier — dropdown backed by get_static_data(\'acid\')' },
+  { key: 'acct_num',         label: 'ACCT Num',           type: 'categorical', sql: 'acct_num',          description: 'Account number — dropdown backed by get_static_data(\'acctnum\')' },
+  { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name (partial ILIKE match)' },
   { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'text',        sql: 'e.tran_date_bal',   description: 'Balance snapshot from EAB via acid LEFT JOIN — listed as a dimension but rendered under pivoted headings as a measure column. Never aggregated. Requires a date dimension to resolve the EAB as-of date.' },
   { key: 'eod_balance',      label: 'GAM Balance',        type: 'text',        sql: 'g.eod_balance',     description: 'Current balance from GAM via acid LEFT JOIN — normal dimension, static per account (does not vary by date). Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique.' },
   // ── Transaction (geo broad → narrow, then channel / type, then accounting) ──
   { key: 'tran_province',    label: 'TRAN Province',      type: 'categorical', sql: 'tran_province',     description: 'Province of the transaction branch' },
   { key: 'tran_cluster',     label: 'TRAN Cluster',       type: 'categorical', sql: 'tran_cluster',      description: 'Cluster of the transaction branch' },
   { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
-  { key: 'tran_source',      label: 'TRAN Source',        type: 'categorical', sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc.' },
-  { key: 'tran_type',        label: 'TRAN Type',          type: 'categorical', sql: 'tran_type',         description: 'Transaction type code — pivot-capable' },
-  { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side of the transaction (CR / DR) — pivot-capable' },
+  { key: 'tran_source',      label: 'TRAN Source',        type: 'text-multi',  sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc. — free-text chip input (no dropdown)' },
+  { key: 'tran_type',        label: 'TRAN Type',          type: 'text-multi',  sql: 'tran_type',         description: 'Transaction type code — free-text chip input, pivot-capable' },
+  { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'text-multi',  sql: 'part_tran_type',    description: 'Credit or debit side (CR / DR) — free-text chip input, pivot-capable' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',        type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code — join to gsh for description — pivot-capable' },
   { key: 'product',          label: 'Product',            type: 'categorical', sql: 'product',           description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',            type: 'categorical', sql: 'service',           description: 'Service type applied to the transaction' },
@@ -565,13 +565,14 @@ const ARCH = [
 
 export default function SkillsPage() {
   const typeColor: Record<string, string> = {
-    categorical: 'blue',
-    text:        'green',
-    date:        'amber',
-    month:       'amber',
-    quarter:     'amber',
-    year:        'amber',
-    eab:         'teal',
+    categorical:  'blue',
+    text:         'green',
+    'text-multi': 'purple',
+    date:         'amber',
+    month:        'amber',
+    quarter:      'amber',
+    year:         'amber',
+    eab:          'teal',
   };
 
   return (
