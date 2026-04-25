@@ -15,6 +15,16 @@ interface UseDashboardPageOptions {
    * hits public.get_deposit which scans EAB × GAM × DATES and times out on ALL.
    */
   defaultPeriod?: DashboardPeriod;
+  /**
+   * When true, the period→date-range sync waits until filterStats has loaded
+   * (i.e. `filterStats?.date_range?.max` is defined) before computing the
+   * range. Without this, before filterStats arrives the hook falls back to
+   * `referenceDate = new Date()` (today) — fine for ALL period (no startDate
+   * defaulted), but YTD/MTD/QTD would compute a from-today range and trigger
+   * a probably-empty query against production data that ends in 2024.
+   * Used by /executive (and any future page that defaults to a relative period).
+   */
+  waitForFilterStats?: boolean;
 }
 
 /**
@@ -44,13 +54,17 @@ export function useDashboardPage(options: UseDashboardPageOptions = {}) {
 
   useEffect(() => {
     if (period === 'CUSTOM') return;
+    // When waitForFilterStats is set, hold off until the production data
+    // range is known. Prevents the YTD/MTD/QTD pre-load misfire described
+    // in UseDashboardPageOptions.waitForFilterStats.
+    if (options.waitForFilterStats && !filterStats?.date_range?.max) return;
     const dr = getDateRange(period, referenceDate, minReferenceDate);
     setFilters((prev) =>
       prev.startDate === dr.startDate && prev.endDate === dr.endDate
         ? prev
         : { ...prev, ...dr, ...options.extraFilters }
     );
-  }, [period, referenceDate, minReferenceDate]);
+  }, [period, referenceDate, minReferenceDate, filterStats?.date_range?.max]);
 
   const handlePeriodChange = (p: DashboardPeriod) => setPeriod(p);
 

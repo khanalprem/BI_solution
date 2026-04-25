@@ -16,6 +16,7 @@ import { useDashboardPage } from '@/lib/hooks/useDashboardPage';
 import { useDeposits, useFilterValues } from '@/lib/hooks/useDashboardData';
 import { exportTableToCsv } from '@/lib/exportCsv';
 import type { DashboardFilters, FilterValuesResponse, LookupOption } from '@/types';
+import { lookupOptions } from '@/lib/lookups';
 
 // ─── Dimension definitions ────────────────────────────────────────────────────
 // The exact 11 dims that `public.get_deposit` supports via its
@@ -462,8 +463,7 @@ export default function DepositsDashboard() {
 
   const getOptions = (dim: DepositDimDef): { value: string; label: string }[] => {
     if (!dim.optionsKey || !filterValues) return [];
-    const opts = filterValues[dim.optionsKey] as LookupOption[] | undefined;
-    return (opts ?? []).map((o) => ({ value: o.value, label: o.name }));
+    return lookupOptions(filterValues[dim.optionsKey] as LookupOption[] | undefined);
   };
 
   // Send dims in the order defined in DEPOSIT_DIMS so column ordering is stable.

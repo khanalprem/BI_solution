@@ -116,17 +116,20 @@ export default function RegulatoryDashboard() {
     <>
       <TopBar title="Regulatory Compliance" subtitle="NRB Basel III ratios · submissions · capital health" {...topBarProps} />
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Placeholder banner first so users see the "sample data" notice
+            BEFORE they reach the filter controls. See loans/page.tsx for the
+            same pattern + restoration plan. */}
+        <PlaceholderBanner
+          message="NRB regulatory returns feed and capital ledger integration pending."
+          hint="Ratios below use Mid-July 2025 sector-average values (NRB Financial Stability Report) for layout preview. Filter controls are inactive until the live feed lands."
+        />
+
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
           onClear={handleClearFilters}
           advancedOpen={filtersOpen}
           onAdvancedOpenChange={setFiltersOpen}
-        />
-
-        <PlaceholderBanner
-          message="NRB regulatory returns feed and capital ledger integration pending."
-          hint="Ratios below use Mid-July 2025 sector-average values (NRB Financial Stability Report) for layout preview."
         />
 
         {/* Ratio cards */}

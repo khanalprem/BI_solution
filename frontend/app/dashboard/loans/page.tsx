@@ -132,17 +132,22 @@ export default function LoansDashboard() {
     <>
       <TopBar title="Loan Portfolio" subtitle="NRB-aligned loan book health · classification · concentration" {...topBarProps} />
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Placeholder banner first so users see the "sample data" notice
+            BEFORE they reach the filter controls — otherwise they may try
+            to filter and wonder why nothing changes. Restore the original
+            order (filters first, banner second) once the live data feed
+            lands and AdvancedFilters actually drives the query. */}
+        <PlaceholderBanner
+          message="Loan master and NRB classification feed not yet integrated."
+          hint="Numbers below use sector-average Nepal commercial-bank ratios (NPL 4.44%, LDR 85%, etc.) for layout preview. Filter controls are inactive until the live feed lands."
+        />
+
         <AdvancedFilters
           filters={filters}
           onChange={setFilters}
           onClear={handleClearFilters}
           advancedOpen={filtersOpen}
           onAdvancedOpenChange={setFiltersOpen}
-        />
-
-        <PlaceholderBanner
-          message="Loan master and NRB classification feed not yet integrated."
-          hint="Numbers below use sector-average Nepal commercial-bank ratios (NPL 4.44%, LDR 85%, etc.) for layout preview."
         />
 
         {/* Headline KPIs */}

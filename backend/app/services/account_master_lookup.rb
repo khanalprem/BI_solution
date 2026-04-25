@@ -112,8 +112,9 @@ class AccountMasterLookup
     def apply_account_filters(scope, filters, skip_cif: false)
       scope = scope.where(sol_id: filters[:solid]) if filters[:solid].present? && gam_column?(:sol_id)
       scope = scope.where(gl_sub_head_code: filters[:gl_sub_head_code]) if filters[:gl_sub_head_code].present? && gam_column?(:gl_sub_head_code)
-      # `scheme_type` filter branch removed in Phase 1 (R-4) — see
-      # REVIEW_OPTIMIZATION.md and TranSummary.apply_filters for context.
+      # `scheme_type` filter branch removed — the frontend filter was deleted
+      # and BaseController#filter_params never sets the key (see CLAUDE.md
+      # "Filter set" entry under Known Issues).
       scope = scope.where(cif_id: filters[:cif_id]) if !skip_cif && filters[:cif_id].present? && gam_column?(:cif_id)
       apply_partial_text_filter(scope, :acct_num, filters[:acct_num])
     end

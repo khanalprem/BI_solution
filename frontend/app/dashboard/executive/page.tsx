@@ -5,18 +5,15 @@ import { TopBar } from "@/components/layout/TopBar";
 import { AdvancedFilters } from "@/components/ui/AdvancedFilters";
 import {
   useDashboardData,
-  useFilterStatistics,
   useDemographics,
 } from "@/lib/hooks/useDashboardData";
+import { useDashboardPage } from "@/lib/hooks/useDashboardPage";
 import {
   formatChannelLabel,
   formatNPR,
   formatProvinceLabel,
-  getDateRange,
-  parseISODateToLocal,
 } from "@/lib/formatters";
 import type {
-  DashboardFilters,
   BranchMetrics,
   ProvinceMetrics,
   ChannelMetrics,
@@ -228,16 +225,8 @@ function css(v: string, fallback: string): string {
   );
 }
 
-type DashboardPeriod =
-  | "ALL"
-  | "1D"
-  | "WTD"
-  | "MTD"
-  | "QTD"
-  | "YTD"
-  | "PYTD"
-  | "FY"
-  | "CUSTOM";
+// `DashboardPeriod` lived here as an inline type — removed when the page
+// migrated to useDashboardPage (which exports its own DashboardPeriod type).
 
 // RISK_ITEMS and ALERTS removed — no live database source for risk scores or alert events.
 // These panels now show a "not connected" placeholder. When a risk/alerts API is added,
@@ -373,25 +362,23 @@ function SparkCard({
 }
 
 export default function ExecutiveDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>("ALL");
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange("ALL"),
-  });
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Migrated from inline period state to the shared hook.
+  // `waitForFilterStats: true` preserves the original page's behavior of
+  // holding the period→date-range sync until the production data range is
+  // known (so YTD/MTD don't briefly fire a today-anchored query against a
+  // 2024-ending dataset).
+  const {
+    filters, setFilters,
+    filtersOpen, setFiltersOpen,
+    handleClearFilters, topBarProps,
+  } = useDashboardPage({ waitForFilterStats: true });
+
+  // `mounted` is the SSR/CSR-hydration safety net — kept separate from period
+  // state because it's about rendering, not about filters.
   const [mounted, setMounted] = useState(false);
 
   const { data, isLoading, error } = useDashboardData(filters);
-  const { data: filterStats } = useFilterStatistics();
   const { data: demographics } = useDemographics();
-
-  const referenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.max) || new Date(),
-    [filterStats?.date_range?.max],
-  );
-  const minReferenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.min) ?? undefined,
-    [filterStats?.date_range?.min],
-  );
 
   // ── Branch table columns ──
   const branchColumns = useMemo<ColumnDef<BranchMetrics>[]>(
@@ -718,34 +705,8 @@ export default function ExecutiveDashboard() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (period === "CUSTOM") return;
-    // Only sync when filterStats has loaded — don't overwrite with today's date
-    if (!filterStats?.date_range?.max) return;
-    const dr = getDateRange(period, referenceDate, minReferenceDate);
-    setFilters((prev) =>
-      prev.startDate === dr.startDate && prev.endDate === dr.endDate
-        ? prev
-        : { ...prev, ...dr },
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handlePeriodChange = (p: DashboardPeriod) => setPeriod(p);
-  const handleCustomRangeChange = (r: {
-    startDate: string;
-    endDate: string;
-  }) => {
-    setPeriod("CUSTOM");
-    setFilters((prev) => ({ ...prev, ...r }));
-  };
-  const handleClearFilters = () => {
-    const dr = getDateRange(period, referenceDate, minReferenceDate);
-    setFilters(
-      period === "CUSTOM"
-        ? (prev) => ({ startDate: prev.startDate, endDate: prev.endDate })
-        : dr,
-    );
-  };
+  // Period sync, custom range handler, and handleClearFilters are owned by
+  // useDashboardPage now (see hook signature at top of this component).
 
   // Build sparkline data from trend
   const trendAmounts = useMemo(
@@ -774,14 +735,7 @@ export default function ExecutiveDashboard() {
       <TopBar
         title="Executive Overview"
         subtitle={`Last refreshed ${new Date().toLocaleTimeString("en-NP")} NPT`}
-        period={period}
-        onPeriodChange={handlePeriodChange}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={handleCustomRangeChange}
-        minDate={filterStats?.date_range?.min ?? undefined}
-        maxDate={filterStats?.date_range?.max ?? undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
+        {...topBarProps}
       />
 
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">

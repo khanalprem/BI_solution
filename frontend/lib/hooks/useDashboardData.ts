@@ -94,6 +94,10 @@ function useDashboardQuery<T>(
   filters: DashboardFilters,
   staleTime = 5 * 60 * 1000,
   extraParams?: Record<string, string | number>,
+  // Optional gate. When provided, the query only fires if true. Lets per-id
+  // hooks (useCustomerProfile, useEmployeeDetail) wait for their identifier
+  // before firing without re-implementing the useQuery boilerplate. Phase 2 R-8.
+  enabled?: boolean,
 ) {
   const params = useMemo(
     () => ({ ...toApiFilters(filters), ...extraParams }),
@@ -107,6 +111,7 @@ function useDashboardQuery<T>(
       return data;
     },
     staleTime,
+    enabled: enabled ?? true,
   });
 }
 
@@ -127,30 +132,21 @@ export function useTopCustomers(filters: DashboardFilters, limit = 20) {
   return useDashboardQuery<TopCustomer[]>('customers-top', 'customers_top', filters, 5*60*1000, { limit });
 }
 
+// Phase 2 R-8: both hooks now flow through `useDashboardQuery` with extraParams
+// + an `enabled` gate, instead of hand-rolling useQuery/useMemo each. Same
+// queryKey shape, same staleTime, same enabled predicate.
 export function useCustomerProfile(filters: DashboardFilters, cifId: string) {
-  const params = useMemo(() => ({ ...toApiFilters(filters), cif_id: cifId }), [filters, cifId]);
-  return useQuery<CustomerProfileData>({
-    queryKey: ['customer-profile', params],
-    queryFn: async () => {
-      const { data } = await apiClient.get<CustomerProfileData>('/dashboards/customer_profile', { params });
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-    enabled: Boolean(cifId),
-  });
+  return useDashboardQuery<CustomerProfileData>(
+    'customer-profile', 'customer_profile', filters, 5 * 60 * 1000,
+    { cif_id: cifId }, Boolean(cifId),
+  );
 }
 
 export function useEmployeeDetail(filters: DashboardFilters, userId: string) {
-  const params = useMemo(() => ({ ...toApiFilters(filters), entry_user: userId }), [filters, userId]);
-  return useQuery<EmployeeDetailData>({
-    queryKey: ['employee-detail', params],
-    queryFn: async () => {
-      const { data } = await apiClient.get<EmployeeDetailData>('/dashboards/employee_detail', { params });
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-    enabled: Boolean(userId),
-  });
+  return useDashboardQuery<EmployeeDetailData>(
+    'employee-detail', 'employee_detail', filters, 5 * 60 * 1000,
+    { entry_user: userId }, Boolean(userId),
+  );
 }
 
 export function useDemographics() {

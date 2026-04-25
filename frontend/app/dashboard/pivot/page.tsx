@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, LookupOption } from '@/types';
+import { lookupOptions } from '@/lib/lookups';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -1501,11 +1502,10 @@ export default function PivotDashboard() {
   const getOptions = useCallback(
     (field: DimensionFieldDef) => {
       if (field.staticOptions) {
-        return field.staticOptions.map(({ name, value }) => ({ value, label: name }));
+        return lookupOptions(field.staticOptions);
       }
       if (field.optionsKey && filterValues) {
-        const arr = filterValues[field.optionsKey] as LookupOption[] | undefined;
-        return (arr ?? []).map(({ name, value }) => ({ value, label: name }));
+        return lookupOptions(filterValues[field.optionsKey] as LookupOption[] | undefined);
       }
       if (field.type === 'month')   return dateOptions.months;
       if (field.type === 'quarter') return dateOptions.quarters;

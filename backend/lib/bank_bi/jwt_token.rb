@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Single source of truth for JWT encode/decode in BankBI.
-# Was previously duplicated across ApplicationController and AuthController —
-# extracted in Phase 1 of the optimization audit (REVIEW_OPTIMIZATION.md R-2).
+# Was previously duplicated across ApplicationController and AuthController.
+# See CLAUDE.md "Authentication & Authorization" for the full contract.
 #
 # Claims:
 #   user_id, email — minimum needed for `authenticate_user!` to find the User.

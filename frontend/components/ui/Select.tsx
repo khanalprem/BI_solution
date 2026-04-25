@@ -9,6 +9,35 @@ interface SelectOption {
   label: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2 R-9: extracted icon components.
+// Chevron and check SVGs were previously inlined 4× across Select / MultiSelect
+// / SearchableMultiSelect / SearchableSelect. The markup is identical at every
+// callsite — extracting the icons removes ~50 LOC of pixel-identical SVG.
+// ─────────────────────────────────────────────────────────────────────────────
+function SelectChevronIcon() {
+  return (
+    <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+      <svg className="h-4 w-4 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+      </svg>
+    </span>
+  );
+}
+
+function SelectCheckIcon({ position = 'right' }: { position?: 'right' | 'left' }) {
+  const positionClass = position === 'right'
+    ? 'absolute inset-y-0 right-0 flex items-center pr-3 text-accent-blue'
+    : 'absolute inset-y-0 left-0  flex items-center pl-2 text-accent-blue';
+  return (
+    <span className={positionClass}>
+      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+      </svg>
+    </span>
+  );
+}
+
 interface SelectProps {
   value: string;
   onChange: (value: string) => void;
@@ -33,11 +62,7 @@ export function Select({ value, onChange, options, placeholder = 'Select...', di
           <span className={selectedOption.value ? '' : 'text-text-muted'}>
             {selectedOption.label}
           </span>
-          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-            <svg className="h-4 w-4 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </span>
+          <SelectChevronIcon />
         </Listbox.Button>
 
         <Transition
@@ -67,11 +92,7 @@ export function Select({ value, onChange, options, placeholder = 'Select...', di
                   <span className={`block truncate ${selected ? 'font-semibold text-text-primary' : 'font-normal'}`}>
                     {option.label}
                     {selected && (
-                      <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-accent-blue">
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                        </svg>
-                      </span>
+                      <SelectCheckIcon position="right" />
                     )}
                   </span>
                 )}
@@ -110,11 +131,7 @@ export function MultiSelect({ value, onChange, options, placeholder = 'Select...
           <span className={value.length > 0 ? '' : 'text-text-muted'}>
             {selectedLabels}
           </span>
-          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-            <svg className="h-4 w-4 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </span>
+          <SelectChevronIcon />
         </Listbox.Button>
 
         <Transition
@@ -143,11 +160,7 @@ export function MultiSelect({ value, onChange, options, placeholder = 'Select...
                 {({ selected }) => (
                   <>
                     {selected && (
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-2 text-accent-blue">
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                        </svg>
-                      </span>
+                      <SelectCheckIcon position="left" />
                     )}
                     <span className={`block truncate ${selected ? 'font-semibold text-text-primary' : 'font-normal'}`}>
                       {option.label}
@@ -401,11 +414,7 @@ export function SearchableSelect({
           <span className={selectedOption.value ? '' : 'text-text-muted'}>
             {selectedOption.label}
           </span>
-          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-            <svg className="h-4 w-4 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </span>
+          <SelectChevronIcon />
         </Listbox.Button>
 
         <Transition

@@ -17,6 +17,7 @@ import {
 import { exportTableToCsv } from '@/lib/exportCsv';
 import { formatNPR } from '@/lib/formatters';
 import type { DashboardFilters, LookupOption } from '@/types';
+import { lookupOptions } from '@/lib/lookups';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -127,8 +128,8 @@ function SegmentationControls({
   onToggleDim, onToggleMeasure, onDimFilter, onMeasureFilter, onSort,
 }: ControlsProps) {
   const opts = (key: DimDef['options']) => {
-    if (key === 'provinces') return provinces.map(({ name, value }) => ({ value, label: name }));
-    if (key === 'branches')  return branches.map(({ name, value }) => ({ value, label: name }));
+    if (key === 'provinces') return lookupOptions(provinces);
+    if (key === 'branches')  return lookupOptions(branches);
     return [];
   };
 

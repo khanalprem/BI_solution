@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { TopBar } from "@/components/layout/TopBar";
 import { AdvancedFilters } from "@/components/ui/AdvancedFilters";
 import {
@@ -18,32 +18,13 @@ import {
   TableHeader,
   TableCell,
 } from "@/components/ui/DataTable";
-import {
-  useDashboardData,
-  useFilterStatistics,
-} from "@/lib/hooks/useDashboardData";
-import {
-  formatNPR,
-  formatPercent,
-  getDateRange,
-  parseISODateToLocal,
-} from "@/lib/formatters";
-import type { DashboardFilters } from "@/types";
+import { useDashboardData } from "@/lib/hooks/useDashboardData";
+import { useDashboardPage } from "@/lib/hooks/useDashboardPage";
+import { formatNPR, formatPercent } from "@/lib/formatters";
 import {
   PremiumLineChart,
   PremiumBarChart,
 } from "@/components/ui/PremiumCharts";
-
-type DashboardPeriod =
-  | "ALL"
-  | "1D"
-  | "WTD"
-  | "MTD"
-  | "QTD"
-  | "YTD"
-  | "PYTD"
-  | "FY"
-  | "CUSTOM";
 
 // BOARD_REPORTS removed — no live database source for governance report registry.
 // When a reports API is connected, restore a data-driven table here.
@@ -57,51 +38,23 @@ interface BoardBranchRow {
 }
 
 export default function BoardDashboard() {
-  const [period, setPeriod] = useState<DashboardPeriod>("ALL");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange("ALL"),
-  });
+  // Phase 2 R-6: replaced ~40 lines of inline period/filter state with the
+  // shared hook. `useDashboardPage` owns DashboardPeriod state, the
+  // referenceDate/minReferenceDate memos, the period→date-range sync effect,
+  // and handleClearFilters. Behavior is unchanged because this page had no
+  // page-specific overrides (no extraFilters, no mounted gate, no custom
+  // filterStats guard) — pure boilerplate that was drifting from the rest
+  // of the dashboard pages.
+  const {
+    filters,
+    setFilters,
+    filtersOpen,
+    setFiltersOpen,
+    handleClearFilters,
+    topBarProps,
+  } = useDashboardPage();
 
   const { data, isLoading } = useDashboardData(filters);
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.max) || new Date(),
-    [filterStats?.date_range?.max],
-  );
-  const minReferenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.min),
-    [filterStats?.date_range?.min],
-  );
-
-  useEffect(() => {
-    if (period === "CUSTOM") return;
-    const dateRange = getDateRange(
-      period,
-      referenceDate,
-      minReferenceDate || undefined,
-    );
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate &&
-      prev.endDate === dateRange.endDate
-        ? prev
-        : { ...prev, ...dateRange },
-    );
-  }, [period, referenceDate, minReferenceDate]);
-
-  const handleClearFilters = () => {
-    if (period === "CUSTOM") {
-      setFilters((prev) => ({
-        startDate: prev.startDate,
-        endDate: prev.endDate,
-      }));
-      return;
-    }
-    setFilters(
-      getDateRange(period, referenceDate, minReferenceDate || undefined),
-    );
-  };
 
   const summary = data?.summary;
   const trend = data?.trend ?? [];
@@ -165,17 +118,7 @@ export default function BoardDashboard() {
       <TopBar
         title="Board & Executive Packs"
         subtitle="Strategic overview & governance reporting"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => {
-          setPeriod("CUSTOM");
-          setFilters((prev) => ({ ...prev, ...r }));
-        }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        onToggleFilters={() => setFiltersOpen((current) => !current)}
-        filtersOpen={filtersOpen}
+        {...topBarProps}
       />
       <div className="flex flex-col gap-[14px] px-5 py-4">
         <AdvancedFilters

@@ -7,7 +7,8 @@ module Api
       # explicitly with a justifying comment (see AuthController#signin).
       # The previous `authenticate_user_optional!` shortcut is removed —
       # it allowed unauthenticated access to every dashboard / production
-      # endpoint and leaked customer PII (see SECURITY_REVIEW.md C-1, C-2).
+      # endpoint and leaked customer PII. See CLAUDE.md "Authentication
+      # & Authorization" for the full contract.
 
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity

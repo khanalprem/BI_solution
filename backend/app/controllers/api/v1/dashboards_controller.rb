@@ -240,8 +240,6 @@ module Api
 
         data = cached('digital_channels') do
           scope = TranSummary.apply_filters(filters)
-          digital = scope.where(tran_source: %w[mobile internet])
-          branch_scope = scope.where(tran_source: nil)
 
           channels = scope.where.not(tran_source: nil)
                           .group(:tran_source)
@@ -255,9 +253,18 @@ module Api
                        .order(:tran_date)
                        .map { |r| { date: r.date.to_s, channel: r.channel, amount: r.amount.to_f, count: r.count.to_i } }
 
-          digital_amount = digital.sum(:tran_amt).to_f
-          branch_amount  = branch_scope.sum(:tran_amt).to_f
-          total = digital_amount + branch_amount
+          # Phase 3 perf: collapse 3 separate scope scans (digital sum, branch
+          # sum, distinct-account count) into one SELECT with conditional
+          # aggregates. Reduces 3 partition scans to 1; output identical.
+          totals = scope.select(
+            "SUM(CASE WHEN tran_source IN ('mobile','internet') THEN tran_amt ELSE 0 END) AS digital_amount",
+            "SUM(CASE WHEN tran_source IS NULL THEN tran_amt ELSE 0 END) AS branch_amount",
+            "COUNT(DISTINCT CASE WHEN tran_source IN ('mobile','internet') THEN acct_num END) AS total_digital_accounts"
+          ).take
+          digital_amount         = totals&.digital_amount.to_f
+          branch_amount          = totals&.branch_amount.to_f
+          total_digital_accounts = totals&.total_digital_accounts.to_i
+          total                  = digital_amount + branch_amount
 
           {
             channels: channels,
@@ -265,7 +272,7 @@ module Api
             digital_amount: digital_amount,
             branch_amount: branch_amount,
             digital_ratio: safe_divide(digital_amount * 100, total),
-            total_digital_accounts: digital.distinct.count(:acct_num)
+            total_digital_accounts: total_digital_accounts
           }
         end
 
@@ -278,9 +285,24 @@ module Api
 
         data = cached('risk_summary') do
           scope = TranSummary.apply_filters(filters)
-          total = scope.sum(:tran_amt).to_f
           # Configurable via env var (default Rs. 50 Lakh = 5,000,000)
           high_value_threshold = ENV.fetch('RISK_HIGH_VALUE_THRESHOLD', '5000000').to_i
+
+          # Phase 3 perf: collapse 4 separate full-scope scans (total / credit /
+          # debit / high_value_count) into a single SELECT with conditional
+          # aggregates. Same shape as DashboardsController#build_summary.
+          # Reduces 4 partition scans to 1 on cache miss — 75% fewer queries
+          # for this block, identical output values.
+          totals = scope.select(
+            'SUM(tran_amt) AS total_amount',
+            "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS credit_amount",
+            "SUM(CASE WHEN part_tran_type = 'DR' THEN tran_amt ELSE 0 END) AS debit_amount",
+            "SUM(CASE WHEN tran_amt >= #{high_value_threshold.to_i} THEN 1 ELSE 0 END) AS high_value_count"
+          ).take
+          total            = totals&.total_amount.to_f
+          credit_amount    = totals&.credit_amount.to_f
+          debit_amount     = totals&.debit_amount.to_f
+          high_value_count = totals&.high_value_count.to_i
 
           by_gl = scope.group(:gl_sub_head_code)
                        .select('gl_sub_head_code, SUM(tran_amt) AS amount, SUM(tran_count) AS count, COUNT(DISTINCT acct_num) AS accounts')
@@ -312,8 +334,8 @@ module Api
           prev_month_amt   = monthly_amounts.length >= 2 ? monthly_amounts[-2] : 0
           mom_volume_change = prev_month_amt > 0 ? ((last_month_amt - prev_month_amt) / prev_month_amt * 100).round(1) : 0
 
-          credit_amount = scope.where(part_tran_type: 'CR').sum(:tran_amt).to_f
-          debit_amount = scope.where(part_tran_type: 'DR').sum(:tran_amt).to_f
+          # credit_amount, debit_amount and high_value_count come from the
+          # combined `totals` SELECT above (Phase 3 perf consolidation).
 
           # NPA proxy: accounts with acct_cls_flg in GAM (if available)
           npa_data = begin
@@ -420,7 +442,7 @@ module Api
             credit_amount: credit_amount,
             debit_amount: debit_amount,
             net_flow: credit_amount - debit_amount,
-            high_value_count: scope.where('tran_amt >= ?', high_value_threshold).count,
+            high_value_count: high_value_count,
             high_value_threshold: high_value_threshold,
             # Branch concentration (was incorrectly using provinces)
             top3_branch_share: safe_divide(top3_branch_amount * 100, total),
@@ -676,10 +698,25 @@ module Api
         [start_date, end_date]
       end
 
+      # SECURITY (Phase 3, fixed 2026-04-25):
+      # The cache key MUST include the per-user branch allow-list when the user
+      # is branch_scoped. Without this, two branch_staff users (Branch A teller
+      # and Branch B teller) with the same query string would share one cache
+      # entry — whichever loaded first poisons the cache for the other. The
+      # branch list is server-side (injected by scoped_branch_filter), not in
+      # request.query_parameters, so the previous key collided.
+      #
+      # For non-branch-scoped users (admin/manager/analyst/auditor) the cache
+      # is still global (filters identical → same data → same cache). That's
+      # both correct and efficient — no per-admin cache duplication.
       def cached(action, expires_in: 15.minutes, &block)
         key_data = request.query_parameters
                           .merge('_sd' => resolved_dates[0].to_s, '_ed' => resolved_dates[1].to_s)
-                          .sort.to_h
+        if current_user&.branch_scoped?
+          allowed = Array(current_user.allowed_branch_names).sort.join(',')
+          key_data = key_data.merge('_branches' => allowed)
+        end
+        key_data = key_data.sort.to_h
         cache_key = "dashboard_#{action}_#{Digest::MD5.hexdigest(key_data.to_query)}"
         Rails.cache.fetch(cache_key, expires_in: expires_in, &block)
       end

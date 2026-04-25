@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -11,19 +11,12 @@ import {
   CreditCard,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { AdvancedFilters } from "@/components/ui/AdvancedFilters";
 import { KPICard } from "@/components/ui/KPICard";
 import { ChartCard } from "@/components/ui/ChartCard";
-import {
-  useEmployeeDetail,
-  useFilterStatistics,
-} from "@/lib/hooks/useDashboardData";
-import {
-  formatNPR,
-  formatPercent,
-  getDateRange,
-  parseISODateToLocal,
-} from "@/lib/formatters";
-import type { DashboardFilters } from "@/types";
+import { useEmployeeDetail } from "@/lib/hooks/useDashboardData";
+import { useDashboardPage } from "@/lib/hooks/useDashboardPage";
+import { formatNPR, formatPercent } from "@/lib/formatters";
 import {
   PremiumLineChart,
   PremiumBarChart,
@@ -34,50 +27,21 @@ import {
 } from "@/components/ui/AdvancedDataTable";
 import { StandardDashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 
-type DashboardPeriod =
-  | "ALL"
-  | "1D"
-  | "WTD"
-  | "MTD"
-  | "QTD"
-  | "YTD"
-  | "PYTD"
-  | "FY"
-  | "CUSTOM";
-
 export default function EmployeeDetailPage() {
   const params = useParams();
   const userId = decodeURIComponent((params?.userId as string) ?? "");
 
-  const [period, setPeriod] = useState<DashboardPeriod>("ALL");
-  const [filters, setFilters] = useState<DashboardFilters>({
-    ...getDateRange("ALL"),
-  });
-  const { data: filterStats } = useFilterStatistics();
-
-  const referenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.max) || new Date(),
-    [filterStats?.date_range?.max],
-  );
-  const minReferenceDate = useMemo(
-    () => parseISODateToLocal(filterStats?.date_range?.min),
-    [filterStats?.date_range?.min],
-  );
-
-  useEffect(() => {
-    if (period === "CUSTOM") return;
-    const dateRange = getDateRange(
-      period,
-      referenceDate,
-      minReferenceDate || undefined,
-    );
-    setFilters((prev) =>
-      prev.startDate === dateRange.startDate &&
-      prev.endDate === dateRange.endDate
-        ? prev
-        : { ...prev, ...dateRange },
-    );
-  }, [period, referenceDate, minReferenceDate]);
+  // Migrated from inline period state. AdvancedFilters re-enabled — was
+  // hidden via showFiltersButton={false}, which left the user able to change
+  // period only. Now they can also slice by branch / channel / GL code /
+  // amount range while still pinned to this employee. `entryUser` is set
+  // through extraFilters so it cannot be cleared by the Clear-Filters button.
+  const extraFilters = useMemo(() => ({ entryUser: userId }), [userId]);
+  const {
+    filters, setFilters,
+    filtersOpen, setFiltersOpen,
+    handleClearFilters, topBarProps,
+  } = useDashboardPage({ extraFilters });
 
   const { data, isLoading } = useEmployeeDetail(filters, userId);
 
@@ -337,19 +301,7 @@ export default function EmployeeDetailPage() {
         <TopBar
           title={userId}
           subtitle="Employee · Transaction activity"
-          period={period}
-          onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-          customRange={{
-            startDate: filters.startDate,
-            endDate: filters.endDate,
-          }}
-          onCustomRangeChange={(r) => {
-            setPeriod("CUSTOM");
-            setFilters((prev) => ({ ...prev, ...r }));
-          }}
-          minDate={filterStats?.date_range?.min || undefined}
-          maxDate={filterStats?.date_range?.max || undefined}
-          showFiltersButton={false}
+          {...topBarProps}
         />
         <StandardDashboardSkeleton />
       </>
@@ -361,19 +313,17 @@ export default function EmployeeDetailPage() {
       <TopBar
         title={userId}
         subtitle="Employee · Transaction activity"
-        period={period}
-        onPeriodChange={(p) => setPeriod(p as DashboardPeriod)}
-        customRange={{ startDate: filters.startDate, endDate: filters.endDate }}
-        onCustomRangeChange={(r) => {
-          setPeriod("CUSTOM");
-          setFilters((prev) => ({ ...prev, ...r }));
-        }}
-        minDate={filterStats?.date_range?.min || undefined}
-        maxDate={filterStats?.date_range?.max || undefined}
-        showFiltersButton={false}
+        {...topBarProps}
       />
 
       <div className="flex flex-col gap-[14px] px-5 py-4 page-enter">
+        <AdvancedFilters
+          filters={filters}
+          onChange={setFilters}
+          onClear={handleClearFilters}
+          advancedOpen={filtersOpen}
+          onAdvancedOpenChange={setFiltersOpen}
+        />
         {/* ── Back + Identity header ── */}
         <div className="flex items-center gap-4">
           <Link

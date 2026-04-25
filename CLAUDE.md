@@ -103,7 +103,7 @@ No ETL, no cache — every query hits live PostgreSQL (production DB: `10.1.1.16
 
 ```
 BI_solution/
-├── CLAUDE.md                       ← you are here
+├── CLAUDE.md                       ← you are here (single source of truth)
 ├── backend/
 │   ├── app/
 │   │   ├── controllers/api/v1/     ← REST endpoints (production_data, filters, auth)
@@ -112,9 +112,16 @@ BI_solution/
 │   │   │   └── production_data_service.rb  ← THE core service (dimensions, measures,
 │   │   │                                      period WHERE generation, proc call)
 │   │   └── models/                 ← User, Branch, Customer (Rails DB)
-│   ├── config/routes.rb
+│   ├── config/
+│   │   ├── routes.rb
+│   │   └── initializers/
+│   │       ├── cors.rb             ← Production CORS — fails loudly if FRONTEND_URL missing
+│   │       └── rack_attack.rb      ← Rate limiting (5/min signin, 30/min procedure endpoints)
+│   ├── lib/bank_bi/
+│   │   └── jwt_token.rb            ← Single source for JWT encode/decode/secret
 │   └── db/scripts/                 ← SQL scripts for DBA manual execution (NOT migrations)
-│       └── performance_indexes.sql ← Additive indexes for EAB, year_month, etc.
+│       ├── performance_indexes.sql ← First wave: EAB, year_month, entry_user, gl_sub_head_code
+│       └── phase3_indexes.sql      ← Second wave: cif_id+date, acct_num+date, htd, etc.
 ├── frontend/
 │   ├── app/
 │   │   ├── dashboard/
@@ -137,7 +144,9 @@ BI_solution/
 │   │   │   ├── useDashboardPage.ts ← shared filter/period state hook (used by ALL pages)
 │   │   │   └── useDashboardData.ts ← TanStack Query wrappers
 │   │   ├── formatters.ts           ← NPR formatting, date helpers
+│   │   ├── lookups.ts              ← LookupOption → SelectOption adapter (single source)
 │   │   └── exportCsv.ts            ← CSV export utility
+│   ├── middleware.ts               ← UI-only auth gate (cookie hint; backend is the real gate)
 │   ├── types/index.ts              ← DashboardFilters, FilterValuesResponse, etc.
 │   └── components.json             ← shadcn/ui CLI config
 └── docker-compose.yml
@@ -414,9 +423,17 @@ const { filters, setFilters, filtersOpen, setFiltersOpen, handleClearFilters, to
 // For detail pages with extra filters:
 const extraFilters = useMemo(() => ({ branchCode }), [branchCode]);
 const { filters, ... } = useDashboardPage({ extraFilters });
+// For pages whose default period is relative (YTD/MTD/QTD) and that should
+// NOT misfire a today-anchored query before the production data range loads:
+const { ... } = useDashboardPage({ waitForFilterStats: true });
 // TopBar: always spread topBarProps
 <TopBar title="Page Title" subtitle="..." {...topBarProps} />
 ```
+
+**Options summary:**
+- `extraFilters` — partial DashboardFilters re-applied on every period sync. Use to pin one dim (`cifId`, `branchCode`, `entryUser`) so it survives `handleClearFilters`.
+- `defaultPeriod` — initial period on first mount. Defaults to `'ALL'`. Override on pages with expensive multi-year queries (e.g. /deposits uses `'YTD'`).
+- `waitForFilterStats` — when true, the period→date-range sync waits until `filterStats?.date_range?.max` is defined. Prevents YTD/MTD/QTD from briefly running a today-anchored query against a 2024-ending dataset. /executive uses this.
 
 **Exception: self-contained pages that build their own filter UI** (currently `/dashboard/segmentation`) skip `useDashboardPage` entirely and hide the TopBar period/filter chrome with `showPeriodSelector={false}` + `showFiltersButton={false}`. Use this escape hatch only when the page's filter model is genuinely different from the shared period + AdvancedFilters model — otherwise use `useDashboardPage`.
 
@@ -488,6 +505,112 @@ bundle exec rails c        # console
 bundle exec rails routes   # route list
 bundle exec rails db:migrate
 ```
+
+---
+
+## Authentication & Authorization
+
+This system serves customer PII over an authenticated API. Get the contract right.
+
+### The auth chain (top to bottom)
+
+1. `BaseController < ApplicationController` — `ApplicationController` enforces `before_action :authenticate_user!`. **`BaseController` does NOT skip it.** Every endpoint under `/api/v1/dashboards/*`, `/api/v1/production/*`, `/api/v1/filters/*`, `/api/v1/users/*` requires a valid bearer token.
+2. **Only `AuthController#signin` is public** (it lives at `ActionController::API`, outside the gate). `auth/me` reads the token directly.
+3. JWT encode/decode lives in `lib/bank_bi/jwt_token.rb` (`BankBi::JwtToken`) — **the single source of truth**. Never reimplement encode/decode. Claims pinned: `iss=bankbi`, `aud=bankbi-frontend`, 8h TTL. Role is NOT in the payload — refetched from DB on every request so role changes take effect immediately.
+4. **Required env vars in production:** `JWT_SECRET_KEY`, `FRONTEND_URL` (HTTPS), `APP_HOST`. The app will refuse to boot without `JWT_SECRET_KEY`.
+
+### Role-based gates
+
+| Helper | Where | What it does |
+|---|---|---|
+| `authenticate_user!` | `ApplicationController` | Rejects requests without a valid bearer token (401). |
+| `require_pii!` | `ApplicationController` | 403 unless `current_user.can_see_pii?` (superadmin/admin/manager). Applied to `demographics`, `employee_detail`. `customer_profile` is NOT gated — it redacts PII inline so analysts retain aggregates. |
+| `require_admin!` | `UsersController` | 403 unless role is `superadmin` or `admin`. Applies to all `/users` endpoints. |
+| `authorize_role_assignment!` | `UsersController` | Prevents an admin from creating or promoting a user to a role at or above their own. Only `superadmin` may assign `superadmin`. |
+| `authorize_target_user!` | `UsersController` | Prevents an admin from editing a peer or superior (e.g. resetting a superadmin's password). Self-edits always allowed. |
+| `scoped_branch_filter(filters)` | `ApplicationController` | Injects `branch_staff` users' `allowed_branch_names` into filters. Returns filters unchanged for non-branch-scoped roles. |
+| `scoped_filter_params` | `ApplicationController` | Wrapper: `scoped_branch_filter(filter_params)`. **Every dashboard / production action must use this instead of `filter_params` directly.** |
+
+### Adding a new endpoint — auth checklist
+
+1. Inherit from `BaseController` (auth required by default).
+2. If the endpoint returns customer PII, add `before_action :require_pii!, only: %i[your_action]`.
+3. If the endpoint takes the standard filter set, use `scoped_filter_params.merge(...)`, never `filter_params.merge(...)`.
+4. Add the route to `spec/requests/api_v1_auth_gate_spec.rb`'s `PROTECTED_ROUTES` list (regression test that asserts 401 without a token).
+5. If the endpoint should be public, add `skip_before_action :authenticate_user!` with a justifying comment, and add to `PUBLIC_ROUTES` in the same spec.
+
+### Rate limiting
+
+`Rack::Attack` (`config/initializers/rack_attack.rb`) throttles:
+
+- `/api/v1/auth/signin` — 5 req/min per IP **and** 5 req/min per email (defeats credential stuffing).
+- `/api/v1/*` — 300 req/min per IP (generic backstop).
+- `/api/v1/production/*` and `/api/v1/dashboards/*` — 30 req/min per IP (procedure endpoints are expensive on cache miss).
+
+Returns 429 with a `Retry-After` header. Tune limits in the initializer per environment.
+
+### CORS
+
+`config/initializers/cors.rb` requires `FRONTEND_URL` (HTTPS) in production — the app refuses to boot otherwise. `credentials: false` because the API authenticates via the `Authorization` header, not cookies. `headers` narrowed to `Authorization, Content-Type, Accept, X-Requested-With`.
+
+### Token storage (frontend)
+
+JWT lives in `localStorage('token')` and is sent via the axios `Authorization` header (see `frontend/lib/api.ts`). The `bankbi-auth=1` cookie checked by `frontend/middleware.ts` is **NOT auth** — it's a UI hint for the redirect-to-signin flow. The backend's `authenticate_user!` is the real gate. **Don't read the cookie as authoritative; don't write security logic against it.**
+
+### Default headers (production)
+
+`production.rb` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. `force_ssl = true` adds HSTS automatically. `config.hosts` is set from `APP_HOST` env var (DNS-rebinding protection).
+
+---
+
+## Performance & Caching
+
+### Index strategy
+
+All index DDL lives in `backend/db/scripts/`. **Never run migrations against the warehouse.** The DBA reviews and executes these files manually with `EXPLAIN ANALYZE` before each statement.
+
+| File | Statements | Covers |
+|------|-----------|--------|
+| `performance_indexes.sql` | 4 | EAB composite, `tran_summary(year_month)`, `(entry_user)`, `(gl_sub_head_code)` |
+| `phase3_indexes.sql` | 8 | `(cif_id, tran_date DESC)`, `(acct_num, tran_date DESC)`, `(year_quarter)`, `(tran_date, tran_source)`, `((gl_sub_head_code::varchar))`, `gam(cif_id)`, `htd(acid, tran_date)`, `user_master(user_name)` |
+
+All statements are `CREATE INDEX CONCURRENTLY IF NOT EXISTS` — additive, non-locking. `phase3_indexes.sql`'s header walks the DBA through the EXPLAIN-first workflow and lists indexes intentionally NOT included with reasoning (low-cardinality columns like `part_tran_type`).
+
+### `DashboardsController#cached` — branch-scoped cache key
+
+The cache key includes `current_user.allowed_branch_names` when `branch_scoped?`. Without this, two branch_staff users with different allowed branches but the same query string would share a cache entry and see each other's data. Non-branch-scoped users (admin/manager/analyst/auditor) still share the global cache — efficient because their filters are identical for the same query string.
+
+**When adding a new server-injected filter** (anything that comes from `current_user`, not `request.query_parameters`), include it in the cache key inside `cached(...)`. Otherwise you create the same leak.
+
+### Aggregate consolidation pattern
+
+Endpoints that compute multiple summary metrics from the same scope use a **single `SELECT` with conditional aggregates**, not separate `scope.sum(...)` calls. Reference implementations:
+
+- `DashboardsController#build_summary` — 11 metrics, 1 query.
+- `DashboardsController#risk_summary` — 4 metrics (total/credit/debit/high_value_count), 1 query (was 4).
+- `DashboardsController#digital_channels` — 3 KPIs (digital amount, branch amount, distinct accounts), 1 query (was 3).
+
+Pattern:
+
+```ruby
+totals = scope.select(
+  'SUM(tran_amt) AS total_amount',
+  "SUM(CASE WHEN part_tran_type = 'CR' THEN tran_amt ELSE 0 END) AS credit_amount",
+  ...
+).take
+```
+
+Use `take` (not `first`) so we don't add a redundant ORDER BY. Coerce with `.to_f` / `.to_i` because Rails serializes `BigDecimal` as a string.
+
+### Partition pruning
+
+`tran_summary` is partitioned by year (`tran_summary_2021..2025`). `WHERE tran_date BETWEEN ? AND ?` should prune to the relevant year(s). Partitions are likely defined on `tran_date` only — queries filtering on `year_month` / `year_quarter` / `year` columns alone won't prune unless those columns are also in the partition CHECK constraint. **Mitigation already in place:** every endpoint goes through `apply_filters(filters)` which always includes a `start_date..end_date` predicate from the period selector. Don't write a new endpoint that omits the date range.
+
+### N+1 / waterfall checklist for new pages
+
+- New dashboard pages must use `useDashboardPage` (shared period/filter state) and `useDashboardQuery` (the React Query factory in `useDashboardData.ts`).
+- Don't fan out N requests in a `useEffect` — push the fan-out into the backend (one endpoint that returns the joined payload). The pattern in `customer_profile` is the reference shape.
+- Frontend N+1 inspection: every `useQuery` should have a stable `queryKey` so React Query dedupes across components. The factory handles this.
 
 ---
 
@@ -604,10 +727,10 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
 - `rfm_score` is no longer in the Pivot sidebar's `STANDARD_MEASURES`. It is still a valid backend measure (used by `/dashboard/segmentation`), but intentionally hidden from generic pivoting because it's a composite formula — mixing it with other aggregates in arbitrary pivot layouts produces meaningless column comparisons. To add RFM elsewhere, call `production/explorer` with `measures=rfm_score` directly.
 - `AdvancedDataTable.tsx` still uses hand-rolled table primitives — future work to migrate internals to shadcn `Table` components
 - `Select.tsx` / `SearchableMultiSelect` kept as-is (complex search+checkbox multi-select not achievable with shadcn Select); shadcn `select.tsx` is available for new simple single-select usage going forward
-- API auth is optional (`authenticate_user_optional!` in BaseController) — TODO: switch to required auth once frontend auth flow is fully hardened
+- API auth is **required** on every endpoint under `BaseController` (signin is the only public route). The previous "optional auth" pattern was removed — see the "Authentication & Authorization" section above.
 - `customer/page.tsx` segment/risk charts derive from top-20 customers only — should use a dedicated backend aggregate
 - `FY` period start date hardcoded to July 16 — Nepal's fiscal year start varies by Bikram Sambat calendar (±1-2 days)
-- `db/scripts/performance_indexes.sql` contains 4 pending indexes for DBA execution (eab composite, year_month, entry_user, gl_sub_head_code)
+- DBA index workflow lives in `db/scripts/performance_indexes.sql` (4 indexes) and `db/scripts/phase3_indexes.sql` (8 more indexes). Both files are `CREATE INDEX CONCURRENTLY IF NOT EXISTS` only — see the "Performance & Caching" section above for the recommended apply order.
 - Risk page thresholds now configurable via env vars: `RISK_HIGH_VALUE_THRESHOLD`, `RISK_CONCENTRATION_WARN/HIGH`, `RISK_VOLATILITY_WARN/HIGH`
 - `digital_channels` assumes NULL `tran_source` = branch — verify with data owners
 - **Numeric/decimal PG columns are returned as JSON strings** (Rails serializes `BigDecimal` as string). Frontend must coerce with `Number(v)` before arithmetic (e.g., TOTAL row summation in `buildPivotData`) and before passing to `formatNPR`. The `renderCell()` helper handles this automatically by detecting numeric-looking strings via `/^-?\d+(\.\d+)?$/`. When writing new components that consume measure columns, always coerce.
@@ -632,10 +755,27 @@ The comparison query is a **second call** to `get_tran_summary` with the period'
     - **Numeric coercion** — `sumDeposit()` / `coerceNumber()` helpers cast `row.deposit` (Rails ships `BigDecimal` as a JSON string) to `Number` before arithmetic. All KPIs and chart data points pass through these.
   - **Adding a new deposit dim:** (1) add to `DEPOSIT_DIMENSIONS` in service, (2) add to `DEPOSIT_DIMS` in `deposits/page.tsx`, (3) if date-like add its `date_join` string + update `DEPOSIT_DATE_DIM_PRIORITY`.
 - **Filter set is fixed by what the backend WHERE clauses support.** Valid filter keys (DashboardFilters + backend `filter_params`): `province, branchCode, cluster, tranProvince, tranCluster, tranBranch, solid, tranType, partTranType, tranSource, product, service, merchant, glSubHeadCode, entryUser, vfdUser, acctNum, cifId, acctName, acid, minAmount, maxAmount` + date-dimension filters (`tranDate, yearMonth, yearQuarter, year` with exact + from/to). GAM-side (`province, branchCode, cluster`) and TRAN-side (`tranProvince, tranCluster, tranBranch`) are first-class separate filters backed by distinct columns in `tran_summary`. `district`, `municipality`, `schemeType` were removed — they were rendered but produced no SQL. Adding a new filter requires adding it to: (1) `DashboardFilters` type, (2) `toApiFilters()` serializer, (3) backend `filter_params`, (4) `explorer_where_clause` WHERE generation, (5) `AdvancedFilters.tsx` (if needed in the UI), (6) `filter_values` endpoint + `FilterValuesResponse` type (if it needs a dropdown).
-- **Filter dropdowns come from `public.get_static_data(<type>)`, not `SELECT DISTINCT`.** `FiltersController#values` calls `ProductionDataService#static_lookup(type)` for each of: `branch, cluster, province, gsh, product, service, merchant, acctnum, acid, cifid, user`. The procedure returns `{name, value}` rows dropped into temp table `static_data` (connection-scoped, so the call runs inside `with_connection`). `FilterValuesResponse` fields are typed `LookupOption[]` (`{ name: string; value: string }`) — display `name` in the UI, submit `value` to the filter payload. The `LookupOption → { value, label: name }` adapter is inlined at each consumer (pivot `getOptions`, segmentation `opts`, AdvancedFilters). `tran_type`, `part_tran_type`, and `tran_source` are intentionally NOT in `filter_values`: they render as free-text chip inputs (`MultiValueChipInput`) because their values are short and user-driven, and the cardinality didn't warrant a dropdown.
+- **Filter dropdowns come from `public.get_static_data(<type>)`, not `SELECT DISTINCT`.** `FiltersController#values` calls `ProductionDataService#static_lookup(type)` for each of: `branch, cluster, province, gsh, product, service, merchant, acctnum, acid, cifid, user`. The procedure returns `{name, value}` rows dropped into temp table `static_data` (connection-scoped, so the call runs inside `with_connection`). `FilterValuesResponse` fields are typed `LookupOption[]` (`{ name: string; value: string }`) — display `name` in the UI, submit `value` to the filter payload. The `LookupOption → { value, label: name }` adapter is **`lookupOptions(arr)` exported from `frontend/lib/lookups.ts`** — single source for AdvancedFilters, pivot, deposits, and segmentation. Don't re-inline the adapter; import it. `tran_type`, `part_tran_type`, and `tran_source` are intentionally NOT in `filter_values`: they render as free-text chip inputs (`MultiValueChipInput`) because their values are short and user-driven, and the cardinality didn't warrant a dropdown.
 - **Filter values cached once per session.** `useFilterValues` uses `staleTime: Infinity` and `refetchOnWindowFocus: false` — dropdowns populate on first mount and never refetch for the life of the browser tab. This is deliberate (the underlying `static_data` lookup is near-static), so don't add a TTL. If a new value must appear, the user reloads.
 - **Account-scoped filters are all multi-value.** `acctNum`, `cifId`, `acctName`, `acid` accept `string | string[]`. Exact-match on numeric-like columns (`acct_num::text IN (...)`, `acid::text IN (...)`). Partial-match on text columns (`cif_id::text ILIKE 'a%' OR cif_id::text ILIKE 'b%' ...`, same for `acct_name`). `tran_summary.rb#apply_partial_text_filter` handles array values via OR'd ILIKE placeholders — keep it array-safe when adding text-filter columns.
 - **Measure-level HAVING filters via structured params.** `production/explorer` accepts `having[<measure_key>][op]=<op>&having[<measure_key>][value]=<val>` where `<op>` is one of `= <= >= < >` and `<val>` is numeric (or ISO date for `tran_maxdate`). Whitelist lives in `HAVING_EXPR` in `production_controller.rb` and must mirror each measure's `select_sql` aggregate. Frontend sends these through the `havingFilters` param of `useProductionExplorer`. The controller builds a safe `HAVING ...` string — raw HAVING input from the client is never accepted. Used by `/dashboard/segmentation` and `/dashboard/pivot` for per-measure thresholds (standard measures only — comparison measures like `thismonth_amt` are not in `HAVING_EXPR`).
 - **Pivot per-measure sort direction.** Pivot page `orderFields: string[]` tracks which keys are in the ORDER BY list; companion `orderDirs: Record<string, 'asc' | 'desc'>` tracks direction per key. Each non-date dim and measure row renders **two side-by-side buttons** — `↑` ASC and `↓` DESC — that are selectable independently (click either direction to activate it; click the active one again to remove the sort). The same two-button pattern is used on `/dashboard/deposits` (per-non-date-dim) and `/dashboard/segmentation` (per-measure). The four date dims share a single direction picker in the Date Dimensions container header — `dateSortDir: 'asc' | 'desc' | null`, rendered as the same two-button group, applies to all selected date dims at once (in `DATE_FIELD_ORDER`: year → year_quarter → year_month → tran_date). When pivot is enabled (any partition active on the pivot page, or the date Pivot toggle on the deposit page), all manual sort buttons (date container included) are visually disabled and `effectiveOrderList` ignores them — `orderbyClause` is auto-built from the pivot order alone (pivoted columns first, then row dims). `orderbyClause` appends ` DESC` only for keys flipped to desc (ASC is the implicit SQL default, leaving it off keeps the sanitizer's token whitelist happy). The backend also substitutes measure aliases (e.g. `rfm_score`, `tran_amt`) with their `order_sql` aggregate expression before passing the clause to `get_tran_summary`, because PG doesn't resolve SELECT-list aliases inside window-function ORDER BY at the inner CTE level.
 - **Pivot per-dim filter modes.** Date dims (`tran_date`, `year_month`, `year_quarter`, `year`) offer `Multi | Range` — no Single mode (Multi with one chip is equivalent). Default is `Multi`; state lives in `dateFilterModes`. Categorical dims (dropdown-backed: `gam_branch`, `cif_id`, `acid`, `acct_num`, `gsh`, `product`, `service`, `merchant`, `cluster`, `province`, TRAN-side variants) offer `Single | Multi`; state lives in `categoricalFilterModes`, default `multi`. Single mode uses `SearchableMultiSelect mode="single"` which replaces the value instead of toggling and closes on selection; Multi mode is the standard multi-select with "Select all / Clear" bar. Switching modes clears the current filter value for that dim to prevent carrying stale multi-selections into single mode. Text / text-multi dims (`acct_name`, `tran_type`, `part_tran_type`, `tran_source`) retain free-text chip inputs (`MultiValueChipInput`) unchanged.
 - **Detail pages use `useDashboardPage({ extraFilters })`** to pin a dimension (e.g., `cifId`, `branchCode`). This keeps the period/filter panel state identical to list pages while preventing accidental clearing of the pinned filter. Pages using this pattern: `branch/[branchCode]`, `customer/[cifId]`. Do NOT build custom period state on detail pages.
+
+### Latent bugs awaiting business confirmation (NOT patched)
+
+These are real behavioral oddities the audit surfaced but did not change because each one needs a stakeholder decision before "fixing" them. Listed for the next contributor to ask about.
+
+- **`non_date_filter_clauses` drops 4 filters that `explorer_where_clause` honors.** The main pivot query honors `tran_branch / tran_cluster / tran_province / tran_type` filters; the period-comparison query (which uses `non_date_filter_clauses`) does NOT. Result: a "This Month vs Prev Month" comparison with `tran_branch=Pokhara` shows Pokhara for the main column and bank-wide for the comparison column. May be intentional ("compare account behavior over time independent of channel") but looks wrong if you're not expecting it. To fix: add the four entries to `categorical_filter_clauses`'s mapping in `production_data_service.rb`.
+- **Default-date inconsistency between `dashboards_controller#resolved_dates` and `production_controller#explorer`.** Dashboards default to last-30-days when no period is sent; explorer passes `nil` and skips the date predicate entirely. The frontend hides this because `useDashboardPage` always sends a date range, but a future caller (curl, integration) will see different windows from the same nominal "no period" input.
+- **Type-mismatch JOIN in `financial_summary` by_gl.** `JOIN gsh ON gsh.gl_sub_head_code::varchar = tran_summary.gl_sub_head_code::varchar` — the double cast prevents Postgres from using any plain index on `gl_sub_head_code`. Workaround: expression index `tran_summary ((gl_sub_head_code::varchar))` already in `phase3_indexes.sql`. Real fix: align the column types and remove the casts (DBA-owned schema change).
+- **Partition pruning for `year_month`/`year_quarter`/`year`-only queries.** `tran_summary` partitions are likely defined on `tran_date` only — queries that filter on the derived columns alone won't prune. Mitigated today because every endpoint goes through `apply_filters` which always includes the date range. Don't write an endpoint that omits it.
+
+### Deferred refactors (intentional follow-up work)
+
+- **`pivot/page.tsx` extraction sequence.** The file is 2,744 lines. Safe extraction order: `buildPivotData` (pure fn) → `SqlPreview` (display) → `HtdDetailPanel` → dim/measure sidebar → URL-sync hook. Each step = its own PR with screenshot diff. Do NOT touch the whole file at once.
+- ~~`executive/page.tsx` and `employer/[userId]/page.tsx` migration to `useDashboardPage`~~ — **completed**: both pages now use the shared hook. `useDashboardPage` gained a `waitForFilterStats: boolean` option for pages (like /executive) whose default period is relative and would misfire a today-anchored query before the production data range loads. `employer/[userId]` had `AdvancedFilters` re-enabled in the same pass — was previously hidden via `showFiltersButton={false}`, leaving users unable to slice an employee's activity by branch / channel / GL code.
+- **`Select.tsx` full collapse.** Currently 4 components (`Select`, `MultiSelect`, `SearchableSelect`, `SearchableMultiSelect`). Phase 2 extracted `<SelectChevronIcon>` and `<SelectCheckIcon>` to dedupe the SVGs. Long-term: fold all four into one `<Select mode="single|multi" searchable>` component. Touches every consumer (~25 callsites) — coordinated PR with snapshot tests.
+- **`CHART_COLORS` constant.** 20 inline hex literals (`'#3b82f6'`, `'#10b981'`, etc.) across 6 dashboard pages. Recharts can't read CSS variables, so the values must stay as hex strings — but they should come from one constant. Add to `lib/formatters.ts` and replace inline literals one page at a time, eyeballing each chart.
+- **GSH column-type alignment.** See "Type-mismatch JOIN" latent bug above. Schema fix is cleaner than the expression-index workaround.

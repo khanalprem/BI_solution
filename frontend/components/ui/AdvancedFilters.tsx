@@ -6,6 +6,7 @@ import { SearchableMultiSelect } from './Select';
 import { MultiValueChipInput } from './MultiValueChipInput';
 import { useFilterStatistics, useFilterValues } from '@/lib/hooks/useDashboardData';
 import { formatNPR, parseISODateToLocal } from '@/lib/formatters';
+import { lookupOptions, valueToName } from '@/lib/lookups';
 import type { DashboardFilters, LookupOption, MultiValueFilter } from '@/types';
 import {
   Dialog,
@@ -62,13 +63,10 @@ function formatCoverageDate(value?: string | null): string {
   return parsed.toLocaleDateString('en-NP', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function toOptions(arr: LookupOption[] | undefined) {
-  return (arr ?? []).map(({ name, value }) => ({ value, label: name }));
-}
-
-function valueToName(arr: LookupOption[] | undefined, value: string): string {
-  return arr?.find((o) => o.value === value)?.name ?? value;
-}
+// `toOptions` and `valueToName` were moved to lib/lookups.ts in Phase 2 R-7
+// so all four callsites (AdvancedFilters, deposits, pivot, segmentation) share
+// one implementation. Keep the local alias for the inline call sites below.
+const toOptions = lookupOptions;
 
 function advancedFieldsFrom(f: DashboardFilters) {
   return {

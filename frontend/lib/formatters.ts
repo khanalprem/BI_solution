@@ -33,11 +33,12 @@ export function formatNPR(amount: number | null | undefined, showDecimals: boole
   return isNegative ? `-${result}` : result;
 }
 
+// Phase 2 R-10: `toLocalDateString` was a private duplicate of the exported
+// `toIsoDate` (defined below). Kept the name as an internal alias so the
+// callsites in this file stay readable, but it now delegates to the canonical
+// helper. New code should call `toIsoDate` directly.
 function toLocalDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toIsoDate(date);
 }
 
 export function parseISODateToLocal(dateString?: string | null): Date | null {

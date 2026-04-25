@@ -4,8 +4,8 @@ class TranSummary < ApplicationRecord
 
   # `by_date_range` scope is the only public scope retained — used implicitly
   # via `apply_filters` and explicitly in lib/tasks/import_data.rake docs.
-  # Removed in Phase 1 (REVIEW_OPTIMIZATION.md R-3): `by_branch`, `by_province`,
-  # `by_customer` scopes; `total_amount`, `total_count`, `unique_accounts`,
+  # Removed in the optimization pass: `by_branch`, `by_province`, `by_customer`
+  # scopes; `total_amount`, `total_count`, `unique_accounts`,
   # `unique_customers`, `average_transaction` class methods. None of them had
   # any caller in app code (only `puts` doc strings in import_data.rake).
   scope :by_date_range, ->(start_date, end_date) {
