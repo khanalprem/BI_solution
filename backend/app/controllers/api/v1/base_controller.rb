@@ -1,11 +1,13 @@
 module Api
   module V1
     class BaseController < ApplicationController
-      # Dashboard/filter/production endpoints use optional auth for now.
-      # TODO: Switch to required auth once all frontend flows include the token.
-      # UsersController overrides this with require_admin!
-      skip_before_action :authenticate_user!
-      before_action :authenticate_user_optional!
+      # SECURITY (C-1, fixed 2026-04-25): every endpoint inherits the
+      # `before_action :authenticate_user!` from ApplicationController.
+      # If a subclass needs to be public it must call `skip_before_action`
+      # explicitly with a justifying comment (see AuthController#signin).
+      # The previous `authenticate_user_optional!` shortcut is removed —
+      # it allowed unauthenticated access to every dashboard / production
+      # endpoint and leaked customer PII (see SECURITY_REVIEW.md C-1, C-2).
 
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity

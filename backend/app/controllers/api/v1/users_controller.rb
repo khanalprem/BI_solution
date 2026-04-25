@@ -17,7 +17,10 @@ module Api
 
       # POST /api/v1/users
       def create
-        user = User.new(user_params)
+        attrs = user_params
+        return if authorize_role_assignment!(attrs[:role])
+
+        user = User.new(attrs)
         user.is_active = true
         user.is_staff     = (User::ROLES - %w[superadmin]).include?(user.role)
         user.is_superuser = user.role == 'superadmin'
@@ -35,6 +38,13 @@ module Api
 
         # Strip blank password — never clear an existing password_digest
         attrs.delete(:password) if attrs[:password].blank?
+
+        # SECURITY (C-4, fixed 2026-04-25): admin cannot create or promote a
+        # user to a role at or above their own level (only superadmin can
+        # assign superadmin). Also blocks editing a peer/superior even
+        # without a role change (can't reset another superadmin's password).
+        return if authorize_role_assignment!(attrs[:role])
+        return if authorize_target_user!(@user)
 
         # Prevent demoting the last superadmin
         incoming_role = attrs[:role]
@@ -73,6 +83,46 @@ module Api
         unless %w[superadmin admin].include?(current_user&.role)
           render json: { error: 'Admin access required' }, status: :forbidden
         end
+      end
+
+      # Returns truthy and renders an error if the caller may not assign
+      # `target_role`. Returns nil (falsy) when the assignment is allowed.
+      # Rule: only superadmin may assign superadmin. Otherwise the target
+      # role must be strictly LOWER (higher index) in User::ROLE_LEVEL than
+      # the caller's role.
+      def authorize_role_assignment!(target_role)
+        return nil if target_role.blank?
+        return nil if current_user.role == 'superadmin'
+
+        if target_role == 'superadmin'
+          render json: { error: 'Only superadmin can assign the superadmin role' }, status: :forbidden
+          return true
+        end
+
+        target_level = User::ROLE_LEVEL[target_role.to_s]
+        actor_level  = User::ROLE_LEVEL[current_user.role.to_s]
+        if target_level.nil? || actor_level.nil? || target_level <= actor_level
+          render json: { error: "You cannot assign role '#{target_role}' (equal or higher than your own)" },
+                 status: :forbidden
+          return true
+        end
+        nil
+      end
+
+      # Block editing a user whose role is at or above the caller's level
+      # (except editing yourself). Prevents an admin from rotating a
+      # superadmin's password or flipping their is_active flag.
+      def authorize_target_user!(target)
+        return nil if current_user.role == 'superadmin'
+        return nil if target.id == current_user.id
+
+        target_level = User::ROLE_LEVEL[target.role.to_s]
+        actor_level  = User::ROLE_LEVEL[current_user.role.to_s]
+        if target_level.nil? || actor_level.nil? || target_level <= actor_level
+          render json: { error: "You cannot modify user with role '#{target.role}'" }, status: :forbidden
+          return true
+        end
+        nil
       end
 
       def set_user

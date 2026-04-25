@@ -133,9 +133,10 @@ export default function SignInPage() {
             </Button>
           </form>
 
-          <div className="mt-4 p-3 rounded-lg bg-bg-input border border-border text-[11px] text-text-muted">
-            Demo: <span className="text-text-primary font-medium">demo@gmail.com</span> / <span className="text-text-primary font-medium">demo</span>
-          </div>
+          {/* SECURITY (C-5a, fixed 2026-04-25): demo credentials banner
+              removed. If you need a demo affordance during local
+              development, gate it behind NEXT_PUBLIC_DEMO_MODE === 'true'
+              so it never ships to production builds. */}
         </CardContent>
       </Card>
     </main>

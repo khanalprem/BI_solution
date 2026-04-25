@@ -74,11 +74,23 @@ Rails.application.configure do
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # SECURITY (H-7, fixed 2026-04-25): pin allowed Host header values to
+  # defeat DNS-rebinding and host-header injection. Set APP_HOST in the
+  # environment (e.g. "bankbi.example.com"). Subdomains of APP_HOST are
+  # also accepted so a load-balancer-level rename doesn't break things.
+  if (app_host = ENV['APP_HOST']).present?
+    config.hosts = [app_host, /\A[A-Za-z0-9_\-.]+\.#{Regexp.escape(app_host)}\z/]
+    config.host_authorization = { exclude: ->(request) { request.path == '/up' } }
+  else
+    Rails.logger.warn '[security] APP_HOST not set — Rails will accept any Host header. Set APP_HOST in production.'
+  end
+
+  # SECURITY (H-8, fixed 2026-04-25): default response headers. CSP is
+  # set on the frontend (Next.js) — these are just the API-side defaults.
+  config.action_dispatch.default_headers = config.action_dispatch.default_headers.merge(
+    'X-Content-Type-Options' => 'nosniff',
+    'X-Frame-Options'        => 'DENY',
+    'Referrer-Policy'        => 'strict-origin-when-cross-origin',
+    'Permissions-Policy'     => 'camera=(), microphone=(), geolocation=()'
+  )
 end

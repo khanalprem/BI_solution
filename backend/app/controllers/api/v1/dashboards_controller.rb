@@ -1,9 +1,18 @@
 module Api
   module V1
     class DashboardsController < BaseController
+      # SECURITY (C-2): PII-bearing endpoints require can_see_pii?.
+      # SECURITY (C-3): every action below uses scoped_filter_params (not
+      # filter_params directly) so branch_staff users are limited to their
+      # allowed branches via the user_branch_cluster mapping.
+      # demographics + employee_detail are hard-gated (no useful aggregate left
+      # after stripping PII). customer_profile redacts PII fields inline so
+      # analyst / branch_staff roles still get the segmentation + tx aggregates.
+      before_action :require_pii!, only: %i[demographics employee_detail]
+
       def executive
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('executive') do
           scope = TranSummary.apply_filters(filters)
@@ -21,7 +30,7 @@ module Api
 
       def branch_performance
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('branch_performance') do
           scope = TranSummary.apply_filters(filters)
@@ -43,7 +52,7 @@ module Api
 
       def province_summary
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('province_summary') do
           build_by_province(TranSummary.apply_filters(filters))
@@ -54,7 +63,7 @@ module Api
 
       def channel_breakdown
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('channel_breakdown') do
           build_by_channel(TranSummary.apply_filters(filters))
@@ -65,7 +74,7 @@ module Api
 
       def daily_trend
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('daily_trend') do
           build_daily_trend(TranSummary.apply_filters(filters))
@@ -76,7 +85,7 @@ module Api
 
       def customers_top
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
         limit = [[params[:limit].to_i, 1].max, 100].min
         limit = 20 if limit == 0
 
@@ -110,7 +119,7 @@ module Api
         return render json: { error: 'cif_id is required' }, status: :bad_request if cif_id.blank?
 
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date, cif_id: cif_id)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date, cif_id: cif_id)
 
         data = cached("customer_profile_#{cif_id}") do
           scope = TranSummary.apply_filters(filters)
@@ -147,20 +156,25 @@ module Api
             }
           end
 
+          # SECURITY (C-2): redact PII fields for roles that can't see PII.
+          # The aggregate fields (segment, risk_tier, accounts, summary, trend,
+          # recent_transactions) remain visible so analysts retain drill-down
+          # utility without leaking name / DOB / contact info.
+          can_see_pii = current_user&.can_see_pii?
           {
             cif_id: cif_id,
             requested_cif_id: cif_id,
-            customer_name: customer_name,
-            # Personal info from customers table
-            first_name:     personal_info[:first_name],
-            last_name:      personal_info[:last_name],
-            email:          personal_info[:email],
-            phone_number:   personal_info[:phone_number],
-            address:        personal_info[:address],
-            date_of_birth:  personal_info[:date_of_birth],
+            customer_name:  can_see_pii ? customer_name : "Customer #{cif_id}",
+            first_name:     can_see_pii ? personal_info[:first_name]   : nil,
+            last_name:      can_see_pii ? personal_info[:last_name]    : nil,
+            email:          can_see_pii ? personal_info[:email]        : nil,
+            phone_number:   can_see_pii ? personal_info[:phone_number] : nil,
+            address:        can_see_pii ? personal_info[:address]      : nil,
+            date_of_birth:  can_see_pii ? personal_info[:date_of_birth] : nil,
             account_status: personal_info[:account_status],
             customer_id:    personal_info[:customer_id],
-            age:            personal_info[:age],
+            age:            can_see_pii ? personal_info[:age] : nil,
+            pii_redacted:   !can_see_pii,
             segment: SegmentClassifier.segment_for(amt),
             risk_tier: SegmentClassifier.risk_tier_for(avg),
             accounts: accounts,
@@ -178,7 +192,7 @@ module Api
 
       def financial_summary
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('financial_summary') do
           scope = TranSummary.apply_filters(filters)
@@ -222,7 +236,7 @@ module Api
 
       def digital_channels
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('digital_channels') do
           scope = TranSummary.apply_filters(filters)
@@ -260,7 +274,7 @@ module Api
 
       def risk_summary
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('risk_summary') do
           scope = TranSummary.apply_filters(filters)
@@ -437,7 +451,7 @@ module Api
 
       def kpi_summary
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('kpi_summary') do
           scope = TranSummary.apply_filters(filters)
@@ -536,7 +550,7 @@ module Api
         return render json: { error: 'entry_user is required' }, status: :bad_request if user_id.blank?
 
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date, entry_user: user_id)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date, entry_user: user_id)
 
         data = cached("employee_detail_#{user_id}") do
           scope = TranSummary.apply_filters(filters)
@@ -624,7 +638,7 @@ module Api
 
       def employer_summary
         start_date, end_date = resolved_dates
-        filters = filter_params.merge(start_date: start_date, end_date: end_date)
+        filters = scoped_filter_params.merge(start_date: start_date, end_date: end_date)
 
         data = cached('employer_summary') do
           scope = TranSummary.apply_filters(filters)

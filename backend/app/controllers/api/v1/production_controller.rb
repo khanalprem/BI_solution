@@ -55,7 +55,7 @@ module Api
           end_date:          explicit_end,
           dimensions:        dimensions,
           measures:          measures,
-          filters:           filter_params,
+          filters:           scoped_filter_params,
           time_comparisons:  time_comparisons,
           partitionby_clause: partitionby_clause,
           orderby_clause:    orderby_clause,
@@ -82,7 +82,7 @@ module Api
           start_date:         explicit_start,
           end_date:           explicit_end,
           dimensions:         dimensions,
-          filters:            filter_params,
+          filters:            scoped_filter_params,
           partitionby_clause: partitionby_clause,
           orderby_clause:     orderby_clause,
           page:               params[:page],
@@ -90,32 +90,41 @@ module Api
         )
         render json: result
       rescue ActiveRecord::StatementInvalid, PG::Error => e
-        # Log the full PG / proc error along with the inputs that caused it so
-        # we can diagnose without needing the user to copy/paste the SQL preview.
+        # SECURITY (H-6, fixed 2026-04-25): never return raw PG / procedure
+        # error messages to the client — they leak column / table / SQL
+        # structure. The full error is logged with the request_id so an
+        # operator can correlate the user's report to the server log.
         Rails.logger.error(<<~LOG)
-          [deposits] procedure call failed
+          [deposits] procedure call failed (request_id=#{request.request_id})
             dims:               #{dimensions.inspect}
             partitionby_clause: #{partitionby_clause.inspect}
             orderby_clause:     #{orderby_clause.inspect}
             error:              #{e.message}
         LOG
-        # Surface the actual error message in the response so the frontend can
-        # show it to the user instead of a generic "Internal Server Error".
-        # Strip any backtrace; the message alone is enough to spot the SQL bug.
-        render json: { error: e.message.to_s.lines.first.to_s.strip }, status: :internal_server_error
+        render json: {
+          error: 'Deposit query failed. Please contact support if this persists.',
+          request_id: request.request_id
+        }, status: :internal_server_error
       end
 
       def htd_detail
         explicit_start = parse_date(param_value(:start_date, :startDate))
         explicit_end   = parse_date(param_value(:end_date, :endDate))
 
-        # Row dimension values passed as row_dims[dim_key]=value
-        row_dims = params[:row_dims].present? ? params[:row_dims].to_unsafe_h : {}
+        # SECURITY (M-4, fixed 2026-04-25): permit only the dim keys the
+        # service actually maps (HTD_DIM_MAP). Unknown keys are silently
+        # dropped — to_unsafe_h is no longer used.
+        row_dims = if params[:row_dims].present?
+          permitted_dim_keys = ProductionDataService::HTD_DIM_MAP.keys.map(&:to_s)
+          params.require(:row_dims).permit(*permitted_dim_keys).to_h
+        else
+          {}
+        end
 
         render json: production_service.htd_detail(
           start_date: explicit_start,
           end_date:   explicit_end,
-          filters:    filter_params,
+          filters:    scoped_filter_params,
           row_dims:   row_dims,
           page:       params[:page],
           page_size:  params[:page_size]
