@@ -1,8 +1,10 @@
 class ApplicationController < ActionController::API
-  # JWT_ISSUER / JWT_AUDIENCE are pinned constants so token decode rejects
-  # tokens minted by other services that happen to share our secret.
-  JWT_ISSUER   = 'bankbi'.freeze
-  JWT_AUDIENCE = 'bankbi-frontend'.freeze
+  # JWT issuer / audience constants and encode/decode logic live in
+  # BankBi::JwtToken (lib/bank_bi/jwt_token.rb). Two aliases below keep the
+  # legacy constant names available so other code that still references
+  # ApplicationController::JWT_ISSUER / JWT_AUDIENCE keeps working.
+  JWT_ISSUER   = BankBi::JwtToken::ISSUER
+  JWT_AUDIENCE = BankBi::JwtToken::AUDIENCE
 
   before_action :authenticate_user!
 
@@ -67,29 +69,7 @@ class ApplicationController < ActionController::API
     render json: { error: 'Unauthorized' }, status: :unauthorized
   end
 
-  def jwt_secret
-    if Rails.env.production?
-      ENV.fetch('JWT_SECRET_KEY') do
-        raise 'JWT_SECRET_KEY env var must be set in production'
-      end
-    else
-      ENV.fetch('JWT_SECRET_KEY', Rails.application.secret_key_base)
-    end
-  end
-
   def decode_jwt(token)
-    JWT.decode(
-      token,
-      jwt_secret,
-      true,
-      algorithm: 'HS256',
-      iss: JWT_ISSUER,
-      aud: JWT_AUDIENCE,
-      verify_iss: true,
-      verify_aud: true,
-      verify_iat: true
-    ).first
-  rescue JWT::DecodeError
-    nil
+    BankBi::JwtToken.decode(token)
   end
 end

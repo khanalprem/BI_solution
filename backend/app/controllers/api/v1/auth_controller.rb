@@ -39,7 +39,7 @@ module Api
           last_name:          user.last_name,
           role:               user.role,
           display_role:       user.display_role,
-          permissions:        user_permissions(user),
+          permissions:        user.permissions_list,
           can_see_pii:        user.can_see_pii?,
           branch_scoped:      user.branch_scoped?,
           # From production user_branch_cluster table
@@ -49,59 +49,11 @@ module Api
         }
       end
 
-      def user_permissions(user)
-        perms = User::PERMISSIONS[user.role]
-        return User::PERMISSIONS.values.flatten.uniq if perms == :all
-        Array(perms)
-      end
-
-      # SECURITY (H-1, fixed 2026-04-25):
-      # - JWT_SECRET_KEY required in production (boots fail loudly if missing).
-      # - Adds iss / aud / iat / nbf claims; decode (in ApplicationController)
-      #   verifies all of them.
-      # - Expiry dropped from 24h → 8h. We do not embed `role` in the payload
-      #   (role can change server-side; refetch on every authenticate_user!).
-      JWT_TTL = 8.hours.freeze
-
-      def jwt_secret
-        if Rails.env.production?
-          ENV.fetch('JWT_SECRET_KEY') do
-            raise 'JWT_SECRET_KEY env var must be set in production'
-          end
-        else
-          ENV.fetch('JWT_SECRET_KEY', Rails.application.secret_key_base)
-        end
-      end
-
-      def encode_jwt(user)
-        now = Time.current
-        payload = {
-          user_id: user.id,
-          email:   user.email,
-          iss:     ApplicationController::JWT_ISSUER,
-          aud:     ApplicationController::JWT_AUDIENCE,
-          iat:     now.to_i,
-          nbf:     now.to_i,
-          exp:     (now + JWT_TTL).to_i
-        }
-        JWT.encode(payload, jwt_secret, 'HS256')
-      end
-
-      def decode_jwt(token)
-        JWT.decode(
-          token,
-          jwt_secret,
-          true,
-          algorithm: 'HS256',
-          iss: ApplicationController::JWT_ISSUER,
-          aud: ApplicationController::JWT_AUDIENCE,
-          verify_iss: true,
-          verify_aud: true,
-          verify_iat: true
-        ).first
-      rescue JWT::DecodeError
-        nil
-      end
+      # JWT encode/decode lives in BankBi::JwtToken (Phase 1 R-2).
+      # Keeping these tiny wrappers so the controller's intent is local and
+      # so a future refactor can stub them in tests if needed.
+      def encode_jwt(user); BankBi::JwtToken.encode(user); end
+      def decode_jwt(token); BankBi::JwtToken.decode(token); end
     end
   end
 end

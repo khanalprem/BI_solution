@@ -158,16 +158,10 @@ module Api
 
       def user_detail(user)
         user_summary(user).merge(
-          permissions:   user_permissions(user),
+          permissions:   user.permissions_list,
           can_see_pii:   user.can_see_pii?,
           branch_scoped: user.branch_scoped?,
         )
-      end
-
-      def user_permissions(user)
-        perms = User::PERMISSIONS[user.role]
-        return User::PERMISSIONS.values.flatten.uniq if perms == :all
-        Array(perms)
       end
     end
   end

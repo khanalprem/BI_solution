@@ -74,7 +74,7 @@ namespace :db do
     puts "Test queries:"
     puts "  TranSummary.count"
     puts "  TranSummary.by_date_range(30.days.ago, Date.today).sum(:tran_amt)"
-    puts "  TranSummary.by_province_summary(30.days.ago, Date.today)"
+    puts "  TranSummary.apply_filters(start_date: 30.days.ago, end_date: Date.today).group(:gam_province).count"
   end
   
   desc "Create sample branches from tran_summary data"

@@ -1224,89 +1224,92 @@ class ProductionDataService
     "WHERE #{clauses.join(' AND ')} "
   end
 
-  # Resolve the reference date for period comparisons.
-  # Priority: selected date dimension filter → any date filter present → global end_date.
-  # This ensures that setting tran_date = '2022-02-18' as a filter (even without selecting
-  # tran_date as a GROUP BY dimension) correctly anchors period comparisons to 2022, not
-  # to the global date-picker end_date.
+  # ─── Period-comparison reference-date resolution ────────────────────────────
+  #
+  # `resolve_reference_date`     → picks the LATEST date from filters (used for
+  #                                "THIS …" period comparisons whose reference
+  #                                should anchor to the end of the window).
+  # `resolve_min_reference_date` → picks the EARLIEST date from filters (used
+  #                                for "PREV …" period comparisons whose ref
+  #                                should anchor to the start of the window).
+  #
+  # Both share the same lookup priority and the same dim-aware parsing — only
+  # the side they pick (max vs min) and the period anchor (end-of-period vs
+  # start-of-period) differ. Phase 1 R-5 collapsed them onto a single helper
+  # `resolve_date_for_dim` to avoid drift between max/min variants.
+  DATE_DIMS_FOR_RESOLVE = %w[tran_date year_month year_quarter year].freeze
+
   def resolve_reference_date(filters:, end_date:, dimension_keys:)
-    # Prefer the active date dimension (selected for GROUP BY) first
-    date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
-
-    # If no date dimension is grouped on, fall back to whichever date filter the user has set
-    date_dim ||= %w[tran_date year_month year_quarter year].find do |k|
-      sym = k.to_sym
-      from_sym = :"#{k.tr('_', '_')}_from" # e.g. :tran_date_from
-      to_sym   = :"#{k.tr('_', '_')}_to"
-      filters[sym].present? || filters[from_sym].present? || filters[to_sym].present?
-    end
-
-    case date_dim
-    when 'tran_date'
-      ref = filters[:tran_date_to].presence ||
-            Array.wrap(filters[:tran_date]).filter_map { |v| Date.parse(v.to_s) rescue nil }.max
-      ref.is_a?(Date) ? ref : (Date.parse(ref.to_s) rescue end_date)
-    when 'year_month'
-      ref_ym = filters[:year_month_to].presence || Array.wrap(filters[:year_month]).max
-      if ref_ym
-        year, month = ref_ym.to_s.split('-').map(&:to_i)
-        Date.new(year, month, -1) rescue end_date
-      else
-        end_date
-      end
-    when 'year_quarter'
-      ref_yq = filters[:year_quarter_to].presence || Array.wrap(filters[:year_quarter]).max
-      if ref_yq && ref_yq.to_s.match(/(\d{4})-Q(\d)/)
-        year, qtr = ::Regexp.last_match(1).to_i, ::Regexp.last_match(2).to_i
-        last_month = qtr * 3
-        Date.new(year, last_month, -1) rescue end_date
-      else
-        end_date
-      end
-    when 'year'
-      ref_yr = filters[:year_to].presence || Array.wrap(filters[:year]).max
-      ref_yr ? (Date.new(ref_yr.to_s.to_i, 12, 31) rescue end_date) : end_date
-    else
-      end_date
-    end
+    resolve_date_for_dim(
+      filters:        filters,
+      fallback:       end_date,
+      dimension_keys: dimension_keys,
+      direction:      :max
+    )
   end
 
-  # Like resolve_reference_date but picks the MINIMUM (earliest) date from filters.
-  # Used for PREV period comparisons where the reference should be the start of the analysis window.
   def resolve_min_reference_date(filters:, start_date:, dimension_keys:)
-    date_dim = dimension_keys.find { |k| %w[tran_date year_month year_quarter year].include?(k) }
-    date_dim ||= %w[tran_date year_month year_quarter year].find do |k|
-      sym = k.to_sym
-      filters[sym].present? || filters[:"#{k}_from"].present? || filters[:"#{k}_to"].present?
+    resolve_date_for_dim(
+      filters:        filters,
+      fallback:       start_date,
+      dimension_keys: dimension_keys,
+      direction:      :min
+    )
+  end
+
+  # Internal helper used by both resolve_*_reference_date methods.
+  # `direction` is :max (use *_to / max() / end-of-period) or :min (use
+  # *_from / min() / start-of-period).
+  def resolve_date_for_dim(filters:, fallback:, dimension_keys:, direction:)
+    date_dim = dimension_keys.find { |k| DATE_DIMS_FOR_RESOLVE.include?(k) }
+    date_dim ||= DATE_DIMS_FOR_RESOLVE.find do |k|
+      filters[k.to_sym].present? || filters[:"#{k}_from"].present? || filters[:"#{k}_to"].present?
     end
+
+    range_key   = direction == :max ? :"#{date_dim}_to" : :"#{date_dim}_from"
+    pick_method = direction == :max ? :max : :min
 
     case date_dim
     when 'tran_date'
-      ref = filters[:tran_date_from].presence ||
-            Array.wrap(filters[:tran_date]).filter_map { |v| Date.parse(v.to_s) rescue nil }.min
-      ref.is_a?(Date) ? ref : (Date.parse(ref.to_s) rescue start_date)
+      ref = filters[range_key].presence ||
+            Array.wrap(filters[:tran_date])
+                 .filter_map { |v| Date.parse(v.to_s) rescue nil }
+                 .public_send(pick_method)
+      ref.is_a?(Date) ? ref : (Date.parse(ref.to_s) rescue fallback)
     when 'year_month'
-      ref_ym = filters[:year_month_from].presence || Array.wrap(filters[:year_month]).min
+      ref_ym = filters[range_key].presence || Array.wrap(filters[:year_month]).public_send(pick_method)
       if ref_ym
         year, month = ref_ym.to_s.split('-').map(&:to_i)
-        Date.new(year, month, 1) rescue start_date
+        anchor_day  = direction == :max ? -1 : 1   # -1 = end-of-month, 1 = start-of-month
+        Date.new(year, month, anchor_day) rescue fallback
       else
-        start_date
+        fallback
       end
     when 'year_quarter'
-      ref_yq = filters[:year_quarter_from].presence || Array.wrap(filters[:year_quarter]).min
+      ref_yq = filters[range_key].presence || Array.wrap(filters[:year_quarter]).public_send(pick_method)
       if ref_yq && ref_yq.to_s.match(/(\d{4})-Q(\d)/)
-        year, qtr = ::Regexp.last_match(1).to_i, ::Regexp.last_match(2).to_i
-        first_month = (qtr - 1) * 3 + 1
-        Date.new(year, first_month, 1) rescue start_date
+        year = ::Regexp.last_match(1).to_i
+        qtr  = ::Regexp.last_match(2).to_i
+        if direction == :max
+          last_month = qtr * 3
+          Date.new(year, last_month, -1) rescue fallback     # end of last month of qtr
+        else
+          first_month = (qtr - 1) * 3 + 1
+          Date.new(year, first_month, 1) rescue fallback     # start of first month of qtr
+        end
       else
-        start_date
+        fallback
       end
     when 'year'
-      ref_yr = filters[:year_from].presence || Array.wrap(filters[:year]).min
-      ref_yr ? (Date.new(ref_yr.to_s.to_i, 1, 1) rescue start_date) : start_date
+      ref_yr = filters[range_key].presence || Array.wrap(filters[:year]).public_send(pick_method)
+      if ref_yr
+        anchor = direction == :max ? Date.new(ref_yr.to_s.to_i, 12, 31) : Date.new(ref_yr.to_s.to_i, 1, 1)
+        anchor rescue fallback
+      else
+        fallback
+      end
     else
-      start_date
+      fallback
     end
   end
 

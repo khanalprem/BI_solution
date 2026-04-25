@@ -26,6 +26,16 @@ class User < ApplicationRecord
     Array(PERMISSIONS[role]).include?(permission.to_sym)
   end
 
+  # Concrete list of permissions for this user. `superadmin` (PERMISSIONS == :all)
+  # expands to the union of all roles' permissions so the frontend can iterate.
+  # Was previously duplicated as `user_permissions(user)` in AuthController and
+  # UsersController; centralized here in Phase 1 so there is one source of truth.
+  def permissions_list
+    perms = PERMISSIONS[role]
+    return PERMISSIONS.values.flatten.uniq if perms == :all
+    Array(perms)
+  end
+
   def can_see_pii?
     PII_ROLES.include?(role)
   end
