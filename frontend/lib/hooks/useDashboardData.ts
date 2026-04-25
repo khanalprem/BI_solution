@@ -277,6 +277,11 @@ export function useDeposits(
   pageSize = 25,
   partitionbyClause = '',
   orderbyClause = '',
+  // Optional extra gate. When provided, the query only fires if both this is
+  // true AND dimensions.length > 0. Lets callers add their own preconditions
+  // (e.g. "at least one date filter must be set") without changing the default
+  // behaviour for callers that don't pass it.
+  options: { enabled?: boolean } = {},
 ) {
   const params = useMemo(
     () => ({
@@ -290,13 +295,14 @@ export function useDeposits(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [filters, JSON.stringify(dimensions), partitionbyClause, orderbyClause, page, pageSize],
   );
+  const callerEnabled = options.enabled ?? true;
   return useQuery<DepositExplorerResponse>({
     queryKey: ['deposit-explorer', params],
     queryFn: async () => {
       const { data } = await apiClient.get<DepositExplorerResponse>('/production/deposits', { params });
       return data;
     },
-    enabled: dimensions.length > 0,
+    enabled: dimensions.length > 0 && callerEnabled,
     staleTime: 60 * 1000,
     retry: 1,
     placeholderData: (prev) => prev,

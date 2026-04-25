@@ -1219,7 +1219,11 @@ export default function PivotDashboard() {
     return m ? m.split(',').filter(Boolean) : [];
   });
   const [datePivotEnabled, setDatePivotEnabled] = useState(false);
-  const [dateSortEnabled, setDateSortEnabled]   = useState(false);
+  // Shared sort direction across all selected date dims. `null` = off.
+  // Replaces the previous boolean `dateSortEnabled`. The two ASC/DESC buttons
+  // in the Date Dimensions container header drive this — click ↑ for ASC,
+  // ↓ for DESC, or the active direction again to turn off.
+  const [dateSortDir, setDateSortDir] = useState<SortDir | null>(null);
   const [nonDatePartitions, setNonDatePartitions] = useState<string[]>([]);
   // orderFields: ordered list of dimension/measure keys checked for "Sort"
   // Combines dimension keys and measure keys into a single ORDER BY field1, field2 clause.
@@ -1287,10 +1291,10 @@ export default function PivotDashboard() {
     [datePivotEnabled, selectedDateDims],
   );
 
-  // Date fields going into ORDER BY (when dateSortEnabled)
+  // Date fields going into ORDER BY (when dateSortDir !== null)
   const dateSortFields = useMemo(
-    () => (dateSortEnabled ? selectedDateDims : []),
-    [dateSortEnabled, selectedDateDims],
+    () => (dateSortDir ? selectedDateDims : []),
+    [dateSortDir, selectedDateDims],
   );
 
   // Combined partitionDimensions: date pivot fields (fixed order) + non-date pivots
@@ -1335,30 +1339,49 @@ export default function PivotDashboard() {
       // Pivot active: pivot fields first, then row dims
       return [...partitionDimensions, ...rowDims];
     }
-    if (dateSortEnabled && dateSortFields.length > 0) {
+    if (dateSortDir && dateSortFields.length > 0) {
       // Sort-only (no pivot): date fields in fixed order
       return dateSortFields;
     }
     return [];
-  }, [partitionDimensions, rowDims, dateSortEnabled, dateSortFields]);
+  }, [partitionDimensions, rowDims, dateSortDir, dateSortFields]);
 
   // effectiveOrderList — the final deduplicated ORDER BY field list.
-  // = autoOrderFields + any user-checked fields not already in autoOrderFields.
-  // When no pivot: only user-checked orderFields apply.
+  //   • Pivot active   → autoOrderFields ONLY (manual user sorts are dropped
+  //     because the orderby_clause is fully determined by the auto-pivot
+  //     order: pivot fields first, then row dims). The sidebar reflects this
+  //     by disabling manual ASC/DESC buttons while pivot is on.
+  //   • Pivot inactive → autoOrderFields ∪ user-checked orderFields, with
+  //     auto entries first (the date Sort container can still auto-include
+  //     date fields without pivot — see autoOrderFields above).
   const effectiveOrderList = useMemo(() => {
+    if (partitionDimensions.length > 0) {
+      return autoOrderFields;
+    }
     const autoSet = new Set(autoOrderFields);
     const extra   = orderFields.filter((k) => !autoSet.has(k));
     return [...autoOrderFields, ...extra];
-  }, [autoOrderFields, orderFields]);
+  }, [autoOrderFields, orderFields, partitionDimensions]);
 
   // orderby_clause sent to the backend. ASC is implicit so we only emit the DESC
-  // suffix when the user flipped that field — keeps the clause tidy and lets the
+  // suffix when the field is in DESC mode — keeps the clause tidy and lets the
   // backend sanitizer's token whitelist continue matching.
+  //
+  // Direction lookup priority:
+  //   • Pivot active                      → ASC (proc default; auto-pivot
+  //                                          ORDER BY needs a deterministic
+  //                                          left-to-right column order).
+  //   • Date dim + dateSortDir set        → dateSortDir (shared toggle).
+  //   • Anything else                      → orderDirs[k] (per-field button).
   const orderbyClause = useMemo(() => {
     if (effectiveOrderList.length === 0) return '';
-    const parts = effectiveOrderList.map((k) => orderDirs[k] === 'desc' ? `${k} DESC` : k);
+    const isDateKey = (k: string) => (DATE_FIELD_ORDER as readonly string[]).includes(k);
+    const parts = effectiveOrderList.map((k) => {
+      const dir = (isDateKey(k) && dateSortDir) ? dateSortDir : orderDirs[k];
+      return dir === 'desc' ? `${k} DESC` : k;
+    });
     return `ORDER BY ${parts.join(', ')}`;
-  }, [effectiveOrderList, orderDirs]);
+  }, [effectiveOrderList, orderDirs, dateSortDir]);
 
   // HAVING payload — only send entries for currently-selected STANDARD measures
   // with a non-empty value. The hook serialises these into having[<key>][op/value]
@@ -1530,7 +1553,7 @@ export default function PivotDashboard() {
         );
         if (remainingDate.length === 0) {
           setDatePivotEnabled(false);
-          setDateSortEnabled(false);
+          setDateSortDir(null);
         }
       } else {
         setNonDatePartitions((pp) => pp.filter((k) => k !== key));
@@ -1569,11 +1592,12 @@ export default function PivotDashboard() {
     setPage(1);
   }, []);
 
-  // ── Toggle for date container sort ────────────────────────────────────────
-
-  const toggleDateSort = useCallback((e: React.MouseEvent) => {
+  // ── Date container sort direction setter ─────────────────────────────────
+  // Shared sort across the four date dims. Click a direction button to set
+  // it; click the active one again to turn the date sort off entirely.
+  const setDateSortDirCycle = useCallback((dir: SortDir, e: React.MouseEvent) => {
     e.stopPropagation();
-    setDateSortEnabled((prev) => !prev);
+    setDateSortDir((prev) => (prev === dir ? null : dir));
     setPage(1);
   }, []);
 
@@ -1594,6 +1618,8 @@ export default function PivotDashboard() {
 
   // Sort button cycle: OFF → DESC → ASC → OFF. DESC is the first state because
   // analysts usually want the highest values on top of a ranking list.
+  // Kept for callers that want the cycle behaviour (e.g. the bulk Sort toggle
+  // on the Date Dimensions container header).
   const toggleOrderField = useCallback((key: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const inList = orderFields.includes(key);
@@ -1609,6 +1635,31 @@ export default function PivotDashboard() {
     }
     setPage(1);
   }, [orderFields, orderDirs]);
+
+  // ASC / DESC selectable independently. Powers the two-button sort UI on
+  // each dim and measure row. Click a direction to activate it (or switch
+  // from the other direction). Click the active direction to turn the sort
+  // off entirely. Click order is preserved across new selections so the
+  // first-clicked field becomes sort priority #1.
+  const setOrderFieldDir = useCallback((key: string, dir: SortDir, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const inList = orderFields.includes(key);
+    const cur    = orderDirs[key];
+    if (inList && cur === dir) {
+      setOrderFields((prev) => prev.filter((k) => k !== key));
+      setOrderDirs((prev)   => { const n = { ...prev }; delete n[key]; return n; });
+    } else {
+      if (!inList) setOrderFields((prev) => [...prev, key]);
+      setOrderDirs((prev) => ({ ...prev, [key]: dir }));
+    }
+    setPage(1);
+  }, [orderFields, orderDirs]);
+
+  // True whenever ANY pivot is active (date pivot OR a non-date partition).
+  // Used to disable all manual sort UI — when pivot is on, ORDER BY is
+  // determined entirely by the auto-pivot order (pivoted columns first, then
+  // remaining dims), so manual selections would be ignored anyway.
+  const pivotActive = partitionDimensions.length > 0;
 
   // ── Measure toggle ────────────────────────────────────────────────────────
 
@@ -1780,27 +1831,47 @@ export default function PivotDashboard() {
                       </span>
                       Pivot
                     </button>
-                    {/* Sort checkbox */}
-                    <button
-                      type="button"
-                      onClick={toggleDateSort}
-                      disabled={selectedDateDims.length === 0}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                        dateSortEnabled
-                          ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
-                          : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
-                      }`}
-                      title="Sort by all selected date fields (year → year_quarter → year_month → tran_date)"
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${dateSortEnabled ? 'border-accent-amber bg-accent-amber' : 'border-current'}`}>
-                        {dateSortEnabled && (
-                          <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <polyline points="1,4 3,6 7,1.5" />
-                          </svg>
-                        )}
-                      </span>
-                      Sort
-                    </button>
+                    {/* Sort direction — ASC / DESC selectable independently.
+                        Click a direction to activate; click the active one
+                        again to turn off. Disabled while any pivot is active
+                        because the auto-pivot ORDER BY governs date ordering.
+                        Hidden visual states: pivotActive shows greyed out;
+                        no date dim selected shows greyed out. */}
+                    {(() => {
+                      const sortDisabled = selectedDateDims.length === 0 || pivotActive;
+                      return (
+                        <div className="inline-flex h-7 rounded-md border border-border overflow-hidden">
+                          {(['asc', 'desc'] as const).map((d) => {
+                            const isActive = dateSortDir === d && !pivotActive;
+                            const arrow    = d === 'asc' ? '↑' : '↓';
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                disabled={sortDisabled}
+                                onClick={(e) => setDateSortDirCycle(d, e)}
+                                className={`px-2 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                  sortDisabled
+                                    ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                    : isActive
+                                      ? 'bg-accent-amber/15 text-accent-amber'
+                                      : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                }`}
+                                title={
+                                  pivotActive
+                                    ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
+                                    : selectedDateDims.length === 0
+                                      ? 'Select at least one date dimension first'
+                                      : `Sort all selected date dims ${d.toUpperCase()}`
+                                }
+                              >
+                                {arrow}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1844,9 +1915,9 @@ export default function PivotDashboard() {
                                   pivot
                                 </span>
                               )}
-                              {selected && dateSortEnabled && (
+                              {selected && dateSortDir && !pivotActive && (
                                 <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
-                                  sort
+                                  sort {dateSortDir === 'desc' ? '↓' : '↑'}
                                 </span>
                               )}
                             </div>
@@ -2022,28 +2093,46 @@ export default function PivotDashboard() {
                           </button>
                         )}
 
-                        {/* Sort button */}
-                        <button
-                          type="button"
-                          onClick={(e) => { if (!isAutoOrder) toggleOrderField(field.key, e); }}
-                          className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md border text-[9.5px] font-semibold transition-colors ${
-                            ordered && isAutoOrder
-                              ? 'border-accent-amber/25 bg-accent-amber/8 text-accent-amber/60 cursor-default'
-                              : ordered
-                              ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
-                              : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
-                          }`}
-                          title={isAutoOrder ? 'Auto-included in ORDER BY (follows Pivot selection)' : 'Sort by this field'}
-                        >
-                          <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center flex-shrink-0 ${ordered ? 'border-accent-amber bg-accent-amber/70' : 'border-current'}`}>
-                            {ordered && (
-                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="1,4 3,6 7,1.5" />
-                              </svg>
-                            )}
-                          </span>
-                          Sort
-                        </button>
+                        {/* Sort buttons — ASC / DESC selectable independently.
+                            Disabled while pivot is on (orderby_clause is auto-built
+                            from pivoted columns + row dims, so manual selections
+                            would be ignored). Also disabled for auto-order fields
+                            in the date Sort container. */}
+                        {(() => {
+                          const sortDisabled = pivotActive || isAutoOrder;
+                          return (
+                            <div className="flex-shrink-0 inline-flex rounded-md border border-border overflow-hidden">
+                              {(['asc', 'desc'] as const).map((d) => {
+                                const isActive = ordered && (orderDirs[field.key] ?? 'desc') === d;
+                                const arrow    = d === 'asc' ? '↑' : '↓';
+                                return (
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={sortDisabled}
+                                    onClick={(e) => setOrderFieldDir(field.key, d, e)}
+                                    className={`px-2 py-1 text-[10.5px] font-mono transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                      sortDisabled
+                                        ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                        : isActive
+                                          ? 'bg-accent-amber/15 text-accent-amber'
+                                          : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                    }`}
+                                    title={
+                                      pivotActive
+                                        ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
+                                        : isAutoOrder
+                                          ? 'Auto-included in ORDER BY (follows Pivot selection)'
+                                          : `Sort ${field.label} ${d.toUpperCase()}`
+                                    }
+                                  >
+                                    {arrow}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
 
                         {hasFilter && (
                           <button
@@ -2237,21 +2326,38 @@ export default function PivotDashboard() {
                         className="w-20 h-7 text-[10px] flex-shrink-0"
                       />
                       {/* Direction-cycling sort button */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
-                          toggleOrderField(measure.key, e);
-                        }}
-                        className={`flex-shrink-0 h-7 px-2 rounded-md border text-[11px] font-mono flex items-center justify-center transition-colors ${
-                          ordered
-                            ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
-                            : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
-                        }`}
-                        title={`Sort by ${measure.label} — ${ordered ? (dir === 'desc' ? 'DESC' : 'ASC') : 'off'} (click to cycle)`}
-                      >
-                        {ordered ? (dir === 'desc' ? '↓' : '↑') : '↕'}
-                      </button>
+                      {/* Sort buttons — ASC / DESC selectable independently. */}
+                      <div className="flex-shrink-0 inline-flex h-7 rounded-md border border-border overflow-hidden">
+                        {(['asc', 'desc'] as const).map((d) => {
+                          const isActive = ordered && dir === d;
+                          const arrow    = d === 'asc' ? '↑' : '↓';
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              disabled={pivotActive}
+                              onClick={(e) => {
+                                if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
+                                setOrderFieldDir(measure.key, d, e);
+                              }}
+                              className={`px-2 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                pivotActive
+                                  ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                  : isActive
+                                    ? 'bg-accent-amber/15 text-accent-amber'
+                                    : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                              }`}
+                              title={
+                                pivotActive
+                                  ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
+                                  : `Sort by ${measure.label} ${d.toUpperCase()}`
+                              }
+                            >
+                              {arrow}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </li>
                   );
                 })}
@@ -2323,22 +2429,38 @@ export default function PivotDashboard() {
                                 </span>
                               )}
                             </button>
-                            {/* Direction-cycling sort button */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
-                                toggleOrderField(m.key, e);
-                              }}
-                              className={`h-6 px-1.5 rounded-md border text-[11px] font-mono flex items-center justify-center transition-colors ${
-                                ordered
-                                  ? 'border-accent-amber/40 bg-accent-amber/15 text-accent-amber'
-                                  : 'border-border bg-bg-input text-text-muted hover:border-accent-amber/30 hover:text-accent-amber'
-                              }`}
-                              title={`Sort by ${m.label} — ${ordered ? (dir === 'desc' ? 'DESC' : 'ASC') : 'off'} (click to cycle)`}
-                            >
-                              {ordered ? (dir === 'desc' ? '↓' : '↑') : '↕'}
-                            </button>
+                            {/* Sort buttons — ASC / DESC selectable independently. */}
+                            <div className="inline-flex h-6 rounded-md border border-border overflow-hidden">
+                              {(['asc', 'desc'] as const).map((d) => {
+                                const isActive = ordered && dir === d;
+                                const arrow    = d === 'asc' ? '↑' : '↓';
+                                return (
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={pivotActive}
+                                    onClick={(e) => {
+                                      if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
+                                      setOrderFieldDir(m.key, d, e);
+                                    }}
+                                    className={`px-1.5 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                      pivotActive
+                                        ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                        : isActive
+                                          ? 'bg-accent-amber/15 text-accent-amber'
+                                          : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                    }`}
+                                    title={
+                                      pivotActive
+                                        ? 'Sort disabled while Pivot is on'
+                                        : `Sort by ${m.label} ${d.toUpperCase()}`
+                                    }
+                                  >
+                                    {arrow}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
@@ -2388,7 +2510,7 @@ export default function PivotDashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setNonDatePartitions([]); setDatePivotEnabled(false); setDateSortEnabled(false); setPage(1); }}
+                  onClick={() => { setNonDatePartitions([]); setDatePivotEnabled(false); setDateSortDir(null); setPage(1); }}
                   className="flex-shrink-0 text-[10px] font-medium text-accent-red hover:underline"
                 >
                   Clear

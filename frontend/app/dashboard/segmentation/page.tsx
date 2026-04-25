@@ -119,7 +119,7 @@ interface ControlsProps {
   onToggleMeasure: (k: MeasureKey) => void;
   onDimFilter:     (k: DimKey, values: string[]) => void;
   onMeasureFilter: (k: MeasureKey, spec: { op: Op; value: string }) => void;
-  onSort:          (k: MeasureKey) => void;
+  onSort:          (k: MeasureKey, dir: SortDir) => void;
 }
 
 function SegmentationControls({
@@ -204,18 +204,28 @@ function SegmentationControls({
                 placeholder={m.kind === 'date' ? 'YYYY-MM-DD' : '0'}
                 className="h-8 text-xs flex-1 min-w-0"
               />
-              <button
-                type="button"
-                onClick={() => onSort(m.key)}
-                title={`Sort by ${m.label} — currently ${isSorted ? sort.dir.toUpperCase() : 'off'}`}
-                className={`h-8 px-1.5 rounded border text-[10px] font-mono flex items-center gap-0.5 transition-colors flex-shrink-0 ${
-                  isSorted
-                    ? 'border-accent-blue/40 bg-accent-blue/10 text-accent-blue'
-                    : 'border-border bg-bg-card text-text-muted hover:bg-bg-card-hover'
-                }`}
-              >
-                {isSorted ? (sort.dir === 'desc' ? '↓' : '↑') : '↕'}
-              </button>
+              {/* Sort buttons — ASC / DESC selectable independently. */}
+              <div className="inline-flex h-8 rounded border border-border overflow-hidden flex-shrink-0">
+                {(['asc', 'desc'] as const).map((d) => {
+                  const isActive = isSorted && sort.dir === d;
+                  const arrow    = d === 'asc' ? '↑' : '↓';
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => onSort(m.key, d)}
+                      title={`Sort by ${m.label} ${d.toUpperCase()}`}
+                      className={`px-1.5 text-[11px] font-mono transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                        isActive
+                          ? 'bg-accent-blue/10 text-accent-blue'
+                          : 'bg-bg-card text-text-muted hover:bg-bg-card-hover'
+                      }`}
+                    >
+                      {arrow}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -285,10 +295,15 @@ export default function CustomerSegmentationPage() {
   const handleMeasureFilter = (k: MeasureKey, spec: { op: Op; value: string }) =>
     setMeasureFilters((p) => ({ ...p, [k]: spec }));
 
-  const handleSort = (k: MeasureKey) => {
+  // Set the sort to (k, dir). Clicking the same measure + same direction
+  // resets to the default (rfm_score DESC) so users can quickly clear a sort.
+  // Otherwise the chosen (measure, dir) becomes active.
+  const handleSort = (k: MeasureKey, dir: SortDir) => {
     setSort((prev) => {
-      if (prev.measure !== k) return { measure: k, dir: 'desc' };
-      return { measure: k, dir: prev.dir === 'desc' ? 'asc' : 'desc' };
+      if (prev.measure === k && prev.dir === dir) {
+        return { measure: 'rfm_score', dir: 'desc' };
+      }
+      return { measure: k, dir };
     });
   };
 

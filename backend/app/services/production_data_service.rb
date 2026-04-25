@@ -996,9 +996,19 @@ class ProductionDataService
 
     select_clause      = "SELECT #{dim_selects.join(', ')}"
     groupby_clause     = "GROUP BY #{dim_sqls.join(', ')}"
-    partitionby_clause = partitionby_clause.to_s.strip
+    partitionby_clause = substitute_deposit_aliases(partitionby_clause.to_s.strip)
     default_orderby    = 'ORDER BY sum(e.tran_date_bal) DESC'
+    # Frontend-provided orderby_clause uses dim KEYS as tokens (e.g.
+    # "ORDER BY year_month, gam_branch"), but the procedure applies ORDER BY
+    # inside a window function in the SAME SELECT list where the alias is
+    # defined — Postgres does NOT resolve SELECT-list aliases in that position
+    # (PG ERROR: column "year_month" does not exist). Substitute each dim key
+    # with its underlying SQL expression (`d.year_month`, `b.branch_name`, …)
+    # so the proc receives a valid clause regardless of pivot/sort mode. Same
+    # treatment for partitionby_clause above — it lives in the same OVER()
+    # context and hits the same alias-resolution issue.
     orderby_clause     = orderby_clause.to_s.strip.presence || default_orderby
+    orderby_clause     = substitute_deposit_aliases(orderby_clause)
 
     # Finest-grained date dim in the selection controls `date_join`. tran_date pins a
     # specific day (date_join empty); coarse dims (year_month/quarter/year) rejoin on
@@ -1513,27 +1523,85 @@ class ProductionDataService
     Array(values).map { |value| @connection.quote(value) }.join(', ')
   end
 
+  # Substitute deposit dim aliases (e.g. `year_month`, `gam_branch`) with their
+  # underlying SQL expressions (`d.year_month`, `b.branch_name`) inside a clause
+  # string. Required for ORDER BY / PARTITION BY because the procedure applies
+  # them inside ROW_NUMBER() OVER(...) in the same SELECT list where the alias
+  # is defined — Postgres can't resolve SELECT-list aliases in that position,
+  # so we must hand it the raw expression.
+  #
+  # Uses word-boundary matching so we don't accidentally rewrite tokens inside
+  # already-qualified expressions like `d.year_month` (no leading word
+  # boundary after the dot, so `d.year_month` is left alone).
+  def substitute_deposit_aliases(clause)
+    return clause if clause.blank?
+    result = clause.dup
+    DEPOSIT_DIMENSIONS.each do |key, meta|
+      sql_expr = meta[:sql]
+      next if sql_expr.blank? || sql_expr == key
+      result = result.gsub(/(?<![.\w])#{Regexp.escape(key)}(?![\w])/, sql_expr)
+    end
+    result
+  end
+
   # ── Deposit explorer clause builders ─────────────────────────────────────
   # Each returns a string ready to splice into the stored procedure's ON-clause
   # slot. Branch/province/cluster/gam slots expect an "AND ..." prefix (or empty
   # string); date_where is the primary predicate and must never be empty.
 
+  # date_where for the Deposit Portfolio. Combines all date-dim filters with AND
+  # so users can stack e.g. year=2024 + year_month BETWEEN 2024-02 AND 2024-04.
+  # Each clause references the matching column on `dates` (d.date / d.year /
+  # d.year_month / d.year_quarter). When no clauses are set we fall back to the
+  # period-selector window so date_where is never empty (the procedure template
+  # concatenates it directly without a leading AND).
+  DEPOSIT_DATE_FILTER_COLS = {
+    'd.date'         => { exact: :tran_date,    from: :tran_date_from,    to: :tran_date_to },
+    'd.year'         => { exact: :year,         from: :year_from,         to: :year_to },
+    'd.year_month'   => { exact: :year_month,   from: :year_month_from,   to: :year_month_to },
+    'd.year_quarter' => { exact: :year_quarter, from: :year_quarter_from, to: :year_quarter_to }
+  }.freeze
+
+  # Format the user-supplied value must match before we splice it into the
+  # WHERE clause. Catches cases like a year-month string ("2024-01") landing
+  # in a tran_date input — Postgres can't cast that to DATE and errors out
+  # with `invalid input syntax for type date`. Anything that doesn't match
+  # is treated as "not set" so we never feed Postgres a malformed literal.
+  DEPOSIT_DATE_VALUE_FORMAT = {
+    'd.date'         => /\A\d{4}-\d{2}-\d{2}\z/,
+    'd.year'         => /\A\d{4}\z/,
+    'd.year_month'   => /\A\d{4}-\d{2}\z/,
+    'd.year_quarter' => /\A\d{4}-Q[1-4]\z/i
+  }.freeze
+
   def build_deposit_date_where(filters:, start_date:, end_date:)
-    td_exact = normalize_filter_values(filters[:tran_date])
-    if td_exact.any?
-      return td_exact.length == 1 \
-        ? "d.date = #{@connection.quote(td_exact.first)}" \
-        : "d.date IN (#{quoted_values(td_exact)})"
+    clauses = DEPOSIT_DATE_FILTER_COLS.filter_map do |column, keys|
+      fmt   = DEPOSIT_DATE_VALUE_FORMAT[column]
+      valid = ->(v) { v.is_a?(String) && (!fmt || v.match?(fmt)) }
+
+      vals = normalize_filter_values(filters[keys[:exact]]).select(&valid)
+      raw_from = filters[keys[:from]].to_s.strip.presence
+      raw_to   = filters[keys[:to]].to_s.strip.presence
+      from     = valid.call(raw_from) ? raw_from : nil
+      to       = valid.call(raw_to)   ? raw_to   : nil
+
+      if from && to
+        "#{column} BETWEEN #{@connection.quote(from)} AND #{@connection.quote(to)}"
+      elsif from
+        "#{column} >= #{@connection.quote(from)}"
+      elsif to
+        "#{column} <= #{@connection.quote(to)}"
+      elsif vals.length == 1
+        "#{column} = #{@connection.quote(vals.first)}"
+      elsif vals.any?
+        "#{column} IN (#{quoted_values(vals)})"
+      end
     end
 
-    td_from = filters[:tran_date_from].to_s.strip.presence
-    td_to   = filters[:tran_date_to].to_s.strip.presence
-    if td_from || td_to
-      from = td_from || start_date.to_s
-      to   = td_to   || end_date.to_s
-      return "d.date BETWEEN #{@connection.quote(from)} AND #{@connection.quote(to)}"
-    end
+    return clauses.join(' AND ') if clauses.any?
 
+    # Fallback: period-selector window. date_where must never be empty — the
+    # procedure splices it directly into its WHERE template.
     "d.date BETWEEN #{@connection.quote(start_date.to_s)} AND #{@connection.quote(end_date.to_s)}"
   end
 

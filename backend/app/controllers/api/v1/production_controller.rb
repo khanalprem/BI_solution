@@ -78,7 +78,7 @@ module Api
         partitionby_clause = sanitize_deposit_clause(params[:partitionby_clause].to_s.strip)
         orderby_clause     = sanitize_deposit_clause(params[:orderby_clause].to_s.strip)
 
-        render json: production_service.deposit_explorer(
+        result = production_service.deposit_explorer(
           start_date:         explicit_start,
           end_date:           explicit_end,
           dimensions:         dimensions,
@@ -88,6 +88,21 @@ module Api
           page:               params[:page],
           page_size:          params[:page_size]
         )
+        render json: result
+      rescue ActiveRecord::StatementInvalid, PG::Error => e
+        # Log the full PG / proc error along with the inputs that caused it so
+        # we can diagnose without needing the user to copy/paste the SQL preview.
+        Rails.logger.error(<<~LOG)
+          [deposits] procedure call failed
+            dims:               #{dimensions.inspect}
+            partitionby_clause: #{partitionby_clause.inspect}
+            orderby_clause:     #{orderby_clause.inspect}
+            error:              #{e.message}
+        LOG
+        # Surface the actual error message in the response so the frontend can
+        # show it to the user instead of a generic "Internal Server Error".
+        # Strip any backtrace; the message alone is enough to spot the SQL bug.
+        render json: { error: e.message.to_s.lines.first.to_s.strip }, status: :internal_server_error
       end
 
       def htd_detail
