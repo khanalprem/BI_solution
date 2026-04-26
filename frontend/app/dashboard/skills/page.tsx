@@ -450,6 +450,7 @@ const DIMENSIONS = [
   { key: 'acid',             label: 'ACID',               type: 'categorical', sql: 'acid',              description: 'Internal account identifier — dropdown backed by get_static_data(\'acid\')' },
   { key: 'acct_num',         label: 'ACCT Num',           type: 'categorical', sql: 'acct_num',          description: 'Account number — dropdown backed by get_static_data(\'acctnum\')' },
   { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name (partial ILIKE match)' },
+  { key: 'schm_code',        label: 'Scheme Code',        type: 'categorical', sql: 'g.schm_code',       description: 'Account scheme code from GAM via acid LEFT JOIN — fixed dropdown of saving / minor / woman / fixed / current. Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique. Pivot path filters via `acid IN (SELECT acid FROM gam WHERE schm_code IN (...))`; deposit path applies the predicate directly on the joined `g.schm_code`.' },
   { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'text',        sql: 'e.tran_date_bal',   description: 'Balance snapshot from EAB via acid LEFT JOIN — listed as a dimension but rendered under pivoted headings as a measure column. Never aggregated. Requires a date dimension to resolve the EAB as-of date.' },
   { key: 'eod_balance',      label: 'GAM Balance',        type: 'text',        sql: 'g.eod_balance',     description: 'Current balance from GAM via acid LEFT JOIN — normal dimension, static per account (does not vary by date). Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique.' },
   // ── Transaction (geo broad → narrow, then channel / type, then accounting) ──
@@ -610,7 +611,7 @@ export default function SkillsPage() {
           <div className="mt-6 flex flex-wrap gap-2.5">
             {[
               { label: '19 Production Tables', color: 'blue' },
-              { label: '23 Dimensions',         color: 'purple' },
+              { label: '26 Dimensions',         color: 'purple' },
               { label: '10 Measures',            color: 'green' },
               { label: '9 Period Comparisons',   color: 'amber' },
               { label: '20 Procedure Params',    color: 'red' },
@@ -777,7 +778,7 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (25)"
+            label="Pivot Dimensions (26)"
             sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">

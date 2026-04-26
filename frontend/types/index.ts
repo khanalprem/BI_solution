@@ -29,6 +29,11 @@ export interface DashboardFilters {
   cifId?: MultiValueFilter;
   acctName?: MultiValueFilter;
   acid?: MultiValueFilter;
+  // Account scheme code (gam.schm_code) — fixed dropdown of preset values
+  // (saving / minor / woman / fixed / current). Tran-summary path filters via
+  // an `acid IN (SELECT acid FROM gam WHERE schm_code IN ...)` subquery; the
+  // deposit explorer applies it directly on the joined `g.schm_code`.
+  schmCode?: MultiValueFilter;
   // Date dimension exact-match filters (pivot explorer)
   tranDate?: MultiValueFilter;    // specific YYYY-MM-DD date(s) on tran_date column
   yearMonth?: MultiValueFilter;   // e.g., ['2024-01', '2024-02']

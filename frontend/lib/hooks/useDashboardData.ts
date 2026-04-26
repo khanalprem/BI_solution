@@ -65,6 +65,7 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['cif_id',           serializeFilterValue(filters.cifId)],
     ['acct_name',        serializeFilterValue(filters.acctName)],
     ['acid',             serializeFilterValue(filters.acid)],
+    ['schm_code',        serializeFilterValue(filters.schmCode)],
     // Date dimension exact-match filters
     ['tran_date',         serializeFilterValue(filters.tranDate)],
     ['year_month',        serializeFilterValue(filters.yearMonth)],

@@ -34,7 +34,8 @@ type DepositDimKey =
   | 'cif_id'
   | 'acid'
   | 'acct_num'
-  | 'acct_name';
+  | 'acct_name'
+  | 'schm_code';
 
 // `kind` drives which inline filter editor renders below the dim row:
 //   • date        — Multi/Range mode toggle + date-formatted text inputs
@@ -56,6 +57,11 @@ interface DepositDimDef {
   toKey?:     keyof DashboardFilters;
   // For categorical dims — which FilterValuesResponse field provides options
   optionsKey?: keyof FilterValuesResponse;
+  // For categorical dims with a fixed, hard-coded option list (no /filters/values
+  // round-trip). Mirrors the pivot page's `staticOptions` field. Used by the
+  // Scheme Code dim whose values are a fixed set (saving / minor / woman / fixed
+  // / current).
+  staticOptions?: LookupOption[];
 }
 
 const DEPOSIT_DIMS: DepositDimDef[] = [
@@ -70,6 +76,15 @@ const DEPOSIT_DIMS: DepositDimDef[] = [
   { key: 'acid',         label: 'ACID',         description: 'Internal account identifier (g.acid)',                             kind: 'categorical', filterKey: 'acid',       optionsKey: 'acids'     },
   { key: 'acct_num',     label: 'ACCT Num',     description: 'Account number (g.acct_num)',                                      kind: 'categorical', filterKey: 'acctNum',    optionsKey: 'acct_nums' },
   { key: 'acct_name',    label: 'ACCT Name',    description: 'Account holder name (g.acct_name)',                                kind: 'text',        filterKey: 'acctName' },
+  { key: 'schm_code',    label: 'Scheme Code',  description: 'Account scheme code (g.schm_code) — fixed dropdown of saving / minor / woman / fixed / current',
+                                                 kind: 'categorical', filterKey: 'schmCode',
+                                                 staticOptions: [
+                                                   { name: 'saving',  value: 'saving'  },
+                                                   { name: 'minor',   value: 'minor'   },
+                                                   { name: 'woman',   value: 'woman'   },
+                                                   { name: 'fixed',   value: 'fixed'   },
+                                                   { name: 'current', value: 'current' },
+                                                 ] },
 ];
 
 // Mode toggles inside the per-dim filter editor. Mirrors the pivot page UX so
@@ -139,6 +154,7 @@ const DEPOSIT_DIM_SQL: Record<DepositDimKey, string> = {
   acct_name:    'g.acct_name',
   acid:         'g.acid',
   cif_id:       'g.cif_id',
+  schm_code:    'g.schm_code',
   tran_date:    'd.date',
   year_month:   'd.year_month',
   year_quarter: 'd.year_quarter',
@@ -462,6 +478,8 @@ export default function DepositsDashboard() {
     setCategoricalFilterModes((prev) => ({ ...prev, [key]: mode }));
 
   const getOptions = (dim: DepositDimDef): { value: string; label: string }[] => {
+    // Hard-coded option list takes priority — no need to wait for filterValues.
+    if (dim.staticOptions) return lookupOptions(dim.staticOptions);
     if (!dim.optionsKey || !filterValues) return [];
     return lookupOptions(filterValues[dim.optionsKey] as LookupOption[] | undefined);
   };

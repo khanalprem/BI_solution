@@ -98,6 +98,9 @@ module Api
           cif_id: parse_multi_value_param(param_value(:cif_id, :cifId)),
           acct_name: parse_multi_value_param(param_value(:acct_name, :acctName)),
           acid: parse_multi_value_param(param_value(:acid)),
+          # Account scheme code (gam.schm_code) — fixed dropdown:
+          # saving / minor / woman / fixed / current. Used by pivot + deposit pages.
+          schm_code: parse_multi_value_param(param_value(:schm_code, :schmCode)),
           # Date dimension exact-match filters (pivot explorer)
           tran_date:         parse_multi_value_param(param_value(:tran_date, :tranDate)),
           year_month:        parse_multi_value_param(param_value(:year_month, :yearMonth)),

@@ -151,7 +151,13 @@ class ProductionDataService
     'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true },
     # eod_balance lives directly in tran_summary (confirmed via information_schema).
     # No GAM join required — treated as a regular inner dimension.
-    'eod_balance'      => { label: 'GAM Balance',        sql: 'eod_balance' }
+    'eod_balance'      => { label: 'GAM Balance',        sql: 'eod_balance' },
+    # schm_code lives only on `gam` (account scheme code: saving / minor / woman /
+    # fixed / current). Pulled in via the GAM LEFT JOIN — same outer_join_field
+    # pattern as tran_date_bal, but routed through the gam join (not eab). The
+    # frontend gates this dim on an account-identifier prerequisite so the GAM
+    # join row is unique per account.
+    'schm_code'        => { label: 'Scheme Code',        sql: 'g.schm_code',     gam_required: true, outer_join_field: true }
   }.freeze
 
   # Dimensions available to the Deposit Portfolio report (driven by `public.get_deposit`).
@@ -167,6 +173,7 @@ class ProductionDataService
     'acct_name'    => { label: 'ACCT Name',    sql: 'g.acct_name' },
     'acid'         => { label: 'ACID',         sql: 'g.acid' },
     'cif_id'       => { label: 'CIF Id',       sql: 'g.cif_id' },
+    'schm_code'    => { label: 'Scheme Code',  sql: 'g.schm_code' },
     'tran_date'    => { label: 'Date',         sql: 'd.date',         date_join: '' },
     'year_month'   => { label: 'Year Month',   sql: 'd.year_month',   date_join: 'AND d.date = d.month_enddate' },
     'year_quarter' => { label: 'Year Quarter', sql: 'd.year_quarter', date_join: 'AND d.date = d.quarter_enddate' },
@@ -1212,6 +1219,15 @@ class ProductionDataService
       clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
 
+    # schm_code filter: scheme code lives only on `gam`, not on `tran_summary`.
+    # The procedure's inner CTE references tran_summary alone, so we cannot
+    # filter `schm_code IN (...)` directly. Push it down via a subquery on
+    # `acid` instead — gam.acid is the PK so this is just an index lookup.
+    schm_code = normalize_filter_values(filters[:schm_code])
+    if schm_code.any?
+      clauses << "acid IN (SELECT acid FROM gam WHERE schm_code IN (#{quoted_values(schm_code)}))"
+    end
+
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
     clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
 
@@ -1517,6 +1533,11 @@ class ProductionDataService
       ors      = patterns.map { |p| "#{column}::text ILIKE #{conn.quote(p)}" }
       clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
+    # schm_code: subquery against gam (column does not live on tran_summary).
+    schm_code = normalize_filter_values(filters[:schm_code])
+    if schm_code.any?
+      clauses << "acid IN (SELECT acid FROM gam WHERE schm_code IN (#{quoted_values(schm_code)}))"
+    end
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
     clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
     clauses
@@ -1630,6 +1651,12 @@ class ProductionDataService
       ors = patterns.map { |p| "g.acct_name ILIKE #{@connection.quote(p)}" }
       clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
+
+    # schm_code: account scheme code (saving / minor / woman / fixed / current).
+    # gam is already joined as `g` in the deposit procedure, so a direct IN-clause
+    # works here (no subquery needed unlike the pivot path).
+    schm_code = normalize_filter_values(filters[:schm_code])
+    clauses << "g.schm_code IN (#{quoted_values(schm_code)})" if schm_code.any?
 
     clauses.any? ? "AND #{clauses.join(' AND ')}" : ''
   end

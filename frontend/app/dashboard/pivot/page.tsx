@@ -194,6 +194,13 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'acid',             label: 'ACID',             type: 'categorical', filterKey: 'acid',          optionsKey: 'acids',             description: 'Internal account identifier' },
   { key: 'acct_num',         label: 'ACCT Num',         type: 'categorical', filterKey: 'acctNum',       optionsKey: 'acct_nums',         description: 'Account number' },
   { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name (partial match)' },
+  { key: 'schm_code',        label: 'Scheme Code',      type: 'categorical', filterKey: 'schmCode',      staticOptions: [
+    { name: 'saving',  value: 'saving'  },
+    { name: 'minor',   value: 'minor'   },
+    { name: 'woman',   value: 'woman'   },
+    { name: 'fixed',   value: 'fixed'   },
+    { name: 'current', value: 'current' },
+  ], description: 'Account scheme code from GAM (saving / minor / woman / fixed / current); requires an account identifier for the GAM join to be unique' },
   { key: 'tran_date_bal',    label: 'TRAN Date Balance', type: 'text',                                   description: 'Balance snapshot from EAB — renders under pivoted headings as a value column; requires a date dimension' },
   { key: 'eod_balance',      label: 'GAM Balance',      type: 'text',                                    description: 'Current balance from GAM — static per account (does not vary by date); requires an account identifier' },
 
@@ -266,12 +273,19 @@ const DISPLAY_AS_MEASURE_DIMS = new Set(['tran_date_bal']);
 // needed for the dim to be meaningful.
 //   • tran_date_bal: needs a date dim to resolve the EAB as-of date.
 //   • eod_balance:  needs an account identifier for the GAM join to be unique.
+//   • schm_code:    needs an account identifier — schm_code lives on `gam` and is
+//                   pulled in via outer_join_field. Without an account-level dim
+//                   in the inner GROUP BY, the join row would be ambiguous.
 const DIM_PREREQS: Record<string, { keys: string[]; label: string }> = {
   tran_date_bal: {
     keys: DATE_FIELD_ORDER as unknown as string[],
     label: 'a date dimension (year / quarter / month / day)',
   },
   eod_balance: {
+    keys: ['cif_id', 'acid', 'acct_num'],
+    label: 'an account identifier (CIF Id / ACID / ACCT Num)',
+  },
+  schm_code: {
     keys: ['cif_id', 'acid', 'acct_num'],
     label: 'an account identifier (CIF Id / ACID / ACCT Num)',
   },
