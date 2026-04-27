@@ -87,10 +87,15 @@ Rails.application.configure do
 
   # SECURITY (H-8, fixed 2026-04-25): default response headers. CSP is
   # set on the frontend (Next.js) — these are just the API-side defaults.
+  # 2026-04-27: added Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy
+  # so the API responses can't be embedded by another origin (defense against
+  # Spectre-style cross-origin leaks of authenticated JSON).
   config.action_dispatch.default_headers = config.action_dispatch.default_headers.merge(
-    'X-Content-Type-Options' => 'nosniff',
-    'X-Frame-Options'        => 'DENY',
-    'Referrer-Policy'        => 'strict-origin-when-cross-origin',
-    'Permissions-Policy'     => 'camera=(), microphone=(), geolocation=()'
+    'X-Content-Type-Options'        => 'nosniff',
+    'X-Frame-Options'               => 'DENY',
+    'Referrer-Policy'               => 'strict-origin-when-cross-origin',
+    'Permissions-Policy'            => 'camera=(), microphone=(), geolocation=()',
+    'Cross-Origin-Opener-Policy'    => 'same-origin',
+    'Cross-Origin-Resource-Policy'  => 'same-site'
   )
 end

@@ -19,6 +19,18 @@ class User < ApplicationRecord
   validates :email, presence: true, uniqueness: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :role, inclusion: { in: ROLES }
 
+  # SECURITY (H-2, fixed 2026-04-27): banking-grade password policy. Validates
+  # only when the password is being set (create or password change) so existing
+  # users keep their current password until they choose to rotate. Complexity:
+  # at least one uppercase, one lowercase, one digit, one symbol.
+  validates :password,
+    length: { minimum: 12, maximum: 72 },
+    format: {
+      with: /\A(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])/,
+      message: 'must include upper, lower, digit, and symbol'
+    },
+    if: -> { password.present? }
+
   scope :active, -> { where(is_active: true) }
 
   def can?(permission)

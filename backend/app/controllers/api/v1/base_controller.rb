@@ -25,8 +25,14 @@ module Api
       end
 
       def internal_error(exception)
-        Rails.logger.error("API Error: #{exception.message}\n#{exception.backtrace&.first(10)&.join("\n")}")
-        render json: { error: 'Internal server error' }, status: :internal_server_error
+        # SECURITY (M-3, fixed 2026-04-27): include request_id in the response
+        # so support can correlate user reports to server logs. Body remains
+        # opaque — never leak the exception message or backtrace.
+        Rails.logger.error("[#{request.request_id}] API Error: #{exception.message}\n#{exception.backtrace&.first(10)&.join("\n")}")
+        render json: {
+          error: 'Internal server error',
+          request_id: request.request_id
+        }, status: :internal_server_error
       end
 
       def parse_date(date_string)
@@ -43,6 +49,14 @@ module Api
         nil
       end
 
+      # SECURITY (M-5, fixed 2026-04-27): cap multi-value filter inputs to
+      # MAX_MULTI_VALUE_PARAMS entries. Without this an attacker can submit
+      # ?cif_id=a,b,c,... with 100k tokens, producing a huge IN(...) clause
+      # that exhausts memory or saturates the planner before statement_timeout
+      # fires. 500 is well above any legitimate UI use (the dropdown caps far
+      # lower) and trivial to raise per-endpoint if a real need surfaces.
+      MAX_MULTI_VALUE_PARAMS = 500
+
       def parse_multi_value_param(value)
         values =
           case value
@@ -58,6 +72,10 @@ module Api
         end
 
         return nil if normalized.empty?
+        if normalized.length > MAX_MULTI_VALUE_PARAMS
+          raise ActionController::BadRequest,
+                "Too many values: max #{MAX_MULTI_VALUE_PARAMS} per filter"
+        end
         return normalized.first if normalized.length == 1
 
         normalized
