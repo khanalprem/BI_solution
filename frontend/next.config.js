@@ -9,21 +9,41 @@
 //
 // Dev-only: 'unsafe-eval' is required by Next.js React Refresh / HMR. It is
 // NEVER added in production — `npm run build && npm start` runs without eval.
+// Production connect-src locks to the API origin parsed out of
+// NEXT_PUBLIC_API_URL (origin only, not the path) so any path on the API
+// host works. Development opens connect-src to any HTTP/HTTPS/WS so devs
+// can swap in a tunnel, a different port, or a docker-routed hostname
+// without re-editing this file.
 //
 const isDev = process.env.NODE_ENV !== 'production';
-const devScriptExtras = isDev ? " 'unsafe-eval'" : '';
-const devConnectExtras = isDev ? ' ws: wss:' : ''; // Next.js HMR websocket
+
+const apiOrigin = (() => {
+  const raw = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return raw;
+  }
+})();
+
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
+const connectSrc = isDev
+  ? "connect-src 'self' http: https: ws: wss:"
+  : `connect-src 'self' ${apiOrigin}`;
 
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${devScriptExtras}`,
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob:",
-      "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') + devConnectExtras,
+      connectSrc,
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
