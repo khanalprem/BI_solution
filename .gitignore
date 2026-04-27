@@ -245,6 +245,8 @@ UI_IMPROVEMENTS_COMPLETE.md
 .cursor/skills/bankbi-ui-styleguide/
 
 # ----------------------------------------------------------
-# Claude Code internal directories (worktrees, temp agents)
+# Claude Code internal files (project instructions, settings, worktrees)
+# These are local-only and should never be pushed to the shared repo.
 # ----------------------------------------------------------
-.claude/worktrees/
+CLAUDE.md
+.claude/
