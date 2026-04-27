@@ -7,16 +7,23 @@
 // is tracked as a follow-up — at that point drop 'unsafe-inline' from
 // script-src. Style-src keeps 'unsafe-inline' for Tailwind + next/font.
 //
+// Dev-only: 'unsafe-eval' is required by Next.js React Refresh / HMR. It is
+// NEVER added in production — `npm run build && npm start` runs without eval.
+//
+const isDev = process.env.NODE_ENV !== 'production';
+const devScriptExtras = isDev ? " 'unsafe-eval'" : '';
+const devConnectExtras = isDev ? ' ws: wss:' : ''; // Next.js HMR websocket
+
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'unsafe-inline'${devScriptExtras}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob:",
-      "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'),
+      "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') + devConnectExtras,
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
