@@ -1,0 +1,103 @@
+# Production compose for nbl.nepseflow.com
+# Isolated from the dev docker-compose.yml: separate project name, separate
+# network, separate volumes, ports bound to 127.0.0.1 only (nginx fronts them).
+#
+# Usage (from repo root):
+#   docker compose -f docker-compose.prod.yml --env-file .env.production build
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#   docker compose -f docker-compose.prod.yml --env-file .env.production logs -f
+#
+# SAFETY: the backend's default entrypoint runs `rails db:prepare` which would
+# attempt to migrate the NiFi production warehouse. The entrypoint override
+# below bypasses it - DO NOT remove without DBA review.
+
+name: nbl
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: nbl_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [nbl_net]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: nbl/backend:latest
+    container_name: nbl_backend
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      RAILS_ENV: production
+      RACK_ENV: production
+      RAILS_LOG_TO_STDOUT: "true"
+      RAILS_SERVE_STATIC_FILES: "true"
+      REDIS_URL: redis://redis:6379/0
+    # Skip the upstream entrypoint (which runs db:prepare). NEVER restore
+    # the default entrypoint against the NiFi warehouse.
+    entrypoint: []
+    command: ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+    ports:
+      - "127.0.0.1:3101:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [nbl_net]
+    healthcheck:
+      test: ["CMD-SHELL", "ruby -e 'require \"net/http\"; exit Net::HTTP.get_response(URI(\"http://localhost:3000/up\")).is_a?(Net::HTTPSuccess) ? 0 : 1' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  sidekiq:
+    image: nbl/backend:latest
+    container_name: nbl_sidekiq
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      RAILS_ENV: production
+      REDIS_URL: redis://redis:6379/0
+    entrypoint: []
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks: [nbl_net]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://nbl.nepseflow.com/api/v1
+    image: nbl/frontend:latest
+    container_name: nbl_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Kathmandu
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      - backend
+    networks: [nbl_net]
+
+volumes:
+  redis_data:
+    name: nbl_redis_data
+
+networks:
+  nbl_net:
+    name: nbl_network
