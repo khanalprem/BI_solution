@@ -211,6 +211,43 @@ RSpec.describe ProductionDataService, type: :service do
         start_date: nil, end_date: nil)
       expect(result).to include("tran_province IN ('Bagmati')")
     end
+
+    it 'emits IN clause for schm_type filter' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { schm_type: ['A', 'B'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("schm_type IN ('A', 'B')")
+    end
+
+    it 'emits IN clause for schm_sub_type filter' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { schm_sub_type: ['W'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("schm_sub_type IN ('W')")
+    end
+
+    it 'emits IN clause for tran_sub_type filter' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { tran_sub_type: ['P', 'I'] },
+        start_date: nil, end_date: nil)
+      expect(result).to include("tran_sub_type IN ('P', 'I')")
+    end
+  end
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DIMENSIONS additions — scheme/tran subtype dims for pivot
+  # ─────────────────────────────────────────────────────────────────────────────
+  describe 'scheme and tran subtype dimensions' do
+    %w[schm_type schm_sub_type tran_sub_type].each do |key|
+      it "registers #{key} as an inner-join dimension" do
+        meta = described_class::DIMENSIONS[key]
+        expect(meta).not_to be_nil, "DIMENSIONS missing #{key}"
+        expect(meta[:sql]).to eq(key)
+        expect(meta[:eab_required]).to be_falsey
+        expect(meta[:gam_required]).to be_falsey
+        expect(meta[:outer_join_field]).to be_falsey
+      end
+    end
   end
 
 end

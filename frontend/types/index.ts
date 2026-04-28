@@ -15,11 +15,16 @@ export interface DashboardFilters {
   tranCluster?: MultiValueFilter;
   tranProvince?: MultiValueFilter;
   tranType?: MultiValueFilter;
+  tranSubType?: MultiValueFilter;
   partTranType?: MultiValueFilter;
   tranSource?: MultiValueFilter;
   product?: MultiValueFilter;
   service?: MultiValueFilter;
   merchant?: MultiValueFilter;
+  // Account scheme classification — fixed dropdowns sourced directly from
+  // tran_summary (unlike schmCode which lives only on gam).
+  schmType?: MultiValueFilter;
+  schmSubType?: MultiValueFilter;
   glSubHeadCode?: MultiValueFilter;
   entryUser?: MultiValueFilter;
   vfdUser?: MultiValueFilter;

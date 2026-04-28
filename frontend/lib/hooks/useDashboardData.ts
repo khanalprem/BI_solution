@@ -53,6 +53,7 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['tran_cluster',     serializeFilterValue(filters.tranCluster)],
     ['tran_province',    serializeFilterValue(filters.tranProvince)],
     ['tran_type',        serializeFilterValue(filters.tranType)],
+    ['tran_sub_type',    serializeFilterValue(filters.tranSubType)],
     ['part_tran_type',   serializeFilterValue(filters.partTranType)],
     ['tran_source',      serializeFilterValue(filters.tranSource)],
     ['product',          serializeFilterValue(filters.product)],
@@ -66,6 +67,8 @@ export function toApiFilters(filters: DashboardFilters): Record<string, string |
     ['acct_name',        serializeFilterValue(filters.acctName)],
     ['acid',             serializeFilterValue(filters.acid)],
     ['schm_code',        serializeFilterValue(filters.schmCode)],
+    ['schm_type',        serializeFilterValue(filters.schmType)],
+    ['schm_sub_type',    serializeFilterValue(filters.schmSubType)],
     // Date dimension exact-match filters
     ['tran_date',         serializeFilterValue(filters.tranDate)],
     ['year_month',        serializeFilterValue(filters.yearMonth)],

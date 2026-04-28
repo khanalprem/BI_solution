@@ -201,6 +201,19 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
     { name: 'fixed',   value: 'fixed'   },
     { name: 'current', value: 'current' },
   ], description: 'Account scheme code from GAM (saving / minor / woman / fixed / current); requires an account identifier for the GAM join to be unique' },
+  { key: 'schm_type',        label: 'Scheme Type',      type: 'categorical', filterKey: 'schmType',      staticOptions: [
+    { name: 'A', value: 'A' },
+    { name: 'B', value: 'B' },
+    { name: 'C', value: 'C' },
+    { name: 'D', value: 'D' },
+    { name: 'E', value: 'E' },
+  ], description: 'Account scheme type classification (A–E)' },
+  { key: 'schm_sub_type',    label: 'Scheme Subtype',   type: 'categorical', filterKey: 'schmSubType',   staticOptions: [
+    { name: 'W', value: 'W' },
+    { name: 'X', value: 'X' },
+    { name: 'Y', value: 'Y' },
+    { name: 'Z', value: 'Z' },
+  ], description: 'Account scheme subtype classification (W–Z)' },
   { key: 'tran_date_bal',    label: 'TRAN Date Balance', type: 'text',                                   description: 'Balance snapshot from EAB — renders under pivoted headings as a value column; requires a date dimension' },
   { key: 'eod_balance',      label: 'GAM Balance',      type: 'text',                                    description: 'Current balance from GAM — static per account (does not vary by date); requires an account identifier' },
 
@@ -210,6 +223,10 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical', filterKey: 'tranBranch',    optionsKey: 'branches',          description: 'Branch where the transaction was processed' },
   { key: 'tran_source',      label: 'TRAN Source',      type: 'text-multi',  filterKey: 'tranSource',    description: 'Transaction channel (free-text multi-value)' },
   { key: 'tran_type',        label: 'TRAN Type',        type: 'text-multi',  filterKey: 'tranType',      description: 'Transaction type code (free-text multi-value)' },
+  { key: 'tran_sub_type',    label: 'TRAN Subtype',     type: 'categorical', filterKey: 'tranSubType',   staticOptions: [
+    { name: 'P', value: 'P' },
+    { name: 'I', value: 'I' },
+  ], description: 'Transaction subtype (P / I) — sparsely populated; most rows are NULL and group into a single bucket' },
   { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  staticOptions: [{ name: 'CR', value: 'CR' }, { name: 'DR', value: 'DR' }], description: 'Credit or debit side — CR or DR' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
   { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },

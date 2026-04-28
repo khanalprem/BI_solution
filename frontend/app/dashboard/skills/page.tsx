@@ -141,7 +141,10 @@ const FACT_TABLES = [
       { name: 'year_startdate',   type: 'date',            note: 'Jan 1 of the year' },
       { name: 'year_enddate',     type: 'date',            note: 'Dec 31 of the year' },
       { name: 'tran_type',        type: 'string',          note: 'Transaction type code' },
+      { name: 'tran_sub_type',    type: 'string',          note: 'Transaction subtype (P / I) — sparsely populated' },
       { name: 'part_tran_type',   type: 'string',          note: '"CR" or "DR" — dimension' },
+      { name: 'schm_type',        type: 'string',          note: 'Account scheme type (A–E) — pivot dimension' },
+      { name: 'schm_sub_type',    type: 'string',          note: 'Account scheme subtype (W–Z) — pivot dimension' },
       { name: 'tran_amt',         type: 'decimal(18,2)',   note: 'Transaction amount in NPR — primary measure base' },
       { name: 'tran_count',       type: 'integer',         note: 'Number of transactions in this summary row' },
       { name: 'signed_tranamt',   type: 'decimal(18,2)',   note: 'Signed amount (CR positive, DR negative)' },
@@ -223,7 +226,8 @@ const MASTER_TABLES = [
       { name: 'cif_id',            type: 'string(50)',   note: 'Customer CIF ID — links to customer' },
       { name: 'gl_sub_head_code',  type: 'string(100)',  note: 'GL sub-head code' },
       { name: 'schm_code',         type: 'string(100)',  note: 'Scheme code' },
-      { name: 'schm_type',         type: 'string(100)',  note: 'Scheme type (SB, CA, FD, OD, etc.)' },
+      { name: 'schm_type',         type: 'string(100)',  note: 'Scheme type (also on tran_summary for pivot)' },
+      { name: 'schm_sub_type',     type: 'string(100)',  note: 'Scheme subtype (also on tran_summary for pivot)' },
       { name: 'acct_opn_date',     type: 'string(100)',  note: 'Account opening date' },
       { name: 'acct_cls_flg',      type: 'string(100)',  note: 'Account closure flag' },
       { name: 'acct_cls_date',     type: 'string(100)',  note: 'Account closure date' },
@@ -459,11 +463,14 @@ const DIMENSIONS = [
   { key: 'tran_branch',      label: 'TRAN Branch',        type: 'categorical', sql: 'tran_branch',       description: 'Branch where the transaction was processed' },
   { key: 'tran_source',      label: 'TRAN Source',        type: 'text-multi',  sql: 'tran_source',       description: 'Transaction channel: mobile, internet, branch, ATM, etc. — free-text chip input (no dropdown)' },
   { key: 'tran_type',        label: 'TRAN Type',          type: 'text-multi',  sql: 'tran_type',         description: 'Transaction type code — free-text chip input, pivot-capable' },
+  { key: 'tran_sub_type',    label: 'TRAN Subtype',       type: 'categorical', sql: 'tran_sub_type',     description: 'Transaction subtype on tran_summary — fixed dropdown (P / I). Sparsely populated (~92% NULL); most rows group into a single (NULL) bucket.' },
   { key: 'part_tran_type',   label: 'PART Tran Type',     type: 'categorical', sql: 'part_tran_type',    description: 'Credit or debit side — static CR / DR dropdown, pivot-capable' },
   { key: 'gl_sub_head_code', label: 'GL Sub Head',        type: 'categorical', sql: 'gl_sub_head_code',  description: 'General ledger sub-head code — join to gsh for description — pivot-capable' },
   { key: 'product',          label: 'Product',            type: 'categorical', sql: 'product',           description: 'Banking product associated with the account' },
   { key: 'service',          label: 'Service',            type: 'categorical', sql: 'service',           description: 'Service type applied to the transaction' },
   { key: 'merchant',         label: 'Merchant',           type: 'categorical', sql: 'merchant',          description: 'Merchant identifier for payment transactions' },
+  { key: 'schm_type',        label: 'Scheme Type',        type: 'categorical', sql: 'schm_type',         description: 'Account scheme type on tran_summary — fixed dropdown (A / B / C / D / E). Inner-join dim, no GAM prerequisite.' },
+  { key: 'schm_sub_type',    label: 'Scheme Subtype',     type: 'categorical', sql: 'schm_sub_type',     description: 'Account scheme subtype on tran_summary — fixed dropdown (W / X / Y / Z). Inner-join dim, no GAM prerequisite.' },
   // ── User ────────────────────────────────────────────────────────────────────
   { key: 'entry_user',       label: 'ENTRY User',         type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
   { key: 'vfd_user',         label: 'VFD User',           type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
@@ -778,7 +785,7 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (26)"
+            label="Pivot Dimensions (29)"
             sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">

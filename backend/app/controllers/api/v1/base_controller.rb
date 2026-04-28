@@ -102,11 +102,16 @@ module Api
           tran_cluster:  parse_multi_value_param(param_value(:tran_cluster,  :tranCluster)),
           tran_province: parse_multi_value_param(param_value(:tran_province, :tranProvince)),
           tran_type: parse_multi_value_param(param_value(:tran_type, :tranType)),
+          tran_sub_type: parse_multi_value_param(param_value(:tran_sub_type, :tranSubType)),
           part_tran_type: parse_multi_value_param(param_value(:part_tran_type, :partTranType)),
           tran_source: parse_multi_value_param(param_value(:tran_source, :tranSource, :channel)),
           product: parse_multi_value_param(param_value(:product)),
           service: parse_multi_value_param(param_value(:service)),
           merchant: parse_multi_value_param(param_value(:merchant)),
+          # Account scheme classification — fixed dropdowns on tran_summary directly
+          # (no gam join needed, unlike schm_code below).
+          schm_type: parse_multi_value_param(param_value(:schm_type, :schmType)),
+          schm_sub_type: parse_multi_value_param(param_value(:schm_sub_type, :schmSubType)),
           gl_sub_head_code: parse_multi_value_param(param_value(:gl_sub_head_code, :glSubHeadCode)),
           entry_user: parse_multi_value_param(param_value(:entry_user, :entryUser)),
           vfd_user: parse_multi_value_param(param_value(:vfd_user, :vfdUser)),
