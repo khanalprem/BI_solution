@@ -191,71 +191,66 @@ RSpec.describe ProductionDataService, type: :service do
     # only constructs a string (no procedure call, no DB round-trip).
     let(:service_with_conn) { described_class.new(connection: ActiveRecord::Base.connection) }
 
-    it 'emits IN clause for tran_branch filter' do
+    it 'emits IN clause for multi-value tran_branch filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_branch: ['001', '002'] },
-        start_date: nil, end_date: nil)
+        filters: { tran_branch: ['001', '002'] })
       expect(result).to include("tran_branch IN ('001', '002')")
     end
 
-    it 'emits IN clause for tran_cluster filter' do
+    it 'emits = clause for single-value tran_cluster filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_cluster: ['north'] },
-        start_date: nil, end_date: nil)
-      expect(result).to include("tran_cluster IN ('north')")
+        filters: { tran_cluster: ['north'] })
+      expect(result).to include("tran_cluster = 'north'")
     end
 
-    it 'emits IN clause for tran_province filter' do
+    it 'emits = clause for single-value tran_province filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_province: ['Bagmati'] },
-        start_date: nil, end_date: nil)
-      expect(result).to include("tran_province IN ('Bagmati')")
+        filters: { tran_province: ['Bagmati'] })
+      expect(result).to include("tran_province = 'Bagmati'")
     end
 
-    it 'emits IN clause for schm_type filter' do
+    it 'emits IN clause for multi-value schm_type filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { schm_type: ['A', 'B'] },
-        start_date: nil, end_date: nil)
+        filters: { schm_type: ['A', 'B'] })
       expect(result).to include("schm_type IN ('A', 'B')")
     end
 
-    it 'emits IN clause for schm_sub_type filter' do
+    it 'emits = clause for single-value schm_sub_type filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { schm_sub_type: ['W'] },
-        start_date: nil, end_date: nil)
-      expect(result).to include("schm_sub_type IN ('W')")
+        filters: { schm_sub_type: ['W'] })
+      expect(result).to include("schm_sub_type = 'W'")
     end
 
-    it 'emits IN clause for tran_sub_type filter' do
+    it 'emits IN clause for multi-value tran_sub_type filter' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_sub_type: ['P', 'I'] },
-        start_date: nil, end_date: nil)
+        filters: { tran_sub_type: ['P', 'I'] })
       expect(result).to include("tran_sub_type IN ('P', 'I')")
     end
 
-    # When the user has applied no filter in any field, the where_clause must carry
-    # no restrictions — even if the period selector is sending a window. The result
-    # falls through to "WHERE 1=1 " so the SQL preview matches the empty filter UI.
-    it 'returns WHERE 1=1 when filters are empty even with a date window' do
-      result = service_with_conn.send(:explorer_where_clause,
-        filters: {},
-        start_date: '2024-01-01', end_date: '2024-12-31')
+    # The where_clause is built strictly from user filter fields — the TopBar
+    # period selector no longer auto-injects a global tran_date BETWEEN.
+    it 'returns WHERE 1=1 when filters are empty' do
+      result = service_with_conn.send(:explorer_where_clause, filters: {})
       expect(result).to eq('WHERE 1=1 ')
     end
 
-    it 'returns WHERE 1=1 when filters contain only blank/nil values with a date window' do
+    it 'returns WHERE 1=1 when filters contain only blank/nil values' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_branch: [], cif_id: nil, acct_name: '', min_amount: nil },
-        start_date: '2024-01-01', end_date: '2024-12-31')
+        filters: { tran_branch: [], cif_id: nil, acct_name: '', min_amount: nil })
       expect(result).to eq('WHERE 1=1 ')
     end
 
-    it 'still injects the global date range when at least one filter is applied' do
+    it 'does not inject a global tran_date BETWEEN even when other filters are set' do
       result = service_with_conn.send(:explorer_where_clause,
-        filters: { tran_branch: ['001'] },
-        start_date: '2024-01-01', end_date: '2024-12-31')
-      expect(result).to include("tran_branch IN ('001')")
-      expect(result).to include("tran_date BETWEEN '2024-01-01' AND '2024-12-31'")
+        filters: { tran_branch: ['001'] })
+      expect(result).to include("tran_branch = '001'")
+      expect(result).not_to include('tran_date BETWEEN')
+    end
+
+    it 'emits an explicit tran_date BETWEEN when the user populates the tran_date filter range' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { tran_date_from: '2024-02-01', tran_date_to: '2024-02-29' })
+      expect(result).to include("tran_date BETWEEN '2024-02-01' AND '2024-02-29'")
     end
   end
 

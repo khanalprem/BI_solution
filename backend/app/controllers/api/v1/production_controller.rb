@@ -21,10 +21,10 @@ module Api
       end
 
       def explorer
-        # Parse dates explicitly so we can distinguish "user set a range" from "no range set".
-        # When start_date is absent (e.g. ALL period before filter-stats loads), pass nil so
-        # explorer_where_clause skips the tran_date BETWEEN clause rather than defaulting to
-        # last-30-days and silently showing a narrow window.
+        # Parse the period-selector dates. They no longer flow into where_clause as a
+        # global tran_date BETWEEN (the service builds where_clause strictly from
+        # user filter fields). They're still used for period-comparison anchors and
+        # the EAB join's as-of date, so we keep parsing them here.
         explicit_start    = parse_date(param_value(:start_date, :startDate))
         explicit_end      = parse_date(param_value(:end_date, :endDate))
         # No fallback measure: an empty `measures` param means the user picked none,
@@ -35,7 +35,11 @@ module Api
         time_comparisons  = Array.wrap(parse_multi_value_param(params[:time_comparisons]))
         raw_dims          = param_value(:dimensions, :dimension)
         dimensions        = Array.wrap(parse_multi_value_param(raw_dims))
-        dimensions        = ['gam_branch'] if dimensions.empty?
+        # Both dims AND measures empty would produce a no-op query — fall back to
+        # gam_branch for a sensible default (caller intent unclear). Measure-only
+        # mode (dims empty, measures present) is supported: the service returns a
+        # single aggregate row across the filter scope.
+        dimensions        = ['gam_branch'] if dimensions.empty? && Array(measures).empty?
         # partitionby_clause: full PARTITION BY clause from the frontend (e.g. "PARTITION BY tran_date").
         # Sanitized to prevent SQL injection — only known dimension/measure keys allowed.
         partitionby_clause = sanitize_sql_clause(params[:partitionby_clause].to_s.strip, 'PARTITION BY')

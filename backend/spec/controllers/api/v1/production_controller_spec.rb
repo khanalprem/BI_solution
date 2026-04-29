@@ -64,5 +64,44 @@ RSpec.describe Api::V1::ProductionController, type: :request do
       expect(response).to have_http_status(:ok)
       expect(Array(captured[:measures])).to eq(['tran_amt'])
     end
+
+    # Measure-only mode: dimensions empty + measures present should NOT silently inject
+    # gam_branch — the service produces "SELECT <agg>" for a single scalar row.
+    it 'does not inject a default dimension when measures are present and dimensions are empty' do
+      captured = nil
+      allow_any_instance_of(ProductionDataService).to receive(:tran_summary_explorer) do |_svc, **kwargs|
+        captured = kwargs
+        { rows: [{ 'tran_amt' => 5_000_000 }], columns: ['tran_amt'], total_rows: 1, page: 1, page_size: 10,
+          dimensions: [], measures: ['tran_amt'], time_comparisons: [],
+          empty_periods: [], sql_preview: {} }
+      end
+
+      get '/api/v1/production/explorer',
+        params: { dimensions: '', measures: 'tran_amt' },
+        headers: auth_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(Array(captured[:dimensions])).to be_empty
+      expect(Array(captured[:measures])).to eq(['tran_amt'])
+    end
+
+    # Both empty is still a no-op-ish call that must not crash; falls back to gam_branch
+    # so legacy callers (and direct API consumers) get a sensible default.
+    it 'falls back to gam_branch when both dimensions and measures are empty' do
+      captured = nil
+      allow_any_instance_of(ProductionDataService).to receive(:tran_summary_explorer) do |_svc, **kwargs|
+        captured = kwargs
+        { rows: [], columns: ['gam_branch'], total_rows: 0, page: 1, page_size: 10,
+          dimensions: ['gam_branch'], measures: [], time_comparisons: [],
+          empty_periods: [], sql_preview: {} }
+      end
+
+      get '/api/v1/production/explorer',
+        params: { dimensions: '', measures: '' },
+        headers: auth_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(Array(captured[:dimensions])).to eq(['gam_branch'])
+    end
   end
 end
