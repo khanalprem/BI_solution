@@ -1322,7 +1322,7 @@ export default function DepositsDashboard() {
             </div>
             {/* ── Date Dimensions container — shared Pivot toggle in header ── */}
             <div className="border-b border-border">
-              <div className="flex items-center justify-between gap-2 px-4 py-2 bg-accent-amber/5 border-b border-border/60">
+              <div className="flex items-center justify-between gap-2 px-4 py-2 bg-accent-amber/5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent-amber">Date Dimensions</p>
                 <div className="flex items-center gap-2">
                   {/* Pivot toggle — pivots selected date dims as column headers */}
