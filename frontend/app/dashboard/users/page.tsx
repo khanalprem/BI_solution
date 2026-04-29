@@ -118,7 +118,7 @@ export default function UsersPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {[
                   { key: 'dashboard',  label: 'Executive Dashboard' },
                   { key: 'analytics',  label: 'Analytics & Trends' },
@@ -197,7 +197,7 @@ export default function UsersPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody>
                   {(data?.users || []).map(user => (
                     <tr key={user.id} className="hover:bg-bg-input/50 transition-colors">
                       <td className="px-4 py-2.5">

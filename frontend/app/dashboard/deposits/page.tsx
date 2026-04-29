@@ -1153,7 +1153,7 @@ export default function DepositsDashboard() {
                 </thead>
                 <tbody>
                   {topDepositors.map((r, i) => (
-                    <tr key={`${r.cif_id}-${i}`} className="border-b border-border/30 hover:bg-bg-card-hover transition-colors">
+                    <tr key={`${r.cif_id}-${i}`} className="hover:bg-bg-card-hover transition-colors">
                       <td className="py-2 px-3 font-mono text-text-muted">{i + 1}</td>
                       <td className="py-2 px-3 font-mono text-text-primary whitespace-nowrap">{r.cif_id}</td>
                       <td className="py-2 px-3 text-text-primary">{r.acct_name}</td>
@@ -1523,7 +1523,7 @@ export default function DepositsDashboard() {
                           </tr>
                         ) : (
                           pivotData.rows.map((pr, i) => (
-                            <tr key={i} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
+                            <tr key={i} className="hover:bg-row-hover">
                               {selectedNonDateDims.map((k) => (
                                 <td key={k} className="px-3 py-2 text-text-primary whitespace-nowrap">
                                   {formatDimCell(pr.rowDims[k])}
@@ -1568,7 +1568,7 @@ export default function DepositsDashboard() {
                           const r = row as Record<string, unknown>;
                           const deposit = coerceNumber(r.deposit);
                           return (
-                            <tr key={i} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
+                            <tr key={i} className="hover:bg-row-hover">
                               {orderedDims.map((k) => (
                                 <td key={k} className="px-3 py-2 text-text-primary whitespace-nowrap">
                                   {formatDimCell(r[k])}
