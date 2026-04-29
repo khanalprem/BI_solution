@@ -1959,9 +1959,14 @@ export default function PivotDashboard() {
                               type="button"
                               aria-label={expanded ? 'Collapse filter' : 'Expand filter'}
                               onClick={(e) => { e.stopPropagation(); setExpanded(expanded ? null : field.key); }}
-                              className="flex-shrink-0 text-text-muted hover:text-text-primary text-[10px] px-1.5 py-0.5 rounded hover:bg-bg-input transition-colors"
+                              className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
                             >
-                              {expanded ? '▲' : '▼'}
+                              <svg
+                                width="12" height="12" viewBox="0 0 12 12" fill="none"
+                                className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                              >
+                                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
                             </button>
                           )}
                         </div>
@@ -2170,9 +2175,14 @@ export default function PivotDashboard() {
                             type="button"
                             aria-label={expanded ? 'Collapse filter' : 'Expand filter'}
                             onClick={(e) => { e.stopPropagation(); setExpanded(expanded ? null : field.key); }}
-                            className="flex-shrink-0 text-text-muted hover:text-text-primary text-[10px] px-1.5 py-0.5 rounded hover:bg-bg-input transition-colors"
+                            className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
                           >
-                            {expanded ? '▲' : '▼'}
+                            <svg
+                              width="12" height="12" viewBox="0 0 12 12" fill="none"
+                              className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                            >
+                              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
                           </button>
                         )}
                       </div>
