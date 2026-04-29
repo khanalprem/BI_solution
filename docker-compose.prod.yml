@@ -45,7 +45,8 @@ services:
     # Skip the upstream entrypoint (which runs db:prepare). NEVER restore
     # the default entrypoint against the NiFi warehouse.
     entrypoint: []
-    command: ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+    command:
+      ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
     ports:
       - "127.0.0.1:3101:3000"
     depends_on:
@@ -53,7 +54,11 @@ services:
         condition: service_healthy
     networks: [nbl_net]
     healthcheck:
-      test: ["CMD-SHELL", "ruby -e 'require \"net/http\"; exit Net::HTTP.get_response(URI(\"http://localhost:3000/up\")).is_a?(Net::HTTPSuccess) ? 0 : 1' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'ruby -e ''require "net/http"; exit Net::HTTP.get_response(URI("http://localhost:3000/up")).is_a?(Net::HTTPSuccess) ? 0 : 1'' || exit 1',
+        ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -84,7 +89,7 @@ services:
         # Includes :8443 because the bankbi nginx is on a non-standard port
         # while the apex nginx still owns :443. Drop the port once we move
         # bankbi behind a shared reverse proxy on :443.
-        NEXT_PUBLIC_API_URL: https://nbl.nepseflow.com:8443/api/v1
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     image: nbl/frontend:latest
     container_name: nbl_frontend
     restart: unless-stopped
