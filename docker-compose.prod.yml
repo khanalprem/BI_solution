@@ -89,7 +89,7 @@ services:
         # Includes :8443 because the bankbi nginx is on a non-standard port
         # while the apex nginx still owns :443. Drop the port once we move
         # bankbi behind a shared reverse proxy on :443.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: https://nbl.nepseflow.com:8443/api/v1
     image: nbl/frontend:latest
     container_name: nbl_frontend
     restart: unless-stopped
