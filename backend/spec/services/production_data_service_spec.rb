@@ -232,6 +232,31 @@ RSpec.describe ProductionDataService, type: :service do
         start_date: nil, end_date: nil)
       expect(result).to include("tran_sub_type IN ('P', 'I')")
     end
+
+    # When the user has applied no filter in any field, the where_clause must carry
+    # no restrictions — even if the period selector is sending a window. The result
+    # falls through to "WHERE 1=1 " so the SQL preview matches the empty filter UI.
+    it 'returns WHERE 1=1 when filters are empty even with a date window' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: {},
+        start_date: '2024-01-01', end_date: '2024-12-31')
+      expect(result).to eq('WHERE 1=1 ')
+    end
+
+    it 'returns WHERE 1=1 when filters contain only blank/nil values with a date window' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { tran_branch: [], cif_id: nil, acct_name: '', min_amount: nil },
+        start_date: '2024-01-01', end_date: '2024-12-31')
+      expect(result).to eq('WHERE 1=1 ')
+    end
+
+    it 'still injects the global date range when at least one filter is applied' do
+      result = service_with_conn.send(:explorer_where_clause,
+        filters: { tran_branch: ['001'] },
+        start_date: '2024-01-01', end_date: '2024-12-31')
+      expect(result).to include("tran_branch IN ('001')")
+      expect(result).to include("tran_date BETWEEN '2024-01-01' AND '2024-12-31'")
+    end
   end
 
   # ─────────────────────────────────────────────────────────────────────────────

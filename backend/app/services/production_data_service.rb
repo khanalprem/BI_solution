@@ -1155,6 +1155,15 @@ class ProductionDataService
     clauses = []
     conn = ActiveRecord::Base.connection
 
+    # When the user has applied no filter in any field, the where_clause must carry
+    # no restrictions — even if the period selector is sending a window. Falls
+    # through to "WHERE 1=1 " so the user-visible SQL preview matches the empty
+    # filter UI. Performance note: this lets queries scan all tran_summary
+    # partitions, which is the same effective scope as the previous
+    # "tran_date BETWEEN <data-min> AND <data-max>" clause that ALL period sent
+    # — that BETWEEN provided no partition pruning either, only noise.
+    user_applied_any_filter = filters.any? { |_, v| filter_value_present?(v) }
+
     # Global date range — applied as tran_date BETWEEN unless the user has already set
     # an explicit tran_date exact-match or range filter (which would be more specific).
     # start_date is nil only when the frontend sends no start_date param (ALL period before
@@ -1162,7 +1171,7 @@ class ProductionDataService
     has_explicit_tran_date = filters[:tran_date].present? ||
                              filters[:tran_date_from].present? ||
                              filters[:tran_date_to].present?
-    if start_date && end_date && !has_explicit_tran_date
+    if start_date && end_date && !has_explicit_tran_date && user_applied_any_filter
       clauses << "tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
     end
 
@@ -1704,6 +1713,16 @@ class ProductionDataService
       text = item.to_s.strip
       text.presence
     end
+  end
+
+  # True when a filter hash entry carries a real user-supplied value. nil, empty
+  # strings, and arrays of only-blank elements all count as "not applied" — so
+  # explorer_where_clause can distinguish "user filtered nothing" from "user
+  # filtered something that happened to normalize to empty".
+  def filter_value_present?(value)
+    return false if value.nil?
+    return value.any? { |v| v.to_s.strip.present? } if value.is_a?(Array)
+    value.to_s.strip.present?
   end
 
   def validate_table_name!(table_name)
