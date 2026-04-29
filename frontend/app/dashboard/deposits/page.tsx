@@ -5,6 +5,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { AdvancedFilters } from '@/components/ui/AdvancedFilters';
 import { KPICard } from '@/components/ui/KPICard';
 import { ChartCard } from '@/components/ui/ChartCard';
+import { AdvancedDataTable, type ColumnDef } from '@/components/ui/AdvancedDataTable';
 import { PlaceholderPanel } from '@/components/ui/PlaceholderPanel';
 import { PremiumLineChart, PremiumBarChart } from '@/components/ui/PremiumCharts';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -355,7 +356,8 @@ export default function DepositsDashboard() {
     [trendSnap],
   );
 
-  const topDepositors = useMemo(
+  type TopDepRow = { cif_id: string; acct_name: string; deposit: number; share: number };
+  const topDepositors = useMemo<TopDepRow[]>(
     () =>
       ((topDepositorsSnap?.rows ?? []) as Array<Record<string, unknown>>).map((r) => {
         const deposit = coerceNumber(r.deposit) ?? 0;
@@ -367,6 +369,53 @@ export default function DepositsDashboard() {
         };
       }),
     [topDepositorsSnap, totalDeposits],
+  );
+
+  const topDepColumns = useMemo<ColumnDef<TopDepRow>[]>(
+    () => [
+      {
+        id: 'rank',
+        header: '#',
+        cell: ({ row }) => (
+          <div
+            className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-semibold ${
+              row.index < 3 ? 'bg-accent-amber-dim text-accent-amber' : 'bg-bg-input text-text-muted'
+            }`}
+          >
+            {row.index + 1}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'cif_id',
+        header: 'CIF',
+        cell: ({ row }) => (
+          <span className="font-mono text-text-primary">{row.original.cif_id}</span>
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'acct_name',
+        header: 'Account Name',
+        cell: ({ row }) => row.original.acct_name,
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'deposit',
+        header: 'Deposit',
+        cell: ({ row }) => <strong className="text-text-primary">{formatNPR(row.original.deposit)}</strong>,
+        enableSorting: true,
+        sortDescFirst: true,
+      },
+      {
+        accessorKey: 'share',
+        header: '% of Book',
+        cell: ({ row }) => <span className="text-accent-blue">{formatPercent(row.original.share)}</span>,
+        enableSorting: true,
+        sortDescFirst: true,
+      },
+    ],
+    [],
   );
 
   // ── Ad-hoc breakdown explorer state (unchanged from previous implementation)
@@ -1115,61 +1164,33 @@ export default function DepositsDashboard() {
         </div>
 
         {/* Top 10 Depositors */}
-        <div className="bg-bg-card border border-border rounded-xl p-5">
-          <div className="mb-4">
-            <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
-              Top 10 Depositors
-            </h3>
-            <p className="text-[10.5px] text-text-muted mt-0.5">
-              {snapshotDate
-                ? `Top CIFs by balance on ${snapshotDate} · concentration view`
-                : 'Top CIFs by latest balance'}
+        {topDepLoading ? (
+          <div className="bg-bg-card border border-border rounded-xl p-5">
+            <StandardDashboardSkeleton />
+          </div>
+        ) : topDepError ? (
+          <div className="bg-bg-card border border-border rounded-xl p-8 text-center space-y-2">
+            <p className="text-[12px] font-semibold text-accent-red">Top depositors query timed out</p>
+            <p className="text-[11px] text-text-muted max-w-md mx-auto">
+              cif_id × acct_name over the full account book is heavy. Try a narrower period or add a customer / branch filter.
             </p>
           </div>
-          {topDepLoading ? (
-            <StandardDashboardSkeleton />
-          ) : topDepError ? (
-            <div className="py-8 text-center space-y-2">
-              <p className="text-[12px] font-semibold text-accent-red">Top depositors query timed out</p>
-              <p className="text-[11px] text-text-muted max-w-md mx-auto">
-                cif_id × acct_name over the full account book is heavy. Try a narrower period or add a customer / branch filter.
-              </p>
-            </div>
-          ) : topDepositors.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-text-muted">
-              No depositor data for this snapshot.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px] w-[80px]">#</th>
-                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">CIF</th>
-                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Account Name</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Deposit</th>
-                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px] w-[120px]">% of Book</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topDepositors.map((r, i) => (
-                    <tr key={`${r.cif_id}-${i}`} className="hover:bg-bg-card-hover transition-colors">
-                      <td className="py-2 px-3 font-mono text-text-muted">{i + 1}</td>
-                      <td className="py-2 px-3 font-mono text-text-primary whitespace-nowrap">{r.cif_id}</td>
-                      <td className="py-2 px-3 text-text-primary">{r.acct_name}</td>
-                      <td className="py-2 px-3 text-right font-mono text-text-primary whitespace-nowrap">
-                        {formatNPR(r.deposit)}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-accent-blue whitespace-nowrap">
-                        {formatPercent(r.share)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        ) : (
+          <AdvancedDataTable
+            title="Top 10 Depositors"
+            subtitle={
+              snapshotDate
+                ? `Top CIFs by balance on ${snapshotDate} · concentration view`
+                : 'Top CIFs by latest balance'
+            }
+            data={topDepositors}
+            columns={topDepColumns}
+            pageSize={10}
+            enableFiltering={false}
+            enableSorting={true}
+            enablePagination={false}
+          />
+        )}
 
         {/* Feeds that get_deposit does not supply — kept as placeholders so the
             page communicates what's coming next without faking the numbers. */}
