@@ -14,6 +14,10 @@ interface RecordTableProps {
   columns: string[];
   rows: Array<Record<string, string | number | boolean | null>>;
   actions?: React.ReactNode;
+  // Optional resolver for column-header labels. Default: underscore → space.
+  // Pivot/explorer pages pass a resolver that maps backend keys (dims/measures)
+  // to their sidebar field-list labels.
+  columnLabel?: (col: string) => string;
 }
 
 function renderCellValue(value: string | number | boolean | null | undefined) {
@@ -22,7 +26,8 @@ function renderCellValue(value: string | number | boolean | null | undefined) {
   return String(value);
 }
 
-export function RecordTable({ title, subtitle, columns, rows, actions }: RecordTableProps) {
+export function RecordTable({ title, subtitle, columns, rows, actions, columnLabel }: RecordTableProps) {
+  const resolveLabel = columnLabel ?? ((c: string) => c.replaceAll('_', ' '));
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => new Set(columns));
   const [colModalOpen, setColModalOpen] = useState(false);
   const [colSearch, setColSearch] = useState('');
@@ -127,7 +132,7 @@ export function RecordTable({ title, subtitle, columns, rows, actions }: RecordT
                     onCheckedChange={() => toggleCol(col)}
                   />
                   <span className={`flex-1 text-[11.5px] font-mono truncate ${visible ? 'text-text-primary' : 'text-text-muted'}`}>
-                    {col}
+                    {resolveLabel(col)}
                   </span>
                   {visible
                     ? <Eye className="w-3 h-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -210,7 +215,7 @@ export function RecordTable({ title, subtitle, columns, rows, actions }: RecordT
                     key={col}
                     className="px-4 py-2.5 text-left text-[10.5px] font-bold text-text-secondary uppercase tracking-[0.5px] whitespace-nowrap"
                   >
-                    {col.replaceAll('_', ' ')}
+                    {resolveLabel(col)}
                   </th>
                 ))}
               </tr>

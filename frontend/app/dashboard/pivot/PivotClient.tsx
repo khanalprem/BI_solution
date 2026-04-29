@@ -342,6 +342,18 @@ const COMPARISON_MEASURES: MeasureDef[] = [
   { key: 'prevyearsamedate_count',  label: 'Prev. Year Same Day — Count',   description: 'prevyearsamedate_where · tran_count',  group: 'comparison', period: 'prevyearsamedate' },
 ];
 
+// Single source of truth for column-header labels. Maps backend keys (dimensions,
+// measures, comparison measures) to the same labels shown in the sidebar field list.
+// Falls back to underscore→space for unknown keys (e.g. raw catalog columns).
+const FIELD_LABELS: Map<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const f of DIMENSION_FIELDS)    m.set(f.key, f.label);
+  for (const x of STANDARD_MEASURES)   m.set(x.key, x.label);
+  for (const x of COMPARISON_MEASURES) m.set(x.key, x.label);
+  return m;
+})();
+const labelFor = (k: string): string => FIELD_LABELS.get(k) ?? k.replaceAll('_', ' ');
+
 // ─── Date input formatting ────────────────────────────────────────────────────
 // Live-format date filter inputs as the user types: insert separators automatically
 // (YYYY-MM-DD, YYYY-MM, YYYY-Qn). On blur, pad single-digit month / day with a
@@ -865,10 +877,41 @@ function PivotCell({
 
 function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: PivotData; title: string; subtitle?: string; filters: DashboardFilters; pivotDimKeys: string[] }) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
-  const hasMultiMeasure = measureKeys.length > 1;
+
+  // Display-as-measure dims (e.g. tran_date_bal) are a date-keyed attribute —
+  // their value depends only on the pivoted date, not on any non-date pivot dim.
+  // In a multi-level pivot we collapse them to one column per level-1 (date)
+  // group, but ONLY when the level-2 pivot dim is non-date (e.g. part_tran_type).
+  // When level-2 is also a date dim (e.g. year_month × tran_date), the daily
+  // balance varies per (l1,l2) composite, so we keep per-composite rendering.
+  const rawRegularMeasureKeys = measureKeys.filter((k) => !DISPLAY_AS_MEASURE_DIMS.has(k));
+  const rawDisplayDimKeys     = measureKeys.filter((k) =>  DISPLAY_AS_MEASURE_DIMS.has(k));
 
   // Detect composite (multi-level) pivot keys: "2024-02-01\x01CR"
   const isMultiLevel = pivotValues.length > 0 && pivotValues[0].includes(PIVOT_DIM_SEP);
+
+  // Collapse rule: only when l1 is a date and l2 is non-date. UI orders date
+  // pivot dims first, so l1 is always a date dim when any date is pivoted.
+  const pivotL2Key      = pivotDimKeys[1];
+  const isPivotL2Date   = pivotL2Key ? (DATE_FIELD_ORDER as readonly string[]).includes(pivotL2Key) : false;
+  const collapseDisplayDims = isMultiLevel && pivotDimKeys.length >= 2 && !isPivotL2Date;
+
+  // When not collapsing, displayDims render as ordinary measures under each
+  // (l1,l2) composite — same as the pre-collapse path.
+  const regularMeasureKeys = collapseDisplayDims ? rawRegularMeasureKeys : measureKeys;
+  const displayDimKeys     = collapseDisplayDims ? rawDisplayDimKeys     : [];
+
+  // Whether a measure-label sub-row (the bottom-most header row) is needed.
+  //   • single-level: appears when there's >1 measure column total
+  //   • multi-level:  labels regular measures under each l2 cell. Skipped when
+  //     there are no regular measures (l2 row holds only displayDim cells), or
+  //     when there's exactly one measure total (no ambiguity to resolve).
+  //     With a regular measure mixing alongside a displayDim, we still emit
+  //     the row so each l2 cell gets a measure label — matches the displayDim's
+  //     own labeled column.
+  const hasMultiMeasure = isMultiLevel
+    ? regularMeasureKeys.length > 0 && measureKeys.length > 1
+    : measureKeys.length > 1;
 
   // Build ordered level-1 groups from composite pivot values.
   // Preserves the natural sort order established by buildPivotData.
@@ -889,14 +932,27 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
     }
   }
 
+  // Whether row 2 (l2 sub-headers) renders. Skipped in multi-level when there
+  // are no regular measures (only displayDims) — l2 split would be meaningless
+  // since every l2 cell would just repeat the same l1 displayDim value.
+  const showL2Row = isMultiLevel && regularMeasureKeys.length > 0;
+
   // Total <thead> rows — drives rowSpan on frozen row-dim headers.
-  // single-level: 1 (pivot values) [+ 1 if multiMeasure]
-  // multi-level:  2 (level1 + level2) [+ 1 if multiMeasure]
-  const totalHeaderRows = (isMultiLevel ? 2 : 1) + (hasMultiMeasure ? 1 : 0);
+  // single-level: 1 (pivot values) [+ 1 if measure sub-row]
+  // multi-level:  1 (level1) + (showL2Row || displayDims) [+ 1 if measure sub-row]
+  const headerRowsBelowL1 =
+      (isMultiLevel ? ((showL2Row || displayDimKeys.length > 0) ? 1 : 0) : 0)
+    + (hasMultiMeasure ? 1 : 0);
+  const totalHeaderRows = 1 + headerRowsBelowL1;
+
+  // Per-l1 column counts in multi-level: regular cells (l2s × regular measures)
+  // plus one column per displayDim. Used for row-1 colSpan + total cols.
+  const colsPerL1 = (l2s: string[]) =>
+    l2s.length * regularMeasureKeys.length + displayDimKeys.length;
 
   // Total scrollable columns (for "No data" colSpan).
   const totalPivotCols = isMultiLevel
-    ? level1Groups.reduce((s, g) => s + g.l2s.length, 0) * measureKeys.length
+    ? level1Groups.reduce((s, g) => s + colsPerL1(g.l2s), 0)
     : pivotValues.length * measureKeys.length;
 
   // Pre-compute cumulative left offset for each row-dim column (sticky freeze).
@@ -990,7 +1046,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                     boxShadow: i === lastDimIdx ? 'var(--shadow-freeze-divider)' : undefined,
                   }}
                 >
-                  {k}
+                  {labelFor(k)}
                 </th>
               ))}
 
@@ -999,7 +1055,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                 ? level1Groups.map(({ l1, period, date, l2s }) => (
                     <PivotGroupTh
                       key={l1}
-                      colSpan={l2s.length * measureKeys.length}
+                      colSpan={colsPerL1(l2s)}
                       period={period}
                       date={date}
                     />
@@ -1019,34 +1075,55 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
               }
             </tr>
 
-            {/* ── Row 2 (multi-level only): level-2 sub-column headers (CR / DR / …) ── */}
-            {isMultiLevel && (
+            {/* ── Row 2 (multi-level only): level-2 sub-column headers (CR / DR / …)
+                  + display-as-measure dim cells (e.g. TRAN Date Balance — one per
+                  level-1 group, rowSpan-merged through the measure sub-row when
+                  hasMultiMeasure is on). ── */}
+            {isMultiLevel && (showL2Row || displayDimKeys.length > 0) && (
               <tr className="border-b border-border">
-                {level1Groups.flatMap(({ l1, period, l2s }) =>
-                  l2s.map((l2) => (
+                {level1Groups.flatMap(({ l1, period, l2s }) => [
+                  ...(showL2Row
+                    ? l2s.map((l2) => (
+                        <th
+                          key={`${l1}${PIVOT_DIM_SEP}${l2}`}
+                          colSpan={regularMeasureKeys.length}
+                          className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
+                            period !== null
+                              ? 'text-accent-amber/80 bg-accent-amber/5'
+                              : 'text-accent-purple/80 bg-accent-purple/5'
+                          }`}
+                        >
+                          {l2}
+                        </th>
+                      ))
+                    : []),
+                  ...displayDimKeys.map((dk) => (
                     <th
-                      key={`${l1}${PIVOT_DIM_SEP}${l2}`}
-                      colSpan={measureKeys.length}
+                      key={`${l1}__dd${PIVOT_SEP}${dk}`}
+                      colSpan={1}
+                      rowSpan={hasMultiMeasure ? 2 : 1}
                       className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
                         period !== null
                           ? 'text-accent-amber/80 bg-accent-amber/5'
                           : 'text-accent-purple/80 bg-accent-purple/5'
                       }`}
                     >
-                      {l2}
+                      {labelFor(dk)}
                     </th>
-                  ))
-                )}
+                  )),
+                ])}
               </tr>
             )}
 
-            {/* ── Row 2 or 3: measure sub-headers (when hasMultiMeasure) ── */}
+            {/* ── Row 2 or 3: measure sub-headers (when hasMultiMeasure).
+                  In multi-level, only regular measures appear here — displayDim
+                  columns already have their label in Row 2 with rowSpan. ── */}
             {hasMultiMeasure && (
               <tr className="border-b border-border">
                 {isMultiLevel
                   ? level1Groups.flatMap(({ l1, period, l2s }) =>
                       l2s.flatMap((l2) =>
-                        measureKeys.map((mk) => (
+                        regularMeasureKeys.map((mk) => (
                           <th
                             key={`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${mk}`}
                             className={`px-3 py-1.5 text-center text-[8.5px] font-semibold uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 ${
@@ -1055,7 +1132,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                                 : 'text-text-muted bg-accent-purple/3'
                             }`}
                           >
-                            {mk.replaceAll('_', ' ')}
+                            {labelFor(mk)}
                           </th>
                         ))
                       )
@@ -1071,7 +1148,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                               : 'text-text-muted bg-accent-purple/3'
                           }`}
                         >
-                          {mk.replaceAll('_', ' ')}
+                          {labelFor(mk)}
                         </th>
                       ));
                     })
@@ -1159,12 +1236,15 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                       </td>
                     ))}
 
-                    {/* Pivot value × measure cells — scrollable + clickable for per-cell drill-down */}
+                    {/* Pivot value × measure cells — scrollable + clickable for per-cell drill-down.
+                        Multi-level renders regular measures per (l1,l2) and displayDim columns
+                        once per l1 (value taken from any non-empty l2 composite — they are
+                        l1-scoped attributes so all l2s carry the same value). */}
                     {isMultiLevel
-                      ? level1Groups.flatMap(({ l1, l2s }) =>
-                          l2s.flatMap((l2) => {
+                      ? level1Groups.flatMap(({ l1, l2s }) => [
+                          ...l2s.flatMap((l2) => {
                             const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
-                            return measureKeys.map((mk) => {
+                            return regularMeasureKeys.map((mk) => {
                               const cellVal = row[`${fullKey}${PIVOT_SEP}${mk}`];
                               const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
                               return (
@@ -1181,8 +1261,26 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                                 </PivotCell>
                               );
                             });
-                          })
-                        )
+                          }),
+                          ...displayDimKeys.map((dk) => {
+                            // Pick the first non-empty l2 composite for this displayDim — its
+                            // value is the same across all l2s in the same l1.
+                            let cellVal: string | number | boolean | null = null;
+                            for (const l2 of l2s) {
+                              const v = row[`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${dk}`];
+                              if (v !== null && v !== undefined && v !== '') { cellVal = v; break; }
+                            }
+                            return (
+                              <PivotCell
+                                key={`${l1}__dd${PIVOT_SEP}${dk}`}
+                                clickable={false}
+                                label=""
+                              >
+                                {renderCell(cellVal, dk)}
+                              </PivotCell>
+                            );
+                          }),
+                        ])
                       : pivotValues.flatMap((pv) =>
                           measureKeys.map((mk) => {
                             const cellVal = row[`${pv}${PIVOT_SEP}${mk}`];
@@ -1734,17 +1832,23 @@ export default function PivotDashboard() {
   );
 
   const dimensionLabels = useMemo(
-    () => selectedDimensions.map((d) => {
-      if (d === 'tran_date_bal') return 'TRAN Date Balance';
-      return catalog?.dimension_options.find((o) => o.value === d)?.label ?? d;
-    }).join(' × '),
-    [catalog, selectedDimensions],
+    () => {
+      const dimPart = selectedDimensions.map((d) => {
+        if (d === 'tran_date_bal') return 'TRAN Date Balance';
+        return catalog?.dimension_options.find((o) => o.value === d)?.label ?? d;
+      }).join(' × ');
+      // Measure-only mode: title falls back to the measure list so users see
+      // what they're aggregating instead of a trailing dash.
+      if (!dimPart) return selectedMeasures.map(labelFor).join(', ');
+      return dimPart;
+    },
+    [catalog, selectedDimensions, selectedMeasures],
   );
 
   // ── Full procedure-call preview (all 20 params) ──────────────────────────
   const sqlPreviewLines = useMemo((): SqlLine[] => {
     if (!explorer) {
-      return [{ text: '-- Select at least one dimension and one measure to generate the call.', kind: 'placeholder' }];
+      return [{ text: '-- Select at least one dimension or measure to generate the call.', kind: 'placeholder' }];
     }
 
     const sp  = explorer.sql_preview;
@@ -2681,12 +2785,12 @@ export default function PivotDashboard() {
             )}
 
             {/* Result table — PivotTable when partition active, RecordTable otherwise.
-                Empty state: nothing runs until at least one dimension is selected. */}
-            {selectedDimensions.length === 0 ? (
+                Empty state: nothing runs until at least one dimension OR measure is selected. */}
+            {selectedDimensions.length === 0 && selectedMeasures.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-bg-surface p-10 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-[13px] font-semibold text-text-primary">Select at least one dimension to start</p>
+                <p className="text-[13px] font-semibold text-text-primary">Select at least one dimension or measure to start</p>
                 <p className="mt-1 text-[11px] text-text-muted">
-                  Pick one or more fields from the <span className="text-accent-blue font-medium">Dimensions</span> panel on the left. Measures are optional — leave them unselected for a plain <span className="font-mono">SELECT dims · GROUP BY dims</span> query.
+                  Pick fields from the <span className="text-accent-blue font-medium">Dimensions</span> or <span className="text-accent-purple font-medium">Measures</span> panel on the left. Dim-only mode runs <span className="font-mono">SELECT dims · GROUP BY dims</span>; measure-only mode runs <span className="font-mono">SELECT &lt;agg&gt;</span> for a single scalar across the filter scope.
                 </p>
               </div>
             ) : isPivoted && pivotData ? (
@@ -2711,6 +2815,7 @@ export default function PivotDashboard() {
                 }
                 columns={flatColumns}
                 rows={flatRows}
+                columnLabel={labelFor}
               />
             )}
 

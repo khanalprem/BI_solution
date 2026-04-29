@@ -261,9 +261,10 @@ export function useProductionExplorer(
       const { data } = await apiClient.get<ProductionExplorerResponse>('/production/explorer', { params });
       return data;
     },
-    // Measure-less queries are valid ("SELECT <dims> GROUP BY <dims>"). Still require
-    // at least one dimension — an empty pivot has nothing to fetch.
-    enabled: dimensions.length > 0,
+    // Measure-less queries are valid ("SELECT <dims> GROUP BY <dims>"); dim-less
+    // queries are valid too ("SELECT <aggs>" — single scalar row across the filter
+    // scope). Only block when both sides are empty: nothing to compute.
+    enabled: dimensions.length > 0 || measures.length > 0,
     staleTime: 60 * 1000,
     retry: 1, // Limit retries — explorer queries can be expensive stored procedure calls
     placeholderData: (prev) => prev,

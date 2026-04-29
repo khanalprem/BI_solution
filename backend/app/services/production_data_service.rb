@@ -579,14 +579,16 @@ class ProductionDataService
       key = d.to_s
       key if DIMENSIONS.key?(key)
     end
-    dimension_keys = ['gam_branch'] if dimension_keys.empty?
 
     measure_keys = Array(measures).filter_map do |measure|
       value = measure.to_s
       value if MEASURES.key?(value)
     end
-    # Measure-less queries are allowed — they produce "SELECT <dims> GROUP BY <dims>"
-    # which returns the distinct dimension-value combinations (no aggregation).
+    # Both empty would produce an unbounded "SELECT * FROM tran_summary" — fall back
+    # to gam_branch as a sensible default. Otherwise either side may be empty:
+    #   • Measure-less = "SELECT <dims> GROUP BY <dims>" (distinct combinations).
+    #   • Dim-less     = "SELECT <aggs>" (single scalar row across the filter scope).
+    dimension_keys = ['gam_branch'] if dimension_keys.empty? && measure_keys.empty?
 
     normalized_page = [page.to_i, 1].max
     normalized_page_size = [[page_size.to_i, 1].max, 100].min
@@ -632,11 +634,25 @@ class ProductionDataService
     enddate_groupby    = active_enddate_col ? ", #{active_enddate_col}" : ''
 
     measure_select_sql = selected_measures.map { |m| m[:select_sql] }.join(', ')
-    measures_prefix    = selected_measures.any? ? ', ' : ''
 
-    select_inner   = "SELECT #{dim_selects.join(', ')}#{acid_select}#{enddate_select}#{measures_prefix}#{measure_select_sql}"
-    where_clause   = explorer_where_clause(filters: filters, start_date: start_date, end_date: end_date)
-    groupby_clause = "GROUP BY #{dim_sqls.join(', ')}#{acid_groupby}#{enddate_groupby}"
+    # Build SELECT and GROUP BY as parts-lists — empty pieces (no dims / no acid /
+    # no enddate / no measures) are dropped instead of leaving dangling commas.
+    # Dim-less measure queries collapse to "SELECT <agg>" with an empty groupby_clause,
+    # which the proc handles (it concatenates groupby_clause directly into the inner CTE).
+    inner_parts = []
+    inner_parts.concat(dim_selects)
+    inner_parts << 'acid' if include_acid
+    inner_parts << active_enddate_col if active_enddate_col
+    inner_parts << measure_select_sql if selected_measures.any?
+    select_inner = "SELECT #{inner_parts.join(', ')}"
+
+    where_clause = explorer_where_clause(filters: filters)
+
+    groupby_parts = []
+    groupby_parts.concat(dim_sqls)
+    groupby_parts << 'acid' if include_acid
+    groupby_parts << active_enddate_col if active_enddate_col
+    groupby_clause = groupby_parts.any? ? "GROUP BY #{groupby_parts.join(', ')}" : ''
     # HAVING is opt-in: caller builds the validated expression (see ProductionController#build_having_clause).
     # Pass empty string when absent so the procedure's placeholder remains harmless.
     having_clause  = having_clause.to_s.strip
@@ -1151,29 +1167,16 @@ class ProductionDataService
     end
   end
 
-  def explorer_where_clause(filters:, start_date: nil, end_date: nil)
+  def explorer_where_clause(filters:)
     clauses = []
     conn = ActiveRecord::Base.connection
 
-    # When the user has applied no filter in any field, the where_clause must carry
-    # no restrictions — even if the period selector is sending a window. Falls
-    # through to "WHERE 1=1 " so the user-visible SQL preview matches the empty
-    # filter UI. Performance note: this lets queries scan all tran_summary
-    # partitions, which is the same effective scope as the previous
-    # "tran_date BETWEEN <data-min> AND <data-max>" clause that ALL period sent
-    # — that BETWEEN provided no partition pruning either, only noise.
-    user_applied_any_filter = filters.any? { |_, v| filter_value_present?(v) }
-
-    # Global date range — applied as tran_date BETWEEN unless the user has already set
-    # an explicit tran_date exact-match or range filter (which would be more specific).
-    # start_date is nil only when the frontend sends no start_date param (ALL period before
-    # filter-stats loads), in which case we skip the clause to avoid a 30-day default window.
-    has_explicit_tran_date = filters[:tran_date].present? ||
-                             filters[:tran_date_from].present? ||
-                             filters[:tran_date_to].present?
-    if start_date && end_date && !has_explicit_tran_date && user_applied_any_filter
-      clauses << "tran_date BETWEEN #{conn.quote(start_date.to_s)} AND #{conn.quote(end_date.to_s)}"
-    end
+    # The where_clause is built strictly from user-set filter fields. The TopBar
+    # period selector's start_date / end_date are NOT auto-injected as a global
+    # tran_date BETWEEN — to filter by date, the user must populate the tran_date
+    # (or year_month / year_quarter / year) filter fields explicitly. start_date
+    # / end_date are still consumed elsewhere in the service (period-comparison
+    # anchors, EAB as-of date), just not pasted into where_clause as a default.
 
     # Categorical filters — each key is a real tran_summary column whose IN-clause
     # is generated when the corresponding filter has any value.
@@ -1200,10 +1203,10 @@ class ProductionDataService
     }.each do |column, value|
       normalized = normalize_filter_values(value)
       next if normalized.empty?
-      clauses << "#{column} IN (#{quoted_values(normalized)})"
+      clauses << equals_or_in(column, normalized)
     end
 
-    # Date dimension filters — support single-value IN, from-to BETWEEN, or multi-value IN
+    # Date dimension filters — support single-value =/IN, from-to BETWEEN, or multi-value IN
     {
       'tran_date'    => { exact: filters[:tran_date],    from: filters[:tran_date_from],    to: filters[:tran_date_to] },
       'year_month'   => { exact: filters[:year_month],   from: filters[:year_month_from],   to: filters[:year_month_to] },
@@ -1217,15 +1220,15 @@ class ProductionDataService
       if from && to
         clauses << "#{column} BETWEEN #{conn.quote(from)} AND #{conn.quote(to)}"
       elsif vals.any?
-        clauses << "#{column} IN (#{quoted_values(vals)})"
+        clauses << equals_or_in(column, vals)
       end
     end
 
-    # Multi-value IDENTITY filters: exact match via IN, supports single-string legacy callers.
+    # Multi-value IDENTITY filters: exact match via =/IN, supports single-string legacy callers.
     { 'acct_num' => filters[:acct_num], 'acid' => filters[:acid] }.each do |column, value|
       normalized = normalize_filter_values(value)
       next if normalized.empty?
-      clauses << "#{column}::text IN (#{quoted_values(normalized)})"
+      clauses << equals_or_in("#{column}::text", normalized)
     end
 
     # Multi-value NAME filters: partial match via ILIKE, OR-joined when multiple values.
@@ -1243,7 +1246,8 @@ class ProductionDataService
     # `acid` instead — gam.acid is the PK so this is just an index lookup.
     schm_code = normalize_filter_values(filters[:schm_code])
     if schm_code.any?
-      clauses << "acid IN (SELECT acid FROM gam WHERE schm_code IN (#{quoted_values(schm_code)}))"
+      # Outer stays IN (subquery may return multiple acids); inner uses =/IN.
+      clauses << "acid IN (SELECT acid FROM gam WHERE #{equals_or_in('schm_code', schm_code)})"
     end
 
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
@@ -1530,7 +1534,7 @@ class ProductionDataService
     mapping.filter_map do |column, value|
       normalized = normalize_filter_values(value)
       next if normalized.empty?
-      "#{column} IN (#{quoted_values(normalized)})"
+      equals_or_in(column, normalized)
     end
   end
 
@@ -1544,7 +1548,7 @@ class ProductionDataService
     { 'acct_num' => filters[:acct_num], 'acid' => filters[:acid] }.each do |column, value|
       normalized = normalize_filter_values(value)
       next if normalized.empty?
-      clauses << "#{column}::text IN (#{quoted_values(normalized)})"
+      clauses << equals_or_in("#{column}::text", normalized)
     end
     { 'cif_id' => filters[:cif_id], 'acct_name' => filters[:acct_name] }.each do |column, value|
       normalized = normalize_filter_values(value)
@@ -1554,9 +1558,10 @@ class ProductionDataService
       clauses << (ors.length == 1 ? ors.first : "(#{ors.join(' OR ')})")
     end
     # schm_code: subquery against gam (column does not live on tran_summary).
+    # Outer stays IN (subquery may return multiple acids); inner uses =/IN.
     schm_code = normalize_filter_values(filters[:schm_code])
     if schm_code.any?
-      clauses << "acid IN (SELECT acid FROM gam WHERE schm_code IN (#{quoted_values(schm_code)}))"
+      clauses << "acid IN (SELECT acid FROM gam WHERE #{equals_or_in('schm_code', schm_code)})"
     end
     clauses << "tran_amt >= #{conn.quote(filters[:min_amount])}" unless filters[:min_amount].nil?
     clauses << "tran_amt <= #{conn.quote(filters[:max_amount])}" unless filters[:max_amount].nil?
@@ -1565,6 +1570,16 @@ class ProductionDataService
 
   def quoted_values(values)
     Array(values).map { |value| @connection.quote(value) }.join(', ')
+  end
+
+  # Build either "<column> = <value>" or "<column> IN (<values>)" depending on
+  # cardinality. Single-value form keeps the user-visible SQL preview readable
+  # and lets Postgres pick equality plans without the planner first having to
+  # unfold a one-element list.
+  def equals_or_in(column, values)
+    list = Array(values)
+    return "#{column} = #{@connection.quote(list.first)}" if list.length == 1
+    "#{column} IN (#{quoted_values(list)})"
   end
 
   # Substitute deposit dim aliases (e.g. `year_month`, `gam_branch`) with their
@@ -1635,10 +1650,8 @@ class ProductionDataService
         "#{column} >= #{@connection.quote(from)}"
       elsif to
         "#{column} <= #{@connection.quote(to)}"
-      elsif vals.length == 1
-        "#{column} = #{@connection.quote(vals.first)}"
       elsif vals.any?
-        "#{column} IN (#{quoted_values(vals)})"
+        equals_or_in(column, vals)
       end
     end
 
@@ -1653,10 +1666,10 @@ class ProductionDataService
     clauses = []
 
     acct_num = normalize_filter_values(filters[:acct_num])
-    clauses << "g.acct_num::text IN (#{quoted_values(acct_num)})" if acct_num.any?
+    clauses << equals_or_in('g.acct_num::text', acct_num) if acct_num.any?
 
     acid = normalize_filter_values(filters[:acid])
-    clauses << "g.acid::text IN (#{quoted_values(acid)})" if acid.any?
+    clauses << equals_or_in('g.acid::text', acid) if acid.any?
 
     cif_id = normalize_filter_values(filters[:cif_id])
     if cif_id.any?
@@ -1673,10 +1686,10 @@ class ProductionDataService
     end
 
     # schm_code: account scheme code (saving / minor / woman / fixed / current).
-    # gam is already joined as `g` in the deposit procedure, so a direct IN-clause
+    # gam is already joined as `g` in the deposit procedure, so a direct =/IN
     # works here (no subquery needed unlike the pivot path).
     schm_code = normalize_filter_values(filters[:schm_code])
-    clauses << "g.schm_code IN (#{quoted_values(schm_code)})" if schm_code.any?
+    clauses << equals_or_in('g.schm_code', schm_code) if schm_code.any?
 
     clauses.any? ? "AND #{clauses.join(' AND ')}" : ''
   end
@@ -1686,11 +1699,11 @@ class ProductionDataService
 
     # filters[:branch] uses sol_id values (from static_data type='branch').
     branch = normalize_filter_values(filters[:branch])
-    clauses << "g.sol_id::text IN (#{quoted_values(branch)})" if branch.any?
+    clauses << equals_or_in('g.sol_id::text', branch) if branch.any?
 
     # filters[:solid] is a legacy alias; union with branch when present.
     solid = normalize_filter_values(filters[:solid])
-    clauses << "g.sol_id::text IN (#{quoted_values(solid)})" if solid.any?
+    clauses << equals_or_in('g.sol_id::text', solid) if solid.any?
 
     clauses.any? ? "AND #{clauses.join(' AND ')}" : ''
   end
@@ -1698,14 +1711,14 @@ class ProductionDataService
   def build_deposit_province_where(filters:)
     values = normalize_filter_values(filters[:province])
     return '' if values.empty?
-    "AND p.name IN (#{quoted_values(values)})"
+    "AND #{equals_or_in('p.name', values)}"
   end
 
   def build_deposit_cluster_where(filters:)
     values = normalize_filter_values(filters[:cluster])
     return '' if values.empty?
     # filters[:cluster] uses cluster_id values (from static_data type='cluster').
-    "AND b.cluster_id::text IN (#{quoted_values(values)})"
+    "AND #{equals_or_in('b.cluster_id::text', values)}"
   end
 
   def normalize_filter_values(value)
@@ -1713,16 +1726,6 @@ class ProductionDataService
       text = item.to_s.strip
       text.presence
     end
-  end
-
-  # True when a filter hash entry carries a real user-supplied value. nil, empty
-  # strings, and arrays of only-blank elements all count as "not applied" — so
-  # explorer_where_clause can distinguish "user filtered nothing" from "user
-  # filtered something that happened to normalize to empty".
-  def filter_value_present?(value)
-    return false if value.nil?
-    return value.any? { |v| v.to_s.strip.present? } if value.is_a?(Array)
-    value.to_s.strip.present?
   end
 
   def validate_table_name!(table_name)
