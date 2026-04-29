@@ -99,8 +99,8 @@ export default function UsersPage() {
         </div>
 
         {/* Permissions matrix */}
-        <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="text-[13px] font-semibold text-text-primary">Role Permissions Matrix</div>
               <div className="text-[10.5px] text-text-muted mt-0.5">What each role can access in the system</div>
@@ -165,8 +165,8 @@ export default function UsersPage() {
         </div>
 
         {/* Users list */}
-        <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="text-[13px] font-semibold text-text-primary">
                 Users ({data?.users.length || 0})
@@ -186,7 +186,7 @@ export default function UsersPage() {
           </div>
 
           {isLoading ? (
-            <div className="p-8 text-center text-[11px] text-text-muted">Loading users…</div>
+            <div className="py-8 text-center text-[11px] text-text-muted">Loading users…</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[11.5px]">

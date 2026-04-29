@@ -1115,59 +1115,52 @@ export default function DepositsDashboard() {
         </div>
 
         {/* Top 10 Depositors */}
-        <section
-          className="rounded-xl border border-border bg-bg-card overflow-hidden"
-          style={{ boxShadow: 'var(--shadow-card)' }}
-        >
-          <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
-                Top 10 Depositors
-              </h3>
-              <p className="text-[10.5px] text-text-muted mt-0.5">
-                {snapshotDate
-                  ? `Top CIFs by balance on ${snapshotDate} · concentration view`
-                  : 'Top CIFs by latest balance'}
-              </p>
-            </div>
+        <div className="bg-bg-card border border-border rounded-xl p-5">
+          <div className="mb-4">
+            <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
+              Top 10 Depositors
+            </h3>
+            <p className="text-[10.5px] text-text-muted mt-0.5">
+              {snapshotDate
+                ? `Top CIFs by balance on ${snapshotDate} · concentration view`
+                : 'Top CIFs by latest balance'}
+            </p>
           </div>
           {topDepLoading ? (
-            <div className="p-4">
-              <StandardDashboardSkeleton />
-            </div>
+            <StandardDashboardSkeleton />
           ) : topDepError ? (
-            <div className="p-8 text-center space-y-2">
+            <div className="py-8 text-center space-y-2">
               <p className="text-[12px] font-semibold text-accent-red">Top depositors query timed out</p>
               <p className="text-[11px] text-text-muted max-w-md mx-auto">
                 cif_id × acct_name over the full account book is heavy. Try a narrower period or add a customer / branch filter.
               </p>
             </div>
           ) : topDepositors.length === 0 ? (
-            <div className="p-8 text-center text-[12px] text-text-muted">
+            <div className="py-8 text-center text-[12px] text-text-muted">
               No depositor data for this snapshot.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-[12px]">
-                <thead className="bg-bg-surface">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-secondary border-b border-border w-[80px]">#</th>
-                    <th className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-secondary border-b border-border">CIF</th>
-                    <th className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-secondary border-b border-border">Account Name</th>
-                    <th className="px-3 py-2 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-secondary border-b border-border">Deposit</th>
-                    <th className="px-3 py-2 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-secondary border-b border-border w-[120px]">% of Book</th>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px] w-[80px]">#</th>
+                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">CIF</th>
+                    <th className="text-left py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Account Name</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px]">Deposit</th>
+                    <th className="text-right py-2 px-3 font-display font-semibold text-text-secondary uppercase tracking-wider text-[10px] w-[120px]">% of Book</th>
                   </tr>
                 </thead>
                 <tbody>
                   {topDepositors.map((r, i) => (
-                    <tr key={`${r.cif_id}-${i}`} className="border-b border-border/30 last:border-0 hover:bg-row-hover">
-                      <td className="px-3 py-2 text-text-muted font-mono text-xs">{i + 1}</td>
-                      <td className="px-3 py-2 text-text-primary font-mono text-xs whitespace-nowrap">{r.cif_id}</td>
-                      <td className="px-3 py-2 text-text-primary">{r.acct_name}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-text-primary whitespace-nowrap">
+                    <tr key={`${r.cif_id}-${i}`} className="border-b border-border/30 hover:bg-bg-card-hover transition-colors">
+                      <td className="py-2 px-3 font-mono text-text-muted">{i + 1}</td>
+                      <td className="py-2 px-3 font-mono text-text-primary whitespace-nowrap">{r.cif_id}</td>
+                      <td className="py-2 px-3 text-text-primary">{r.acct_name}</td>
+                      <td className="py-2 px-3 text-right font-mono text-text-primary whitespace-nowrap">
                         {formatNPR(r.deposit)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-accent-blue whitespace-nowrap">
+                      <td className="py-2 px-3 text-right font-mono text-accent-blue whitespace-nowrap">
                         {formatPercent(r.share)}
                       </td>
                     </tr>
@@ -1176,7 +1169,7 @@ export default function DepositsDashboard() {
               </table>
             </div>
           )}
-        </section>
+        </div>
 
         {/* Feeds that get_deposit does not supply — kept as placeholders so the
             page communicates what's coming next without faking the numbers. */}
