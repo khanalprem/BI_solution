@@ -235,6 +235,56 @@ RSpec.describe ProductionDataService, type: :service do
   end
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # default_orderby — alias-form so the expansion step doesn't double-wrap aggregates
+  # ─────────────────────────────────────────────────────────────────────────────
+  describe 'default_orderby (Bug 2 — nested aggregate)' do
+    # When the caller sends an empty orderby_clause, the service builds a default.
+    # That default is then run through an alias→aggregate expansion (so SELECT-list
+    # aliases resolve inside ROW_NUMBER() OVER(ORDER BY ...) where Postgres won't).
+    # If the default already contained the aggregate form, the expansion would
+    # double-wrap into SUM(SUM(tran_amt)) — Postgres rejects that with
+    # "aggregate function calls cannot be nested". This test pins the alias form.
+    it 'uses the measure ALIAS, not the SUM(...) aggregate, in the default ORDER BY' do
+      svc = described_class.new(connection: ActiveRecord::Base.connection)
+      stub_proc_call!(svc)
+      svc.tran_summary_explorer(
+        start_date: Date.new(2024, 1, 1),
+        end_date:   Date.new(2024, 1, 31),
+        dimensions: ['gam_province'],
+        measures:   ['tran_amt'],
+        filters:    {},
+        orderby_clause: '',
+        page: 1, page_size: 10,
+      )
+      orderby = $captured_proc_args[:orderby_clause]
+      expect(orderby).not_to match(/SUM\s*\(\s*SUM\s*\(/i),
+        "ORDER BY contained nested SUM(SUM(...)): #{orderby.inspect}"
+      expect(orderby).to include('SUM(tran_amt)')
+    end
+  end
+
+  # Helper: stub the bits of #tran_summary_explorer that hit the real DB so we can
+  # assert on the SQL it would have built without actually running the procedure.
+  def stub_proc_call!(svc)
+    fake_conn = ActiveRecord::Base.connection
+    allow(fake_conn).to receive(:execute).and_wrap_original do |orig, sql, *rest|
+      if sql.is_a?(String) && sql.include?('CALL public.get_tran_summary')
+        $captured_proc_args = {
+          orderby_clause: sql[/orderby_clause\s*=>\s*'([^']*)'/, 1].to_s,
+        }
+        nil
+      elsif sql.is_a?(String) && sql.start_with?('DROP TABLE')
+        nil
+      else
+        orig.call(sql, *rest)
+      end
+    end
+    allow(fake_conn).to receive(:exec_query).and_return(double('result', to_a: []))
+    allow(svc).to receive(:with_connection).and_yield
+    svc.instance_variable_set(:@connection, fake_conn)
+  end
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # DIMENSIONS additions — scheme/tran subtype dims for pivot
   # ─────────────────────────────────────────────────────────────────────────────
   describe 'scheme and tran subtype dimensions' do

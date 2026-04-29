@@ -27,7 +27,11 @@ module Api
         # last-30-days and silently showing a narrow window.
         explicit_start    = parse_date(param_value(:start_date, :startDate))
         explicit_end      = parse_date(param_value(:end_date, :endDate))
-        measures          = parse_multi_value_param(params[:measures]) || 'total_amount'
+        # No fallback measure: an empty `measures` param means the user picked none,
+        # which the service treats as a measure-less "SELECT <dims> GROUP BY <dims>"
+        # query. Defaulting to `total_amount` here would silently inject an Amount
+        # column the user never asked for.
+        measures          = parse_multi_value_param(params[:measures])
         time_comparisons  = Array.wrap(parse_multi_value_param(params[:time_comparisons]))
         raw_dims          = param_value(:dimensions, :dimension)
         dimensions        = Array.wrap(parse_multi_value_param(raw_dims))

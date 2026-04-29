@@ -642,9 +642,12 @@ class ProductionDataService
     having_clause  = having_clause.to_s.strip
     # ORDER BY fallback: use the first measure when any, else fall back to the first
     # dimension alias (so measure-less "select dims / group by dims" queries still
-    # paginate deterministically).
+    # paginate deterministically). Use the measure's ALIAS form here (not its full
+    # aggregate `order_sql`) — the expansion step below substitutes alias→aggregate
+    # exactly once. Inlining the aggregate here would double-wrap into SUM(SUM(...)),
+    # which Postgres rejects with "aggregate function calls cannot be nested".
     default_orderby = if selected_measures.any?
-      "ORDER BY #{selected_measures.first.fetch(:order_sql)}"
+      "ORDER BY #{measure_keys.first} DESC"
     elsif inner_dim_keys.any?
       "ORDER BY #{inner_dim_keys.first} ASC"
     else
