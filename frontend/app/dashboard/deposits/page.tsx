@@ -1380,10 +1380,10 @@ export default function DepositsDashboard() {
 
           {/* Results */}
           <section
-            className="rounded-xl border border-border bg-bg-card overflow-hidden"
+            className="rounded-xl border border-border bg-bg-card p-5"
             style={{ boxShadow: 'var(--shadow-card)' }}
           >
-            <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+            <div className="mb-4 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="font-display text-[13.5px] font-bold tracking-tight text-text-primary">
                   Deposit Balances
@@ -1403,7 +1403,7 @@ export default function DepositsDashboard() {
             </div>
 
             {selectedDims.length === 0 ? (
-              <div className="p-8 text-center text-[12px] text-text-muted">
+              <div className="py-8 text-center text-[12px] text-text-muted">
                 Pick a dimension from the left to GROUP BY.
               </div>
             ) : !hasDateDimFilter ? (
@@ -1411,7 +1411,7 @@ export default function DepositsDashboard() {
                  are picked but the user hasn't yet set any of the four date
                  dim filters. The query is intentionally suppressed until they
                  do, because the proc otherwise scans the full period window. */
-              <div className="p-8 text-center space-y-3">
+              <div className="py-8 text-center space-y-3">
                 <div className="inline-flex items-center gap-1.5 rounded border border-accent-amber/30 bg-accent-amber/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-accent-amber">
                   <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
                     <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -1432,9 +1432,7 @@ export default function DepositsDashboard() {
                 </p>
               </div>
             ) : explorerInitialLoad ? (
-              <div className="p-4">
-                <StandardDashboardSkeleton />
-              </div>
+              <StandardDashboardSkeleton />
             ) : explorerIsError ? (
               (() => {
                 // Extract the most useful error string we can find.
@@ -1462,7 +1460,7 @@ export default function DepositsDashboard() {
                   }
                 }
                 return (
-                  <div className="p-8 text-center space-y-3">
+                  <div className="py-8 text-center space-y-3">
                     <p className="text-[12px] font-semibold text-accent-red">
                       Deposit query failed.
                     </p>
@@ -1483,7 +1481,7 @@ export default function DepositsDashboard() {
                 );
               })()
             ) : explorerRows.length === 0 ? (
-              <div className="p-8 text-center text-[12px] text-text-muted">
+              <div className="py-8 text-center text-[12px] text-text-muted">
                 No rows matched the current filters.
               </div>
             ) : (
@@ -1589,7 +1587,7 @@ export default function DepositsDashboard() {
 
                 {/* Pagination — same visual style as pivot / HTD panels */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
                     <div className="text-[10.5px] text-text-muted">
                       Showing {((explorerPage - 1) * effectivePageSize) + 1}–
                       {Math.min(explorerPage * effectivePageSize, explorerTotal).toLocaleString()} of {explorerTotal.toLocaleString()} rows
