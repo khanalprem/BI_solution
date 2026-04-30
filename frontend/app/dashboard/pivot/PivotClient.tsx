@@ -901,6 +901,16 @@ function PivotCell({
   );
 }
 
+// Format a list of selected-field labels as a concise summary line:
+//   ["A", "B"]                 → "A · B"
+//   ["A", "B", "C"]            → "A · B · C"
+//   ["A", "B", "C", "D"]       → "A · B · C +1"
+//   ["A", "B", "C", "D", "E"]  → "A · B · C +2"
+function summarizeLabels(labels: string[]): string {
+  if (labels.length <= 3) return labels.join(' · ');
+  return `${labels.slice(0, 3).join(' · ')} +${labels.length - 3}`;
+}
+
 // Top-level collapsible sidebar section. Module-scope so React doesn't see a
 // new component type on each parent render.
 function SidebarSection({
@@ -1494,6 +1504,19 @@ export default function PivotDashboard() {
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
+  const [collapsedSections, setCollapsedSections] = useState<Set<SidebarSectionId>>(
+    () => (typeof window === 'undefined' ? new Set() : loadCollapsedSections()),
+  );
+
+  const toggleSection = useCallback((id: SidebarSectionId) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      saveCollapsedSections(next);
+      return next;
+    });
+  }, []);
   // Procedure-call preview panel — collapsed by default (developer-only context).
   const [showProcPreview, setShowProcPreview]       = useState(false);
   const [dateFilterModes, setDateFilterModes]       = useState<Record<string, DateFilterMode>>({
@@ -1561,6 +1584,87 @@ export default function PivotDashboard() {
     ],
     [datePivotFields, nonDatePartitions, selectedDimensions],
   );
+
+  // Per-section "selected" counts, drives the count-badge in each SidebarSection
+  // header and the expanded/collapsed summary line.
+  const dimensionSelectedCount = useMemo(() => {
+    const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
+    return selectedDimensions.length + (amountActive ? 1 : 0);
+  }, [selectedDimensions, filters.minAmount, filters.maxAmount]);
+
+  const measureSelectedCount = useMemo(
+    () => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)).length,
+    [selectedMeasures],
+  );
+
+  const comparisonSelectedCount = useMemo(() => {
+    const periods = new Set<string>();
+    for (const k of selectedMeasures) {
+      const def = COMPARISON_MEASURES.find((m) => m.key === k);
+      if (def?.period) periods.add(def.period);
+    }
+    return periods.size;
+  }, [selectedMeasures]);
+
+  // First three labels of selected items, with a "+N" suffix for the rest.
+  // Used as the one-liner under a collapsed section header.
+  const dimensionSummary = useMemo(() => {
+    if (dimensionSelectedCount === 0) return undefined;
+    const labels = selectedDimensions
+      .map((k) => DIMENSION_FIELDS.find((f) => f.key === k)?.label ?? k);
+    const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
+    if (amountActive) labels.push('Amount Range');
+    return summarizeLabels(labels);
+  }, [selectedDimensions, dimensionSelectedCount, filters.minAmount, filters.maxAmount]);
+
+  const measureSummary = useMemo(() => {
+    if (measureSelectedCount === 0) return undefined;
+    const labels = selectedMeasures
+      .map((k) => STANDARD_MEASURES.find((m) => m.key === k))
+      .filter((m): m is typeof STANDARD_MEASURES[number] => Boolean(m))
+      .map((m) => m.label);
+    return summarizeLabels(labels);
+  }, [selectedMeasures, measureSelectedCount]);
+
+  const comparisonSummary = useMemo(() => {
+    if (comparisonSelectedCount === 0) return undefined;
+    const periodLabels = new Map<string, string>();
+    for (const m of COMPARISON_MEASURES) {
+      if (m.period && !periodLabels.has(m.period)) {
+        periodLabels.set(m.period, PERIOD_DISPLAY[m.period] ?? m.period);
+      }
+    }
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const k of selectedMeasures) {
+      const def = COMPARISON_MEASURES.find((m) => m.key === k);
+      if (def?.period && !seen.has(def.period)) {
+        seen.add(def.period);
+        labels.push(periodLabels.get(def.period) ?? def.period);
+      }
+    }
+    return summarizeLabels(labels);
+  }, [selectedMeasures, comparisonSelectedCount]);
+
+  // Render-side decision: a section is expanded when not in the explicit-collapse
+  // set AND (storage exists → honor "expanded" inferred from absence; or first
+  // visit → apply the smart default).
+  //
+  // collapsedSections is a state value that updates on every toggle, so this
+  // re-runs any time the user clicks a header — no need for hasStoredCollapseState
+  // to be reactive.
+  const isExpanded = useCallback(
+    (id: SidebarSectionId, hasSelection: boolean): boolean => {
+      if (collapsedSections.has(id)) return false;
+      if (!hasStoredCollapseState()) return defaultExpanded(id, hasSelection);
+      return true;
+    },
+    [collapsedSections],
+  );
+
+  const dimensionsExpanded  = isExpanded('dimensions',  dimensionSelectedCount  > 0);
+  const measuresExpanded    = isExpanded('measures',    measureSelectedCount    > 0);
+  const comparisonsExpanded = isExpanded('comparisons', comparisonSelectedCount > 0);
 
   // Display-as-measure dimensions (e.g. tran_date_bal): selected as dimensions in
   // the sidebar but rendered as MEASURE columns in the pivot (under pivoted headings).
