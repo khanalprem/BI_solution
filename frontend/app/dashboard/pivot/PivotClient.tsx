@@ -20,6 +20,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, LookupOption } from '@/types';
 import { lookupOptions } from '@/lib/lookups';
 import { dateDimCount, shouldCollapseDisplayDims } from './pivotLayout';
+import {
+  loadExpandedSections,
+  saveExpandedSections,
+  type SidebarSectionId,
+} from './sidebarCollapseState';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -458,6 +463,22 @@ const PERIOD_DISPLAY: Record<string, string> = {
   prev_year_same_date:   'Prev. Year Same Day',
 };
 
+// Display labels keyed by the short-slug `period` field on COMPARISON_MEASURES
+// (e.g. "thismonth" → "This Month"). Distinct from PERIOD_DISPLAY above, which
+// is keyed by the long-form labels stamped onto comparison-result rows by the
+// backend's build_period_where output.
+const COMPARISON_PERIOD_LABELS: Record<string, string> = {
+  prevdate:           'Prev. Day',
+  thismonth:          'This Month',
+  prevmonth:          'Prev. Month',
+  prevmonthmtd:       'Prev. Month MTD',
+  prevmonthsamedate:  'Prev. Month Same Day',
+  thisyear:           'This Year',
+  prevyear:           'Prev. Year',
+  prevyearytd:        'Prev. Year YTD',
+  prevyearsamedate:   'Prev. Year Same Day',
+};
+
 // Parse a raw pivot value that may be "period_label:date" or just "date".
 function parsePivotHeader(pv: string): { period: string | null; date: string } {
   const sep = pv.indexOf(':');
@@ -891,6 +912,97 @@ function PivotCell({
         {label && <span className="block text-text-primary mt-0.5">{label}</span>}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+// Format a list of selected-field labels as a concise summary line:
+//   ["A", "B"]                 → "A · B"
+//   ["A", "B", "C"]            → "A · B · C"
+//   ["A", "B", "C", "D"]       → "A · B · C +1"
+//   ["A", "B", "C", "D", "E"]  → "A · B · C +2"
+function summarizeLabels(labels: string[]): string {
+  if (labels.length <= 3) return labels.join(' · ');
+  return `${labels.slice(0, 3).join(' · ')} +${labels.length - 3}`;
+}
+
+// Top-level collapsible sidebar section. Module-scope so React doesn't see a
+// new component type on each parent render.
+function SidebarSection({
+  id,
+  title,
+  description,
+  selectedCount,
+  summary,
+  expanded,
+  onToggle,
+  headerExtra,
+  children,
+}: {
+  id: SidebarSectionId;
+  title: string;
+  description?: string;
+  selectedCount: number;
+  summary?: string;
+  expanded: boolean;
+  onToggle: () => void;
+  headerExtra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const sectionId = `pivot-sidebar-${id}`;
+  return (
+    <section
+      className={`rounded-xl border border-border bg-bg-card overflow-hidden flex flex-col ${
+        expanded ? 'xl:flex-1 xl:min-h-0' : 'xl:flex-shrink-0'
+      }`}
+    >
+      <header className="border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-controls={sectionId}
+            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              className={`w-3 h-3 flex-shrink-0 text-text-muted transition-transform duration-150 ${
+                expanded ? 'rotate-90' : ''
+              }`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <polyline points="5,3 10,8 5,13" />
+            </svg>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">
+                  {title}
+                </p>
+                {selectedCount > 0 && (
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-blue/30 bg-accent-blue/10 text-accent-blue">
+                    {selectedCount} selected
+                  </span>
+                )}
+              </div>
+              {expanded && description && (
+                <p className="text-[10.5px] text-text-secondary mt-0.5">{description}</p>
+              )}
+              {!expanded && summary && (
+                <p className="text-[10.5px] text-text-secondary mt-0.5 truncate">{summary}</p>
+              )}
+            </div>
+          </button>
+          {headerExtra}
+        </div>
+      </header>
+      {expanded && (
+        <div id={sectionId} className="xl:flex-1 xl:min-h-0 xl:overflow-y-auto">
+          {children}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1414,6 +1526,27 @@ export default function PivotDashboard() {
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
+  // Stores the set of currently-EXPANDED sections. Initial value matches the
+  // SSR fallback used by `loadExpandedSections` when window is unavailable, so
+  // hydration is consistent. The `useEffect` below replaces it with the real
+  // stored set on mount.
+  const [expandedSections, setExpandedSections] = useState<Set<SidebarSectionId>>(
+    () => new Set<SidebarSectionId>(['dimensions']),
+  );
+
+  useEffect(() => {
+    setExpandedSections(loadExpandedSections());
+  }, []);
+
+  const toggleSection = useCallback((id: SidebarSectionId) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      saveExpandedSections(next);
+      return next;
+    });
+  }, []);
   // Procedure-call preview panel — collapsed by default (developer-only context).
   const [showProcPreview, setShowProcPreview]       = useState(false);
   const [dateFilterModes, setDateFilterModes]       = useState<Record<string, DateFilterMode>>({
@@ -1481,6 +1614,68 @@ export default function PivotDashboard() {
     ],
     [datePivotFields, nonDatePartitions, selectedDimensions],
   );
+
+  // Per-section "selected" counts, drives the count-badge in each SidebarSection
+  // header and the expanded/collapsed summary line.
+  const dimensionSelectedCount = useMemo(() => {
+    const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
+    return selectedDimensions.length + (amountActive ? 1 : 0);
+  }, [selectedDimensions, filters.minAmount, filters.maxAmount]);
+
+  const measureSelectedCount = useMemo(
+    () => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)).length,
+    [selectedMeasures],
+  );
+
+  const comparisonSelectedCount = useMemo(() => {
+    const periods = new Set<string>();
+    for (const k of selectedMeasures) {
+      const def = COMPARISON_MEASURES.find((m) => m.key === k);
+      if (def?.period) periods.add(def.period);
+    }
+    return periods.size;
+  }, [selectedMeasures]);
+
+  // First three labels of selected items, with a "+N" suffix for the rest.
+  // Used as the one-liner under a collapsed section header.
+  const dimensionSummary = useMemo(() => {
+    if (dimensionSelectedCount === 0) return undefined;
+    const labels = selectedDimensions
+      .map((k) => DIMENSION_FIELDS.find((f) => f.key === k)?.label ?? k);
+    const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
+    if (amountActive) labels.push('Amount Range');
+    return summarizeLabels(labels);
+  }, [selectedDimensions, dimensionSelectedCount, filters.minAmount, filters.maxAmount]);
+
+  const measureSummary = useMemo(() => {
+    if (measureSelectedCount === 0) return undefined;
+    const labels = selectedMeasures
+      .map((k) => STANDARD_MEASURES.find((m) => m.key === k))
+      .filter((m): m is typeof STANDARD_MEASURES[number] => Boolean(m))
+      .map((m) => m.label);
+    return summarizeLabels(labels);
+  }, [selectedMeasures, measureSelectedCount]);
+
+  const comparisonSummary = useMemo(() => {
+    if (comparisonSelectedCount === 0) return undefined;
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const k of selectedMeasures) {
+      const def = COMPARISON_MEASURES.find((m) => m.key === k);
+      if (def?.period && !seen.has(def.period)) {
+        seen.add(def.period);
+        labels.push(COMPARISON_PERIOD_LABELS[def.period] ?? def.period);
+      }
+    }
+    return summarizeLabels(labels);
+  }, [selectedMeasures, comparisonSelectedCount]);
+
+  // Render-side decision: simply membership in the expanded-set. The smart
+  // default ['dimensions'] is applied inside loadExpandedSections; user toggles
+  // store their explicit preference verbatim.
+  const dimensionsExpanded  = expandedSections.has('dimensions');
+  const measuresExpanded    = expandedSections.has('measures');
+  const comparisonsExpanded = expandedSections.has('comparisons');
 
   // Display-as-measure dimensions (e.g. tran_date_bal): selected as dimensions in
   // the sidebar but rendered as MEASURE columns in the pivot (under pivoted headings).
@@ -1968,22 +2163,33 @@ export default function PivotDashboard() {
       <div className="p-6">
         <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] gap-5 items-start">
 
-          {/* ── Left: field selector panel ─────────────────────────────────── */}
-          <div className="flex flex-col gap-4">
+          {/* ── Left: field selector panel ───────────────────────────────────
+              Sticky + viewport-fit on xl+: each collapsed section keeps its
+              header always visible at its position; expanded sections share
+              the remaining vertical space and scroll internally. */}
+          <div className="flex flex-col gap-4 xl:sticky xl:top-[60px] xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden">
 
             {/* DIMENSIONS */}
-            <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
-              <header className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">Dimensions</p>
-                  <p className="text-[10.5px] text-text-secondary mt-0.5">Check one or more fields to group results by</p>
-                </div>
-                {activeFilterCount > 0 && (
-                  <button type="button" onClick={handleClearFilters} className="text-[10px] font-medium text-accent-red hover:underline">
+            <SidebarSection
+              id="dimensions"
+              title="Dimensions"
+              description="Check one or more fields to group results by"
+              selectedCount={dimensionSelectedCount}
+              summary={dimensionSummary}
+              expanded={dimensionsExpanded}
+              onToggle={() => toggleSection('dimensions')}
+              headerExtra={
+                activeFilterCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="text-[10px] font-medium text-accent-red hover:underline flex-shrink-0"
+                  >
                     Clear filters ({activeFilterCount})
                   </button>
-                )}
-              </header>
+                ) : null
+              }
+            >
 
               {/* ── Section A: Date Dimensions Container ───────────────────── */}
               <div className="border-b border-border">
@@ -2449,21 +2655,18 @@ export default function PivotDashboard() {
                   />
                 </div>
               </div>
-            </section>
+            </SidebarSection>
 
-            {/* MEASURES — standard + period comparisons in one panel */}
-            <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
-              <header className="px-4 py-3 border-b border-border">
-                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">Measures</p>
-                <p className="text-[10.5px] text-text-secondary mt-0.5">
-                  Standard aggregations and period-comparison <span className="font-mono">*_where</span> fields
-                </p>
-              </header>
-
-              {/* Standard group */}
-              <div className="px-4 pt-3 pb-1">
-                <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Standard Aggregations</p>
-              </div>
+            {/* MEASURES — standard aggregations only */}
+            <SidebarSection
+              id="measures"
+              title="Measures"
+              description="Standard aggregations applied to the selected dimensions"
+              selectedCount={measureSelectedCount}
+              summary={measureSummary}
+              expanded={measuresExpanded}
+              onToggle={() => toggleSection('measures')}
+            >
               <ul className="divide-y divide-border">
                 {STANDARD_MEASURES.map((measure) => {
                   const active   = selectedMeasures.includes(measure.key);
@@ -2553,21 +2756,25 @@ export default function PivotDashboard() {
                   );
                 })}
               </ul>
+            </SidebarSection>
 
-              {/* Comparison group — grouped by period */}
-              <div className="px-4 pt-4 pb-1 border-t border-border mt-1">
-                <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Period Comparisons</p>
-                <p className="text-[10px] text-text-muted mt-0.5">
-                  WHERE clauses are built relative to the selected dimension and filter date.
-                </p>
-              </div>
+            {/* PERIOD COMPARISONS */}
+            <SidebarSection
+              id="comparisons"
+              title="Period Comparisons"
+              description="WHERE clauses built relative to the selected dimension and filter date"
+              selectedCount={comparisonSelectedCount}
+              summary={comparisonSummary}
+              expanded={comparisonsExpanded}
+              onToggle={() => toggleSection('comparisons')}
+            >
 
               {Array.from(new Set(COMPARISON_MEASURES.map((m) => m.period!))).map((period) => {
                 const pair      = COMPARISON_MEASURES.filter((m) => m.period === period);
                 const anyActive = pair.some((m) => selectedMeasures.includes(m.key));
 
                 return (
-                  <div key={period} className={`border-t border-border ${anyActive ? 'bg-accent-blue/5' : ''}`}>
+                  <div key={period} className={`border-t border-border first:border-t-0 ${anyActive ? 'bg-accent-blue/5' : ''}`}>
                     <div className="px-4 pt-2.5 pb-1 flex items-center gap-2">
                       <p className={`text-[11px] font-semibold ${anyActive ? 'text-accent-blue' : 'text-text-primary'}`}>
                         {period === 'prevdate'          && 'Prev. Day'}
@@ -2659,7 +2866,7 @@ export default function PivotDashboard() {
                   </div>
                 );
               })}
-            </section>
+            </SidebarSection>
           </div>
 
           {/* ── Right: SQL preview + results ───────────────────────────────── */}
