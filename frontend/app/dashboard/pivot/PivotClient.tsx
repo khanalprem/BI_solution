@@ -990,19 +990,27 @@ function SidebarSection({
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={sectionId}
-            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+            className="group flex items-center gap-2.5 flex-1 min-w-0 text-left"
           >
-            <svg
-              viewBox="0 0 16 16"
-              className={`w-3 h-3 flex-shrink-0 text-text-muted transition-transform duration-150 ${
-                expanded ? 'rotate-90' : ''
+            <span
+              className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-md border transition-all ${
+                expanded
+                  ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
+                  : 'border-border bg-bg-input text-text-secondary group-hover:border-accent-blue/40 group-hover:text-accent-blue group-hover:bg-accent-blue/10'
               }`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
             >
-              <polyline points="5,3 10,8 5,13" />
-            </svg>
+              <svg
+                viewBox="0 0 16 16"
+                className={`w-3.5 h-3.5 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="5,3 10,8 5,13" />
+              </svg>
+            </span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">
