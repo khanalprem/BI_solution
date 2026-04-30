@@ -1,105 +1,78 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  loadCollapsedSections,
-  saveCollapsedSections,
-  hasStoredCollapseState,
-  defaultExpanded,
+  loadExpandedSections,
+  saveExpandedSections,
   STORAGE_KEY,
   type SidebarSectionId,
 } from '@/app/dashboard/pivot/sidebarCollapseState';
 
-describe('loadCollapsedSections', () => {
+describe('loadExpandedSections', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('returns empty set when key is missing', () => {
-    expect([...loadCollapsedSections()]).toEqual([]);
+  it('returns the default {dimensions} when key is missing', () => {
+    const result = loadExpandedSections();
+    expect(result.has('dimensions')).toBe(true);
+    expect(result.has('measures')).toBe(false);
+    expect(result.has('comparisons')).toBe(false);
   });
 
-  it('returns empty set when value is not valid JSON', () => {
+  it('returns the default when value is not valid JSON', () => {
     localStorage.setItem(STORAGE_KEY, 'not json');
-    expect([...loadCollapsedSections()]).toEqual([]);
+    const result = loadExpandedSections();
+    expect([...result]).toEqual(['dimensions']);
   });
 
-  it('returns empty set when value is not an array', () => {
+  it('returns the default when value is not an array', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ measures: true }));
-    expect([...loadCollapsedSections()]).toEqual([]);
+    const result = loadExpandedSections();
+    expect([...result]).toEqual(['dimensions']);
   });
 
   it('parses a valid array of known section ids', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures', 'comparisons']));
-    const result = loadCollapsedSections();
+    const result = loadExpandedSections();
     expect(result.has('measures')).toBe(true);
     expect(result.has('comparisons')).toBe(true);
     expect(result.has('dimensions')).toBe(false);
   });
 
+  it('honors an explicitly empty array (user collapsed everything)', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    expect([...loadExpandedSections()]).toEqual([]);
+  });
+
   it('drops unknown ids defensively', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures', 'bogus', 42]));
-    const result = loadCollapsedSections();
+    const result = loadExpandedSections();
     expect([...result]).toEqual(['measures']);
   });
 });
 
-describe('saveCollapsedSections', () => {
+describe('saveExpandedSections', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('writes the set as a JSON array of ids', () => {
-    saveCollapsedSections(new Set<SidebarSectionId>(['measures']));
-    expect(localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify(['measures']));
+  it('writes the set as a JSON array of ids in canonical order', () => {
+    saveExpandedSections(new Set<SidebarSectionId>(['comparisons', 'dimensions']));
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(
+      JSON.stringify(['dimensions', 'comparisons']),
+    );
   });
 
-  it('round-trips through loadCollapsedSections', () => {
+  it('round-trips through loadExpandedSections', () => {
     const before = new Set<SidebarSectionId>(['dimensions', 'comparisons']);
-    saveCollapsedSections(before);
-    const after = loadCollapsedSections();
+    saveExpandedSections(before);
+    const after = loadExpandedSections();
     expect(after.has('dimensions')).toBe(true);
     expect(after.has('comparisons')).toBe(true);
     expect(after.has('measures')).toBe(false);
   });
 
   it('writes an empty array when the set is empty', () => {
-    saveCollapsedSections(new Set());
+    saveExpandedSections(new Set());
     expect(localStorage.getItem(STORAGE_KEY)).toBe('[]');
-  });
-});
-
-describe('hasStoredCollapseState', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
-  it('returns false when the key has never been written', () => {
-    expect(hasStoredCollapseState()).toBe(false);
-  });
-
-  it('returns true after saveCollapsedSections is called, even with empty set', () => {
-    saveCollapsedSections(new Set());
-    expect(hasStoredCollapseState()).toBe(true);
-  });
-
-  it('returns true when the key exists even if the value is malformed', () => {
-    localStorage.setItem(STORAGE_KEY, 'garbage');
-    expect(hasStoredCollapseState()).toBe(true);
-  });
-});
-
-describe('defaultExpanded', () => {
-  it('returns true for dimensions regardless of selection', () => {
-    expect(defaultExpanded('dimensions', false)).toBe(true);
-    expect(defaultExpanded('dimensions', true)).toBe(true);
-  });
-
-  it('returns hasSelection for measures', () => {
-    expect(defaultExpanded('measures', false)).toBe(false);
-    expect(defaultExpanded('measures', true)).toBe(true);
-  });
-
-  it('returns hasSelection for comparisons', () => {
-    expect(defaultExpanded('comparisons', false)).toBe(false);
-    expect(defaultExpanded('comparisons', true)).toBe(true);
   });
 });

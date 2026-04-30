@@ -1,4 +1,4 @@
-// Pure helpers for the Pivot sidebar collapse state.
+// Pure helpers for the Pivot sidebar expanded-section state.
 // No React / Next deps — unit-tested in __tests__/pivot-sidebar-collapse.test.ts.
 
 export type SidebarSectionId = 'dimensions' | 'measures' | 'comparisons';
@@ -9,25 +9,31 @@ export const SIDEBAR_SECTION_IDS: readonly SidebarSectionId[] = [
   'comparisons',
 ] as const;
 
-export const STORAGE_KEY = 'pivot-sidebar-collapsed';
+export const STORAGE_KEY = 'pivot-sidebar-expanded';
 
-// Read the explicit-collapse list from localStorage. Returns an empty set
-// when storage is unavailable, the key is missing, or the contents are not
-// a valid JSON array of known section ids.
-export function loadCollapsedSections(): Set<SidebarSectionId> {
-  const empty = new Set<SidebarSectionId>();
+// Default set of expanded sections on first visit (no storage entry yet).
+// Only Dimensions opens automatically — Measures and Period Comparisons stay
+// collapsed until the user explicitly opens them.
+const DEFAULT_EXPANDED: readonly SidebarSectionId[] = ['dimensions'];
+
+// Read the expanded-section set from localStorage. Returns a fresh copy of
+// DEFAULT_EXPANDED when storage is unavailable, the key is missing, or the
+// contents are not a valid JSON array of known section ids. An explicitly
+// stored empty array means "user has collapsed everything" and is honored.
+export function loadExpandedSections(): Set<SidebarSectionId> {
+  const fallback = () => new Set<SidebarSectionId>(DEFAULT_EXPANDED);
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return empty;
+    return fallback();
   }
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (raw === null) return empty;
+  if (raw === null) return fallback();
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return empty;
+    return fallback();
   }
-  if (!Array.isArray(parsed)) return empty;
+  if (!Array.isArray(parsed)) return fallback();
   const known = new Set<string>(SIDEBAR_SECTION_IDS);
   const out = new Set<SidebarSectionId>();
   for (const v of parsed) {
@@ -38,10 +44,9 @@ export function loadCollapsedSections(): Set<SidebarSectionId> {
   return out;
 }
 
-// Persist the explicit-collapse list. No-op if localStorage is unavailable
-// (SSR, private mode quota errors, etc.) — failure to persist must not crash
-// the UI.
-export function saveCollapsedSections(set: Set<SidebarSectionId>): void {
+// Persist the expanded-section set. No-op if localStorage is unavailable
+// (SSR, private mode, quota errors) — failure to persist must not crash UI.
+export function saveExpandedSections(set: Set<SidebarSectionId>): void {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
     return;
   }
@@ -51,26 +56,4 @@ export function saveCollapsedSections(set: Set<SidebarSectionId>): void {
   } catch {
     // Quota / private-mode errors are non-fatal — silently drop.
   }
-}
-
-// True when the user has ever toggled a section (the storage key exists,
-// even if the saved set is empty). Used by the consumer to decide whether
-// to apply the smart default for first-time visitors or honor the saved
-// state.
-export function hasStoredCollapseState(): boolean {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return false;
-  }
-  return window.localStorage.getItem(STORAGE_KEY) !== null;
-}
-
-// Smart default for first-time visitors (no storage entry yet). Returns the
-// initial expanded state given the section id and whether the section
-// currently has any selected items. Rules:
-//   • dimensions  → always expanded (entry-point default)
-//   • measures    → expanded iff hasSelection
-//   • comparisons → expanded iff hasSelection
-export function defaultExpanded(id: SidebarSectionId, hasSelection: boolean): boolean {
-  if (id === 'dimensions') return true;
-  return hasSelection;
 }

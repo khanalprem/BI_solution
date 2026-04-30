@@ -21,10 +21,8 @@ import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, 
 import { lookupOptions } from '@/lib/lookups';
 import { dateDimCount, shouldCollapseDisplayDims } from './pivotLayout';
 import {
-  loadCollapsedSections,
-  saveCollapsedSections,
-  hasStoredCollapseState,
-  defaultExpanded,
+  loadExpandedSections,
+  saveExpandedSections,
   type SidebarSectionId,
 } from './sidebarCollapseState';
 
@@ -1520,24 +1518,24 @@ export default function PivotDashboard() {
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
-  // Initial value matches SSR (always empty) to avoid hydration mismatch; the
-  // useEffect below hydrates from localStorage on mount. The brief default-state
-  // flash on first paint is acceptable — it only affects sections the user has
-  // explicitly collapsed.
-  const [collapsedSections, setCollapsedSections] = useState<Set<SidebarSectionId>>(
-    () => new Set(),
+  // Stores the set of currently-EXPANDED sections. Initial value matches the
+  // SSR fallback used by `loadExpandedSections` when window is unavailable, so
+  // hydration is consistent. The `useEffect` below replaces it with the real
+  // stored set on mount.
+  const [expandedSections, setExpandedSections] = useState<Set<SidebarSectionId>>(
+    () => new Set<SidebarSectionId>(['dimensions']),
   );
 
   useEffect(() => {
-    setCollapsedSections(loadCollapsedSections());
+    setExpandedSections(loadExpandedSections());
   }, []);
 
   const toggleSection = useCallback((id: SidebarSectionId) => {
-    setCollapsedSections((prev) => {
+    setExpandedSections((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      saveCollapsedSections(next);
+      saveExpandedSections(next);
       return next;
     });
   }, []);
@@ -1664,25 +1662,12 @@ export default function PivotDashboard() {
     return summarizeLabels(labels);
   }, [selectedMeasures, comparisonSelectedCount]);
 
-  // Render-side decision: a section is expanded when not in the explicit-collapse
-  // set AND (storage exists → honor "expanded" inferred from absence; or first
-  // visit → apply the smart default).
-  //
-  // collapsedSections is a state value that updates on every toggle, so this
-  // re-runs any time the user clicks a header — no need for hasStoredCollapseState
-  // to be reactive.
-  const isExpanded = useCallback(
-    (id: SidebarSectionId, hasSelection: boolean): boolean => {
-      if (collapsedSections.has(id)) return false;
-      if (!hasStoredCollapseState()) return defaultExpanded(id, hasSelection);
-      return true;
-    },
-    [collapsedSections],
-  );
-
-  const dimensionsExpanded  = isExpanded('dimensions',  dimensionSelectedCount  > 0);
-  const measuresExpanded    = isExpanded('measures',    measureSelectedCount    > 0);
-  const comparisonsExpanded = isExpanded('comparisons', comparisonSelectedCount > 0);
+  // Render-side decision: simply membership in the expanded-set. The smart
+  // default ['dimensions'] is applied inside loadExpandedSections; user toggles
+  // store their explicit preference verbatim.
+  const dimensionsExpanded  = expandedSections.has('dimensions');
+  const measuresExpanded    = expandedSections.has('measures');
+  const comparisonsExpanded = expandedSections.has('comparisons');
 
   // Display-as-measure dimensions (e.g. tran_date_bal): selected as dimensions in
   // the sidebar but rendered as MEASURE columns in the pivot (under pivoted headings).
