@@ -2156,18 +2156,26 @@ export default function PivotDashboard() {
           <div className="flex flex-col gap-4">
 
             {/* DIMENSIONS */}
-            <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
-              <header className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">Dimensions</p>
-                  <p className="text-[10.5px] text-text-secondary mt-0.5">Check one or more fields to group results by</p>
-                </div>
-                {activeFilterCount > 0 && (
-                  <button type="button" onClick={handleClearFilters} className="text-[10px] font-medium text-accent-red hover:underline">
+            <SidebarSection
+              id="dimensions"
+              title="Dimensions"
+              description="Check one or more fields to group results by"
+              selectedCount={dimensionSelectedCount}
+              summary={dimensionSummary}
+              expanded={dimensionsExpanded}
+              onToggle={() => toggleSection('dimensions')}
+              headerExtra={
+                activeFilterCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="text-[10px] font-medium text-accent-red hover:underline flex-shrink-0"
+                  >
                     Clear filters ({activeFilterCount})
                   </button>
-                )}
-              </header>
+                ) : null
+              }
+            >
 
               {/* ── Section A: Date Dimensions Container ───────────────────── */}
               <div className="border-b border-border">
@@ -2633,7 +2641,7 @@ export default function PivotDashboard() {
                   />
                 </div>
               </div>
-            </section>
+            </SidebarSection>
 
             {/* MEASURES — standard + period comparisons in one panel */}
             <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
