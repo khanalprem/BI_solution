@@ -336,43 +336,69 @@ function missingPrereqLabels(dimKey: string, selected: string[]): string[] {
     .map((g) => g.label);
 }
 
-// Order strategy: grouped by time scale (Day → Month → Year), and within each
-// scale "current" comes first, then full-prior, then to-date, then same-date.
-// Lets analysts find the right comparison without scanning the whole list.
-const COMPARISON_MEASURES: MeasureDef[] = [
-  // ── Day-level ────────────────────────────────────────────────────────────
-  { key: 'prevdate_amt',            label: 'Prev. Day — Amount',            description: 'prevdate_where · tran_amt',         group: 'comparison', period: 'prevdate' },
-  { key: 'prevdate_count',          label: 'Prev. Day — Count',             description: 'prevdate_where · tran_count',       group: 'comparison', period: 'prevdate' },
+// Period × measure cross-product. Each standard measure (except tran_maxdate)
+// gets its own row of period checkboxes. Selecting `(cr_amt, prevdate)` enables
+// only the prev-day CR Amount comparison column — the prev-day TRAN Amount
+// column stays hidden unless the user also enables it under tran_amt.
+//
+// Key format: `${period}__${measureKey}` (double underscore — measure keys
+// like `tran_acct_count` already contain underscores, so a single separator
+// would be ambiguous to parse on the backend).
+const COMPARISON_PERIODS = [
+  { key: 'prevdate',          label: 'Prev. Day' },
+  { key: 'thismonth',         label: 'This Month' },
+  { key: 'prevmonth',         label: 'Prev. Month' },
+  { key: 'prevmonthmtd',      label: 'Prev. Month MTD' },
+  { key: 'prevmonthsamedate', label: 'Prev. Month Same Day' },
+  { key: 'thisyear',          label: 'This Year' },
+  { key: 'prevyear',          label: 'Prev. Year' },
+  { key: 'prevyearytd',       label: 'Prev. Year YTD' },
+  { key: 'prevyearsamedate',  label: 'Prev. Year Same Day' },
+] as const;
 
-  // ── Month-level (this → prev full → prev MTD → prev same-date) ───────────
-  { key: 'thismonth_amt',           label: 'This Month — Amount',           description: 'thismonth_where · tran_amt',        group: 'comparison', period: 'thismonth' },
-  { key: 'thismonth_count',         label: 'This Month — Count',            description: 'thismonth_where · tran_count',      group: 'comparison', period: 'thismonth' },
-  { key: 'prevmonth_amt',           label: 'Prev. Month — Amount',          description: 'prevmonth_where · tran_amt',        group: 'comparison', period: 'prevmonth' },
-  { key: 'prevmonth_count',         label: 'Prev. Month — Count',           description: 'prevmonth_where · tran_count',      group: 'comparison', period: 'prevmonth' },
-  { key: 'prevmonthmtd_amt',        label: 'Prev. Month MTD — Amount',      description: 'prevmonthmtd_where · tran_amt',     group: 'comparison', period: 'prevmonthmtd' },
-  { key: 'prevmonthmtd_count',      label: 'Prev. Month MTD — Count',       description: 'prevmonthmtd_where · tran_count',   group: 'comparison', period: 'prevmonthmtd' },
-  { key: 'prevmonthsamedate_amt',   label: 'Prev. Month Same Day — Amount', description: 'prevmonthsamedate_where · tran_amt',   group: 'comparison', period: 'prevmonthsamedate' },
-  { key: 'prevmonthsamedate_count', label: 'Prev. Month Same Day — Count',  description: 'prevmonthsamedate_where · tran_count', group: 'comparison', period: 'prevmonthsamedate' },
+// Standard measures that can be tagged with a period comparison.
+const COMPARISON_TARGET_MEASURE_KEYS: ReadonlyArray<string> = STANDARD_MEASURES.map((m) => m.key);
 
-  // ── Year-level (this → prev full → prev YTD → prev same-date) ────────────
-  { key: 'thisyear_amt',            label: 'This Year — Amount',            description: 'thisyear_where · tran_amt',         group: 'comparison', period: 'thisyear' },
-  { key: 'thisyear_count',          label: 'This Year — Count',             description: 'thisyear_where · tran_count',       group: 'comparison', period: 'thisyear' },
-  { key: 'prevyear_amt',            label: 'Prev. Year — Amount',           description: 'prevyear_where · tran_amt',         group: 'comparison', period: 'prevyear' },
-  { key: 'prevyear_count',          label: 'Prev. Year — Count',            description: 'prevyear_where · tran_count',       group: 'comparison', period: 'prevyear' },
-  { key: 'prevyearytd_amt',         label: 'Prev. Year YTD — Amount',       description: 'prevyearytd_where · tran_amt',      group: 'comparison', period: 'prevyearytd' },
-  { key: 'prevyearytd_count',       label: 'Prev. Year YTD — Count',        description: 'prevyearytd_where · tran_count',    group: 'comparison', period: 'prevyearytd' },
-  { key: 'prevyearsamedate_amt',    label: 'Prev. Year Same Day — Amount',  description: 'prevyearsamedate_where · tran_amt',    group: 'comparison', period: 'prevyearsamedate' },
-  { key: 'prevyearsamedate_count',  label: 'Prev. Year Same Day — Count',   description: 'prevyearsamedate_where · tran_count',  group: 'comparison', period: 'prevyearsamedate' },
-];
+// (period, measure) pairs to drop from the cross-product. Mirrors the backend's
+// EXCLUDED_COMPARISON_PAIRS — tran_maxdate is a MAX(tran_date), so pairing it with
+// prevdate (a single prior day) would just return that day and tell the analyst nothing.
+const EXCLUDED_COMPARISON_PAIRS: Record<string, ReadonlyArray<string>> = {
+  prevdate: ['tran_maxdate'],
+};
 
-// Comparison measures group naturally under one of two base measures by suffix.
-// `*_amt` measures aggregate `tran_amt`; `*_count` measures aggregate `tran_count`.
-// The sidebar nests each comparison under its base measure as an expandable child.
-const MEASURE_CHILD_BASE_KEYS = ['tran_amt', 'tran_count'] as const;
-type MeasureChildBaseKey = typeof MEASURE_CHILD_BASE_KEYS[number];
+const comparisonKey = (periodKey: string, measureKey: string) => `${periodKey}__${measureKey}`;
+
+const COMPARISON_MEASURES: MeasureDef[] = COMPARISON_TARGET_MEASURE_KEYS.flatMap((measureKey) => {
+  const measureLabel = STANDARD_MEASURES.find((m) => m.key === measureKey)!.label;
+  return COMPARISON_PERIODS
+    .filter((p) => !(EXCLUDED_COMPARISON_PAIRS[p.key] ?? []).includes(measureKey))
+    .map((p) => ({
+      key:         comparisonKey(p.key, measureKey),
+      label:       `${p.label} — ${measureLabel}`,
+      description: `${p.key}_where · ${measureKey}`,
+      group:       'comparison' as const,
+      period:      p.key,
+    }));
+});
+
+// Legacy single-suffix keys (`prevdate_amt`, `prevdate_count`) → new double-underscore
+// form. Lets URLs saved under the old scheme continue to round-trip.
+const LEGACY_COMPARISON_ALIASES: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  for (const p of COMPARISON_PERIODS) {
+    m[`${p.key}_amt`]   = comparisonKey(p.key, 'tran_amt');
+    m[`${p.key}_count`] = comparisonKey(p.key, 'tran_count');
+  }
+  return m;
+})();
+
+// Every standard measure (except tran_maxdate) is a comparison parent — each row
+// in the sidebar can be expanded to reveal its own per-period checkbox grid.
+const MEASURE_CHILD_BASE_KEYS = COMPARISON_TARGET_MEASURE_KEYS;
+type MeasureChildBaseKey = string;
 
 function comparisonsForBase(baseKey: MeasureChildBaseKey): MeasureDef[] {
-  const suffix = baseKey === 'tran_amt' ? '_amt' : '_count';
+  const suffix = `__${baseKey}`;
   return COMPARISON_MEASURES.filter((m) => m.key.endsWith(suffix));
 }
 
@@ -489,6 +515,22 @@ const PERIOD_DISPLAY: Record<string, string> = {
   prev_year_ytd:         'Prev. Year YTD',
   prev_month_same_date:  'Prev. Month Same Day',
   prev_year_same_date:   'Prev. Year Same Day',
+};
+
+// Maps the short period slug (used in COMPARISON_MEASURES.period and the
+// `${period}__${measure}` time_comparison keys) to the long-form label that the
+// backend stamps onto comparison-result rows (e.g. "previous_date:2024-03-15").
+// Mirrors backend's `PERIOD_COMPARISONS[k][:label].downcase.gsub(' ', '_')`.
+const PERIOD_SLUG_TO_STAMP: Record<string, string> = {
+  prevdate:           'previous_date',
+  thismonth:          'this_month',
+  thisyear:           'this_year',
+  prevmonth:          'previous_month',
+  prevyear:           'previous_year',
+  prevmonthmtd:       'prev_month_mtd',
+  prevyearytd:        'prev_year_ytd',
+  prevmonthsamedate:  'prev_month_same_date',
+  prevyearsamedate:   'prev_year_same_date',
 };
 
 // Display labels keyed by the short-slug `period` field on COMPARISON_MEASURES
@@ -1042,7 +1084,19 @@ function SidebarSection({
   );
 }
 
-function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: PivotData; title: string; subtitle?: string; filters: DashboardFilters; pivotDimKeys: string[] }) {
+function PivotTable({
+  data, title, subtitle, filters, pivotDimKeys, enabledComparisons,
+}: {
+  data: PivotData;
+  title: string;
+  subtitle?: string;
+  filters: DashboardFilters;
+  pivotDimKeys: string[];
+  // Per-(period, measure) selections; key format: `${period_stamp}:${measureKey}`.
+  // Empty for non-comparison flows. Used to filter comparison sub-columns so
+  // unchecked (period × measure) cells don't render.
+  enabledComparisons: Set<string>;
+}) {
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
 
   // Display-as-measure dims (e.g. tran_date_bal) are a date-keyed attribute —
@@ -1139,15 +1193,47 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
     + (hasMultiMeasure ? 1 : 0);
   const totalHeaderRows = 1 + headerRowsBelowL1;
 
+  // Per-(period, measure) filter helpers. For main rows (period === null) all
+  // measures render; for comparison groups (period stamp like "previous_date"),
+  // only measure keys the user explicitly enabled under their parent measure
+  // pass through. Display-as-measure dims (tran_date_bal / eod_balance) are
+  // suppressed under comparison groups — their balance value is anchored to the
+  // global filter end-date by the comparison query, so repeating them per
+  // period is meaningless.
+  const measureKeysForPeriod = (period: string | null): string[] =>
+    period === null
+      ? measureKeys
+      : measureKeys.filter((mk) => enabledComparisons.has(`${period}:${mk}`));
+
+  const regularMeasureKeysForPeriod = (period: string | null): string[] =>
+    period === null
+      ? regularMeasureKeys
+      : regularMeasureKeys.filter((mk) => enabledComparisons.has(`${period}:${mk}`));
+
+  const displayDimKeysForPeriod = (period: string | null): string[] =>
+    period === null ? displayDimKeys : [];
+
   // Per-l1 column counts in multi-level: regular cells (l2s × regular measures)
   // plus one column per displayDim. Used for row-1 colSpan + total cols.
-  const colsPerL1 = (l2s: string[]) =>
-    l2s.length * regularMeasureKeys.length + displayDimKeys.length;
+  const colsPerL1 = (g: L1Group) =>
+    g.l2s.length * regularMeasureKeysForPeriod(g.period).length
+      + displayDimKeysForPeriod(g.period).length;
+
+  // Filter out groups that have nothing left to render after the comparison
+  // filter — they would otherwise emit zero-colspan headers that confuse layout.
+  const visibleLevel1Groups = level1Groups.filter((g) => colsPerL1(g) > 0);
+  const visiblePivotValues  = pivotValues.filter((pv) => {
+    const { period } = parsePivotHeader(pv);
+    return measureKeysForPeriod(period).length > 0;
+  });
 
   // Total scrollable columns (for "No data" colSpan).
   const totalPivotCols = isMultiLevel
-    ? level1Groups.reduce((s, g) => s + colsPerL1(g.l2s), 0)
-    : pivotValues.length * measureKeys.length;
+    ? visibleLevel1Groups.reduce((s, g) => s + colsPerL1(g), 0)
+    : visiblePivotValues.reduce(
+        (s, pv) => s + measureKeysForPeriod(parsePivotHeader(pv).period).length,
+        0,
+      );
 
   // Pre-compute cumulative left offset for each row-dim column (sticky freeze).
   // +36px for the expand column at position 0.
@@ -1246,21 +1332,21 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
 
               {isMultiLevel
                 // Multi-level: level-1 group headers spanning all their sub-columns
-                ? level1Groups.map(({ l1, period, dates, l2s }) => (
+                ? visibleLevel1Groups.map((g) => (
                     <PivotGroupTh
-                      key={l1}
-                      colSpan={colsPerL1(l2s)}
-                      period={period}
-                      dates={dates}
+                      key={g.l1}
+                      colSpan={colsPerL1(g)}
+                      period={g.period}
+                      dates={g.dates}
                     />
                   ))
                 // Single-level: each pivot value spans measure columns
-                : pivotValues.map((pv) => {
+                : visiblePivotValues.map((pv) => {
                     const { period, date } = parsePivotHeader(pv);
                     return (
                       <PivotGroupTh
                         key={pv}
-                        colSpan={measureKeys.length}
+                        colSpan={measureKeysForPeriod(period).length}
                         period={period}
                         dates={[date]}
                       />
@@ -1275,37 +1361,41 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                   hasMultiMeasure is on). ── */}
             {isMultiLevel && (showL2Row || displayDimKeys.length > 0) && (
               <tr className="border-b border-border">
-                {level1Groups.flatMap(({ l1, period, l2s }) => [
-                  ...(showL2Row
-                    ? l2s.map((l2) => (
-                        <th
-                          key={`${l1}${PIVOT_DIM_SEP}${l2}`}
-                          colSpan={regularMeasureKeys.length}
-                          className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
-                            period !== null
-                              ? 'text-accent-amber/80 bg-accent-amber/5'
-                              : 'text-accent-purple/80 bg-accent-purple/5'
-                          }`}
-                        >
-                          {l2}
-                        </th>
-                      ))
-                    : []),
-                  ...displayDimKeys.map((dk) => (
-                    <th
-                      key={`${l1}__dd${PIVOT_SEP}${dk}`}
-                      colSpan={1}
-                      rowSpan={hasMultiMeasure ? 2 : 1}
-                      className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
-                        period !== null
-                          ? 'text-accent-amber/80 bg-accent-amber/5'
-                          : 'text-accent-purple/80 bg-accent-purple/5'
-                      }`}
-                    >
-                      {labelFor(dk)}
-                    </th>
-                  )),
-                ])}
+                {visibleLevel1Groups.flatMap(({ l1, period, l2s }) => {
+                  const groupRegularKeys = regularMeasureKeysForPeriod(period);
+                  const groupDisplayKeys = displayDimKeysForPeriod(period);
+                  return [
+                    ...(showL2Row && groupRegularKeys.length > 0
+                      ? l2s.map((l2) => (
+                          <th
+                            key={`${l1}${PIVOT_DIM_SEP}${l2}`}
+                            colSpan={groupRegularKeys.length}
+                            className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
+                              period !== null
+                                ? 'text-accent-amber/80 bg-accent-amber/5'
+                                : 'text-accent-purple/80 bg-accent-purple/5'
+                            }`}
+                          >
+                            {l2}
+                          </th>
+                        ))
+                      : []),
+                    ...groupDisplayKeys.map((dk) => (
+                      <th
+                        key={`${l1}__dd${PIVOT_SEP}${dk}`}
+                        colSpan={1}
+                        rowSpan={hasMultiMeasure ? 2 : 1}
+                        className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-[0.5px] whitespace-nowrap border-l border-border/50 ${
+                          period !== null
+                            ? 'text-accent-amber/80 bg-accent-amber/5'
+                            : 'text-accent-purple/80 bg-accent-purple/5'
+                        }`}
+                      >
+                        {labelFor(dk)}
+                      </th>
+                    )),
+                  ];
+                })}
               </tr>
             )}
 
@@ -1315,9 +1405,9 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
             {hasMultiMeasure && (
               <tr className="border-b border-border">
                 {isMultiLevel
-                  ? level1Groups.flatMap(({ l1, period, l2s }) =>
+                  ? visibleLevel1Groups.flatMap(({ l1, period, l2s }) =>
                       l2s.flatMap((l2) =>
-                        regularMeasureKeys.map((mk) => (
+                        regularMeasureKeysForPeriod(period).map((mk) => (
                           <th
                             key={`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${mk}`}
                             className={`px-3 py-1.5 text-center text-[8.5px] font-semibold uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 ${
@@ -1331,9 +1421,9 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                         ))
                       )
                     )
-                  : pivotValues.flatMap((pv) => {
+                  : visiblePivotValues.flatMap((pv) => {
                       const { period } = parsePivotHeader(pv);
-                      return measureKeys.map((mk) => (
+                      return measureKeysForPeriod(period).map((mk) => (
                         <th
                           key={`${pv}${PIVOT_SEP}${mk}`}
                           className={`px-3 py-1.5 text-center text-[8.5px] font-semibold uppercase tracking-[0.4px] whitespace-nowrap border-l border-border/50 ${
@@ -1435,48 +1525,53 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                         once per l1 (value taken from any non-empty l2 composite — they are
                         l1-scoped attributes so all l2s carry the same value). */}
                     {isMultiLevel
-                      ? level1Groups.flatMap(({ l1, l2s }) => [
-                          ...l2s.flatMap((l2) => {
-                            const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
-                            return regularMeasureKeys.map((mk) => {
-                              const cellVal = row[`${fullKey}${PIVOT_SEP}${mk}`];
-                              const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
+                      ? visibleLevel1Groups.flatMap(({ l1, period, l2s }) => {
+                          const groupRegularKeys = regularMeasureKeysForPeriod(period);
+                          const groupDisplayKeys = displayDimKeysForPeriod(period);
+                          return [
+                            ...l2s.flatMap((l2) => {
+                              const fullKey = `${l1}${PIVOT_DIM_SEP}${l2}`;
+                              return groupRegularKeys.map((mk) => {
+                                const cellVal = row[`${fullKey}${PIVOT_SEP}${mk}`];
+                                const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
+                                return (
+                                  <PivotCell
+                                    key={`${fullKey}${PIVOT_SEP}${mk}`}
+                                    clickable={clickable}
+                                    label={clickable ? buildCellLabel(row, fullKey) : ''}
+                                    onClick={clickable ? () => setCellDrill({
+                                      rowDims: buildCellRowDims(row, fullKey),
+                                      label: buildCellLabel(row, fullKey),
+                                    }) : undefined}
+                                  >
+                                    {renderCell(cellVal, mk)}
+                                  </PivotCell>
+                                );
+                              });
+                            }),
+                            ...groupDisplayKeys.map((dk) => {
+                              // Pick the first non-empty l2 composite for this displayDim — its
+                              // value is the same across all l2s in the same l1.
+                              let cellVal: string | number | boolean | null = null;
+                              for (const l2 of l2s) {
+                                const v = row[`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${dk}`];
+                                if (v !== null && v !== undefined && v !== '') { cellVal = v; break; }
+                              }
                               return (
                                 <PivotCell
-                                  key={`${fullKey}${PIVOT_SEP}${mk}`}
-                                  clickable={clickable}
-                                  label={clickable ? buildCellLabel(row, fullKey) : ''}
-                                  onClick={clickable ? () => setCellDrill({
-                                    rowDims: buildCellRowDims(row, fullKey),
-                                    label: buildCellLabel(row, fullKey),
-                                  }) : undefined}
+                                  key={`${l1}__dd${PIVOT_SEP}${dk}`}
+                                  clickable={false}
+                                  label=""
                                 >
-                                  {renderCell(cellVal, mk)}
+                                  {renderCell(cellVal, dk)}
                                 </PivotCell>
                               );
-                            });
-                          }),
-                          ...displayDimKeys.map((dk) => {
-                            // Pick the first non-empty l2 composite for this displayDim — its
-                            // value is the same across all l2s in the same l1.
-                            let cellVal: string | number | boolean | null = null;
-                            for (const l2 of l2s) {
-                              const v = row[`${l1}${PIVOT_DIM_SEP}${l2}${PIVOT_SEP}${dk}`];
-                              if (v !== null && v !== undefined && v !== '') { cellVal = v; break; }
-                            }
-                            return (
-                              <PivotCell
-                                key={`${l1}__dd${PIVOT_SEP}${dk}`}
-                                clickable={false}
-                                label=""
-                              >
-                                {renderCell(cellVal, dk)}
-                              </PivotCell>
-                            );
-                          }),
-                        ])
-                      : pivotValues.flatMap((pv) =>
-                          measureKeys.map((mk) => {
+                            }),
+                          ];
+                        })
+                      : visiblePivotValues.flatMap((pv) => {
+                          const { period } = parsePivotHeader(pv);
+                          return measureKeysForPeriod(period).map((mk) => {
                             const cellVal = row[`${pv}${PIVOT_SEP}${mk}`];
                             const clickable = !isTotal && cellVal !== null && cellVal !== undefined && cellVal !== '';
                             return (
@@ -1492,8 +1587,8 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                                 {renderCell(cellVal, mk)}
                               </PivotCell>
                             );
-                          })
-                        )
+                          });
+                        })
                     }
                   </tr>
                 );
@@ -1540,7 +1635,8 @@ export default function PivotDashboard() {
   });
   const [selectedMeasures, setSelectedMeasures]     = useState<string[]>(() => {
     const m = searchParams.get('measures');
-    return m ? m.split(',').filter(Boolean) : [];
+    if (!m) return [];
+    return m.split(',').filter(Boolean).map((k) => LEGACY_COMPARISON_ALIASES[k] ?? k);
   });
   const [datePivotEnabled, setDatePivotEnabled] = useState(false);
   // Shared sort direction across all selected date dims. `null` = off.
@@ -1620,6 +1716,22 @@ export default function PivotDashboard() {
     () => selectedMeasures.filter((k) => COMPARISON_MEASURES.some((m) => m.key === k)),
     [selectedMeasures],
   );
+  // Per-(period, measure) selections, keyed in the format the backend stamps onto
+  // comparison-result rows: `${stamp}:${measureKey}`. Drives the PivotTable filter
+  // that hides comparison sub-columns the user did not explicitly enable under
+  // their parent measure.
+  const enabledComparisons = useMemo(() => {
+    const set = new Set<string>();
+    for (const cm of COMPARISON_MEASURES) {
+      if (!selectedMeasures.includes(cm.key)) continue;
+      const idx = cm.key.indexOf('__');
+      if (idx === -1) continue;
+      const measureKey = cm.key.slice(idx + 2);
+      const stamp = PERIOD_SLUG_TO_STAMP[cm.period!];
+      if (stamp && measureKey) set.add(`${stamp}:${measureKey}`);
+    }
+    return set;
+  }, [selectedMeasures]);
   // Aggregation measures sent to the backend. Empty is allowed: the backend produces
   // a "SELECT <dims> GROUP BY <dims>" query in that case (distinct dim-value list).
   const measures = useMemo(() => standardMeasures, [standardMeasures]);
@@ -2713,11 +2825,12 @@ export default function PivotDashboard() {
                   const spec     = havingFilters[measure.key] ?? { op: '>=' as MeasureOp, value: '' };
                   const isDate   = DATE_MEASURE_KEYS.has(measure.key);
                   const childrenExpanded   = expandedMeasureChildren.has(measure.key);
-                  // Show a "+N periods" badge only on the two measures whose suffix
-                  // actually owns the comparison keys; the inline expand panel under
-                  // every measure renders the full period grid for convenience,
-                  // but the badge stays accurate to the semantic owner.
-                  const isComparisonParent = measure.key === 'tran_amt' || measure.key === 'tran_count';
+                  // Per-measure × period selections are independent now — every
+                  // standard measure has its own period grid. The badge counts only
+                  // periods enabled under THIS measure. tran_maxdate's grid omits
+                  // prevdate (see EXCLUDED_COMPARISON_PAIRS); a measure with zero
+                  // valid pairings would not be a comparison parent.
+                  const isComparisonParent = comparisonsForBase(measure.key as MeasureChildBaseKey).length > 0;
                   const activeChildCount   = isComparisonParent ? activeComparisonChildCount(measure.key as MeasureChildBaseKey) : 0;
                   return (
                     <li key={measure.key} className={`block transition-colors border-l-2 ${active ? (ordered ? 'bg-accent-amber/5 border-accent-amber' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
@@ -2811,126 +2924,108 @@ export default function PivotDashboard() {
                             </div>
                           </div>
                         </div>
-                        {/* Period-comparison expand chevron — right-aligned with the label row */}
-                        <button
-                          type="button"
-                          aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
-                          aria-expanded={childrenExpanded}
-                          onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
-                          className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
-                          title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
-                        >
-                          <svg
-                            width="12" height="12" viewBox="0 0 12 12" fill="none"
-                            className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
+                        {/* Period-comparison expand chevron — right-aligned with the label row.
+                            Hidden for tran_maxdate (MAX(date) — no period comparison). */}
+                        {isComparisonParent && (
+                          <button
+                            type="button"
+                            aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
+                            aria-expanded={childrenExpanded}
+                            onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
+                            className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
+                            title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
                           >
-                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </button>
+                            <svg
+                              width="12" height="12" viewBox="0 0 12 12" fill="none"
+                              className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
+                            >
+                              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </button>
+                        )}
                       </div>
 
-                      {/* Period Comparisons — same period-grouped layout that used
-                          to live in the standalone section, now nested inside each
-                          standard measure's expand. Header label + description on top,
-                          then one row per period with both tran_amt and tran_count
-                          chips and their independent sort buttons. */}
-                      {childrenExpanded && (
+                      {/* Per-measure period chips. Each parent measure has its own
+                          set of (period × measure) keys, so toggling "Prev. Day"
+                          under cr_amt only enables the prev-day CR Amount column —
+                          independent from selecting it under tran_amt. Sort buttons
+                          target the same per-(measure, period) key. */}
+                      {isComparisonParent && childrenExpanded && (
                         <div className="border-t border-border" style={{ background: 'var(--bg-surface)' }}>
                           <div className="px-4 pt-3 pb-2 pl-12">
-                            <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Period Comparisons</p>
+                            <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Period Comparisons · {measure.label}</p>
                             <p className="text-[10px] text-text-muted mt-0.5">
                               WHERE clauses are built relative to the selected dimension and filter date.
                             </p>
                           </div>
 
-                          {Array.from(new Set(COMPARISON_MEASURES.map((m) => m.period!))).map((period) => {
-                            const pair      = COMPARISON_MEASURES.filter((m) => m.period === period);
-                            const anyActive = pair.some((m) => selectedMeasures.includes(m.key));
-                            const periodLbl = COMPARISON_PERIOD_LABELS[period] ?? period;
-
-                            return (
-                              <div key={period} className={`border-t border-border ${anyActive ? 'bg-accent-blue/5' : ''}`}>
-                                <div className="px-4 pt-2.5 pb-1 pl-12 flex items-center gap-2">
-                                  <p className={`text-[11px] font-semibold ${anyActive ? 'text-accent-blue' : 'text-text-primary'}`}>
-                                    {periodLbl}
-                                  </p>
-                                  {anyActive && (
-                                    <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-blue/30 bg-accent-blue/15 text-accent-blue">
-                                      active
+                          <div className="px-4 pt-2.5 pb-3 pl-12 flex flex-wrap gap-2">
+                            {comparisonsForBase(measure.key as MeasureChildBaseKey).map((m) => {
+                              const on          = selectedMeasures.includes(m.key);
+                              const cOrdered    = orderFields.includes(m.key);
+                              const cOrderIdx   = orderFields.indexOf(m.key);
+                              const cDir        = orderDirs[m.key];
+                              const periodLbl   = COMPARISON_PERIOD_LABELS[m.period!] ?? m.period!;
+                              return (
+                                <div key={m.key} className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleMeasure(m.key)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10.5px] font-medium transition-colors ${
+                                      on
+                                        ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
+                                        : 'border-border bg-bg-input text-text-secondary hover:border-border-strong hover:text-text-primary'
+                                    }`}
+                                  >
+                                    <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${on ? 'border-accent-blue bg-accent-blue' : 'border-current'}`}>
+                                      {on && (
+                                        <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <polyline points="1,4 3,6 7,1.5" />
+                                        </svg>
+                                      )}
                                     </span>
-                                  )}
-                                </div>
-
-                                <div className="px-4 pb-2.5 pl-12 flex flex-wrap gap-2">
-                                  {pair.map((m) => {
-                                    const on          = selectedMeasures.includes(m.key);
-                                    const cOrdered    = orderFields.includes(m.key);
-                                    const cOrderIdx   = orderFields.indexOf(m.key);
-                                    const cDir        = orderDirs[m.key];
-                                    const metricLabel = m.key.endsWith('_amt') ? 'tran_amt' : 'tran_count';
-                                    return (
-                                      <div key={m.key} className="flex items-center gap-1">
+                                    <span>{periodLbl}</span>
+                                    {cOrdered && (
+                                      <span className="text-[8px] font-bold px-1 rounded bg-accent-amber/20 text-accent-amber">
+                                        #{cOrderIdx + 1} {cDir === 'desc' ? '↓' : '↑'}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <div className="inline-flex h-6 rounded-md border border-border overflow-hidden">
+                                    {(['asc', 'desc'] as const).map((d) => {
+                                      const isActive = cOrdered && cDir === d;
+                                      const arrow    = d === 'asc' ? '↑' : '↓';
+                                      return (
                                         <button
+                                          key={d}
                                           type="button"
-                                          onClick={() => toggleMeasure(m.key)}
-                                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10.5px] font-medium transition-colors ${
-                                            on
-                                              ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
-                                              : 'border-border bg-bg-input text-text-secondary hover:border-border-strong hover:text-text-primary'
+                                          disabled={pivotActive}
+                                          onClick={(e) => {
+                                            if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
+                                            setOrderFieldDir(m.key, d, e);
+                                          }}
+                                          className={`px-1.5 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                            pivotActive
+                                              ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                              : isActive
+                                                ? 'bg-accent-amber/15 text-accent-amber'
+                                                : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
                                           }`}
+                                          title={
+                                            pivotActive
+                                              ? 'Sort disabled while Pivot is on'
+                                              : `Sort by ${m.label} ${d.toUpperCase()}`
+                                          }
                                         >
-                                          <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${on ? 'border-accent-blue bg-accent-blue' : 'border-current'}`}>
-                                            {on && (
-                                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <polyline points="1,4 3,6 7,1.5" />
-                                              </svg>
-                                            )}
-                                          </span>
-                                          <span className="font-mono">{metricLabel}</span>
-                                          {cOrdered && (
-                                            <span className="text-[8px] font-bold px-1 rounded bg-accent-amber/20 text-accent-amber">
-                                              #{cOrderIdx + 1} {cDir === 'desc' ? '↓' : '↑'}
-                                            </span>
-                                          )}
+                                          {arrow}
                                         </button>
-                                        <div className="inline-flex h-6 rounded-md border border-border overflow-hidden">
-                                          {(['asc', 'desc'] as const).map((d) => {
-                                            const isActive = cOrdered && cDir === d;
-                                            const arrow    = d === 'asc' ? '↑' : '↓';
-                                            return (
-                                              <button
-                                                key={d}
-                                                type="button"
-                                                disabled={pivotActive}
-                                                onClick={(e) => {
-                                                  if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
-                                                  setOrderFieldDir(m.key, d, e);
-                                                }}
-                                                className={`px-1.5 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
-                                                  pivotActive
-                                                    ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
-                                                    : isActive
-                                                      ? 'bg-accent-amber/15 text-accent-amber'
-                                                      : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
-                                                }`}
-                                                title={
-                                                  pivotActive
-                                                    ? 'Sort disabled while Pivot is on'
-                                                    : `Sort by ${m.label} ${d.toUpperCase()}`
-                                                }
-                                              >
-                                                {arrow}
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </li>
@@ -3128,6 +3223,7 @@ export default function PivotDashboard() {
                 }
                 filters={filters}
                 pivotDimKeys={partitionDimensions}
+                enabledComparisons={enabledComparisons}
               />
             ) : (
               <RecordTable
