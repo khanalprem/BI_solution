@@ -2643,19 +2643,16 @@ export default function PivotDashboard() {
               </div>
             </SidebarSection>
 
-            {/* MEASURES — standard + period comparisons in one panel */}
-            <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
-              <header className="px-4 py-3 border-b border-border">
-                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">Measures</p>
-                <p className="text-[10.5px] text-text-secondary mt-0.5">
-                  Standard aggregations and period-comparison <span className="font-mono">*_where</span> fields
-                </p>
-              </header>
-
-              {/* Standard group */}
-              <div className="px-4 pt-3 pb-1">
-                <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Standard Aggregations</p>
-              </div>
+            {/* MEASURES — standard aggregations only */}
+            <SidebarSection
+              id="measures"
+              title="Measures"
+              description="Standard aggregations applied to the selected dimensions"
+              selectedCount={measureSelectedCount}
+              summary={measureSummary}
+              expanded={measuresExpanded}
+              onToggle={() => toggleSection('measures')}
+            >
               <ul className="divide-y divide-border">
                 {STANDARD_MEASURES.map((measure) => {
                   const active   = selectedMeasures.includes(measure.key);
@@ -2745,14 +2742,18 @@ export default function PivotDashboard() {
                   );
                 })}
               </ul>
+            </SidebarSection>
 
-              {/* Comparison group — grouped by period */}
-              <div className="px-4 pt-4 pb-1 border-t border-border mt-1">
-                <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Period Comparisons</p>
-                <p className="text-[10px] text-text-muted mt-0.5">
-                  WHERE clauses are built relative to the selected dimension and filter date.
-                </p>
-              </div>
+            {/* PERIOD COMPARISONS */}
+            <SidebarSection
+              id="comparisons"
+              title="Period Comparisons"
+              description="WHERE clauses built relative to the selected dimension and filter date"
+              selectedCount={comparisonSelectedCount}
+              summary={comparisonSummary}
+              expanded={comparisonsExpanded}
+              onToggle={() => toggleSection('comparisons')}
+            >
 
               {Array.from(new Set(COMPARISON_MEASURES.map((m) => m.period!))).map((period) => {
                 const pair      = COMPARISON_MEASURES.filter((m) => m.period === period);
@@ -2851,7 +2852,7 @@ export default function PivotDashboard() {
                   </div>
                 );
               })}
-            </section>
+            </SidebarSection>
           </div>
 
           {/* ── Right: SQL preview + results ───────────────────────────────── */}
