@@ -950,8 +950,12 @@ function SidebarSection({
 }) {
   const sectionId = `pivot-sidebar-${id}`;
   return (
-    <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
-      <header className="border-b border-border">
+    <section
+      className={`rounded-xl border border-border bg-bg-card overflow-hidden flex flex-col ${
+        expanded ? 'xl:flex-1 xl:min-h-0' : 'xl:flex-shrink-0'
+      }`}
+    >
+      <header className="border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between gap-2 px-4 py-3">
           <button
             type="button"
@@ -993,7 +997,11 @@ function SidebarSection({
           {headerExtra}
         </div>
       </header>
-      {expanded && <div id={sectionId}>{children}</div>}
+      {expanded && (
+        <div id={sectionId} className="xl:flex-1 xl:min-h-0 xl:overflow-y-auto">
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -2155,8 +2163,11 @@ export default function PivotDashboard() {
       <div className="p-6">
         <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] gap-5 items-start">
 
-          {/* ── Left: field selector panel ─────────────────────────────────── */}
-          <div className="flex flex-col gap-4">
+          {/* ── Left: field selector panel ───────────────────────────────────
+              Sticky + viewport-fit on xl+: each collapsed section keeps its
+              header always visible at its position; expanded sections share
+              the remaining vertical space and scroll internally. */}
+          <div className="flex flex-col gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-hidden">
 
             {/* DIMENSIONS */}
             <SidebarSection
