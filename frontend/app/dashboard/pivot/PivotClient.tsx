@@ -465,6 +465,22 @@ const PERIOD_DISPLAY: Record<string, string> = {
   prev_year_same_date:   'Prev. Year Same Day',
 };
 
+// Display labels keyed by the short-slug `period` field on COMPARISON_MEASURES
+// (e.g. "thismonth" → "This Month"). Distinct from PERIOD_DISPLAY above, which
+// is keyed by the long-form labels stamped onto comparison-result rows by the
+// backend's build_period_where output.
+const COMPARISON_PERIOD_LABELS: Record<string, string> = {
+  prevdate:           'Prev. Day',
+  thismonth:          'This Month',
+  prevmonth:          'Prev. Month',
+  prevmonthmtd:       'Prev. Month MTD',
+  prevmonthsamedate:  'Prev. Month Same Day',
+  thisyear:           'This Year',
+  prevyear:           'Prev. Year',
+  prevyearytd:        'Prev. Year YTD',
+  prevyearsamedate:   'Prev. Year Same Day',
+};
+
 // Parse a raw pivot value that may be "period_label:date" or just "date".
 function parsePivotHeader(pv: string): { period: string | null; date: string } {
   const sep = pv.indexOf(':');
@@ -1504,9 +1520,17 @@ export default function PivotDashboard() {
   const [expandedField, setExpanded]                = useState<string | null>(null);
   const [page, setPage]                             = useState(1);
   const [pageSize, setPageSize]                     = useState(10);
+  // Initial value matches SSR (always empty) to avoid hydration mismatch; the
+  // useEffect below hydrates from localStorage on mount. The brief default-state
+  // flash on first paint is acceptable — it only affects sections the user has
+  // explicitly collapsed.
   const [collapsedSections, setCollapsedSections] = useState<Set<SidebarSectionId>>(
-    () => (typeof window === 'undefined' ? new Set() : loadCollapsedSections()),
+    () => new Set(),
   );
+
+  useEffect(() => {
+    setCollapsedSections(loadCollapsedSections());
+  }, []);
 
   const toggleSection = useCallback((id: SidebarSectionId) => {
     setCollapsedSections((prev) => {
@@ -1628,19 +1652,13 @@ export default function PivotDashboard() {
 
   const comparisonSummary = useMemo(() => {
     if (comparisonSelectedCount === 0) return undefined;
-    const periodLabels = new Map<string, string>();
-    for (const m of COMPARISON_MEASURES) {
-      if (m.period && !periodLabels.has(m.period)) {
-        periodLabels.set(m.period, PERIOD_DISPLAY[m.period] ?? m.period);
-      }
-    }
     const seen = new Set<string>();
     const labels: string[] = [];
     for (const k of selectedMeasures) {
       const def = COMPARISON_MEASURES.find((m) => m.key === k);
       if (def?.period && !seen.has(def.period)) {
         seen.add(def.period);
-        labels.push(periodLabels.get(def.period) ?? def.period);
+        labels.push(COMPARISON_PERIOD_LABELS[def.period] ?? def.period);
       }
     }
     return summarizeLabels(labels);
@@ -2760,7 +2778,7 @@ export default function PivotDashboard() {
                 const anyActive = pair.some((m) => selectedMeasures.includes(m.key));
 
                 return (
-                  <div key={period} className={`border-t border-border ${anyActive ? 'bg-accent-blue/5' : ''}`}>
+                  <div key={period} className={`border-t border-border first:border-t-0 ${anyActive ? 'bg-accent-blue/5' : ''}`}>
                     <div className="px-4 pt-2.5 pb-1 flex items-center gap-2">
                       <p className={`text-[11px] font-semibold ${anyActive ? 'text-accent-blue' : 'text-text-primary'}`}>
                         {period === 'prevdate'          && 'Prev. Day'}
