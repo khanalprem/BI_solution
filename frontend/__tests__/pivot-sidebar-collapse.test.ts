@@ -15,7 +15,6 @@ describe('loadExpandedSections', () => {
     const result = loadExpandedSections();
     expect(result.has('dimensions')).toBe(true);
     expect(result.has('measures')).toBe(false);
-    expect(result.has('comparisons')).toBe(false);
   });
 
   it('returns the default when value is not valid JSON', () => {
@@ -31,10 +30,9 @@ describe('loadExpandedSections', () => {
   });
 
   it('parses a valid array of known section ids', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures', 'comparisons']));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures']));
     const result = loadExpandedSections();
     expect(result.has('measures')).toBe(true);
-    expect(result.has('comparisons')).toBe(true);
     expect(result.has('dimensions')).toBe(false);
   });
 
@@ -44,7 +42,7 @@ describe('loadExpandedSections', () => {
   });
 
   it('drops unknown ids defensively', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures', 'bogus', 42]));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(['measures', 'comparisons', 'bogus', 42]));
     const result = loadExpandedSections();
     expect([...result]).toEqual(['measures']);
   });
@@ -56,19 +54,18 @@ describe('saveExpandedSections', () => {
   });
 
   it('writes the set as a JSON array of ids in canonical order', () => {
-    saveExpandedSections(new Set<SidebarSectionId>(['comparisons', 'dimensions']));
+    saveExpandedSections(new Set<SidebarSectionId>(['measures', 'dimensions']));
     expect(localStorage.getItem(STORAGE_KEY)).toBe(
-      JSON.stringify(['dimensions', 'comparisons']),
+      JSON.stringify(['dimensions', 'measures']),
     );
   });
 
   it('round-trips through loadExpandedSections', () => {
-    const before = new Set<SidebarSectionId>(['dimensions', 'comparisons']);
+    const before = new Set<SidebarSectionId>(['measures']);
     saveExpandedSections(before);
     const after = loadExpandedSections();
-    expect(after.has('dimensions')).toBe(true);
-    expect(after.has('comparisons')).toBe(true);
-    expect(after.has('measures')).toBe(false);
+    expect(after.has('measures')).toBe(true);
+    expect(after.has('dimensions')).toBe(false);
   });
 
   it('writes an empty array when the set is empty', () => {

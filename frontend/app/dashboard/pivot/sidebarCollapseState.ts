@@ -1,19 +1,20 @@
 // Pure helpers for the Pivot sidebar expanded-section state.
 // No React / Next deps — unit-tested in __tests__/pivot-sidebar-collapse.test.ts.
 
-export type SidebarSectionId = 'dimensions' | 'measures' | 'comparisons';
+export type SidebarSectionId = 'dimensions' | 'measures';
 
 export const SIDEBAR_SECTION_IDS: readonly SidebarSectionId[] = [
   'dimensions',
   'measures',
-  'comparisons',
 ] as const;
 
 export const STORAGE_KEY = 'pivot-sidebar-expanded';
 
 // Default set of expanded sections on first visit (no storage entry yet).
-// Only Dimensions opens automatically — Measures and Period Comparisons stay
-// collapsed until the user explicitly opens them.
+// Only Dimensions opens automatically — Measures stays collapsed until the
+// user explicitly opens it. Period comparisons no longer have a dedicated
+// section — they nest under their parent standard measure (tran_amt /
+// tran_count) as expandable child rows inside the Measures section.
 const DEFAULT_EXPANDED: readonly SidebarSectionId[] = ['dimensions'];
 
 // Read the expanded-section set from localStorage. Returns a fresh copy of
