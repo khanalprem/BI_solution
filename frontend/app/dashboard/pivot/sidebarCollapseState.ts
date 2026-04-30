@@ -15,14 +15,42 @@ export const STORAGE_KEY = 'pivot-sidebar-collapsed';
 // when storage is unavailable, the key is missing, or the contents are not
 // a valid JSON array of known section ids.
 export function loadCollapsedSections(): Set<SidebarSectionId> {
-  return new Set();
+  const empty = new Set<SidebarSectionId>();
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return empty;
+  }
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (raw === null) return empty;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return empty;
+  }
+  if (!Array.isArray(parsed)) return empty;
+  const known = new Set<string>(SIDEBAR_SECTION_IDS);
+  const out = new Set<SidebarSectionId>();
+  for (const v of parsed) {
+    if (typeof v === 'string' && known.has(v)) {
+      out.add(v as SidebarSectionId);
+    }
+  }
+  return out;
 }
 
 // Persist the explicit-collapse list. No-op if localStorage is unavailable
 // (SSR, private mode quota errors, etc.) — failure to persist must not crash
 // the UI.
-export function saveCollapsedSections(_set: Set<SidebarSectionId>): void {
-  // intentionally empty until Task 3
+export function saveCollapsedSections(set: Set<SidebarSectionId>): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return;
+  }
+  const arr = SIDEBAR_SECTION_IDS.filter((id) => set.has(id));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // Quota / private-mode errors are non-fatal — silently drop.
+  }
 }
 
 // True when the user has ever toggled a section (the storage key exists,
@@ -42,7 +70,7 @@ export function hasStoredCollapseState(): boolean {
 //   • dimensions  → always expanded (entry-point default)
 //   • measures    → expanded iff hasSelection
 //   • comparisons → expanded iff hasSelection
-export function defaultExpanded(_id: SidebarSectionId, _hasSelection: boolean): boolean {
-  // stub: real logic lands in Task 3
-  return true;
+export function defaultExpanded(id: SidebarSectionId, hasSelection: boolean): boolean {
+  if (id === 'dimensions') return true;
+  return hasSelection;
 }
