@@ -2754,7 +2754,7 @@ export default function PivotDashboard() {
                               </div>
                               <p className="text-[10px] text-text-muted mt-0.5 font-mono">{measure.description}</p>
                             </div>
-                            {/* HAVING op + value, stacked under the label */}
+                            {/* Bottom row: HAVING op + value + sort buttons, all stacked under the label */}
                             <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
                               <div className="w-14 flex-shrink-0">
                                 <Select
@@ -2769,59 +2769,56 @@ export default function PivotDashboard() {
                                 placeholder={isDate ? 'YYYY-MM-DD' : '0'}
                                 className="w-24 h-7 text-[10px] flex-shrink-0"
                               />
+                              <div className="inline-flex h-7 rounded-md border border-border overflow-hidden flex-shrink-0">
+                                {(['asc', 'desc'] as const).map((d) => {
+                                  const isActive = ordered && dir === d;
+                                  const arrow    = d === 'asc' ? '↑' : '↓';
+                                  return (
+                                    <button
+                                      key={d}
+                                      type="button"
+                                      disabled={pivotActive}
+                                      onClick={(e) => {
+                                        if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
+                                        setOrderFieldDir(measure.key, d, e);
+                                      }}
+                                      className={`px-2 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                        pivotActive
+                                          ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                          : isActive
+                                            ? 'bg-accent-amber/15 text-accent-amber'
+                                            : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                      }`}
+                                      title={
+                                        pivotActive
+                                          ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
+                                          : `Sort by ${measure.label} ${d.toUpperCase()}`
+                                      }
+                                    >
+                                      {arrow}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         </div>
-                        {/* Right column: sort buttons + chevron, vertically aligned with the label row */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <div className="inline-flex h-7 rounded-md border border-border overflow-hidden">
-                            {(['asc', 'desc'] as const).map((d) => {
-                              const isActive = ordered && dir === d;
-                              const arrow    = d === 'asc' ? '↑' : '↓';
-                              return (
-                                <button
-                                  key={d}
-                                  type="button"
-                                  disabled={pivotActive}
-                                  onClick={(e) => {
-                                    if (!selectedMeasures.includes(measure.key)) toggleMeasure(measure.key);
-                                    setOrderFieldDir(measure.key, d, e);
-                                  }}
-                                  className={`px-2 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
-                                    pivotActive
-                                      ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
-                                      : isActive
-                                        ? 'bg-accent-amber/15 text-accent-amber'
-                                        : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
-                                  }`}
-                                  title={
-                                    pivotActive
-                                      ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
-                                      : `Sort by ${measure.label} ${d.toUpperCase()}`
-                                  }
-                                >
-                                  {arrow}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {/* Period-comparison expand chevron */}
-                          <button
-                            type="button"
-                            aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
-                            aria-expanded={childrenExpanded}
-                            onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
-                            className="flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
-                            title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
+                        {/* Period-comparison expand chevron — right-aligned with the label row */}
+                        <button
+                          type="button"
+                          aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
+                          aria-expanded={childrenExpanded}
+                          onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
+                          className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
+                          title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
+                        >
+                          <svg
+                            width="12" height="12" viewBox="0 0 12 12" fill="none"
+                            className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
                           >
-                            <svg
-                              width="12" height="12" viewBox="0 0 12 12" fill="none"
-                              className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
-                            >
-                              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </button>
-                        </div>
+                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
                       </div>
 
                       {/* Period Comparisons — same period-grouped layout that used
