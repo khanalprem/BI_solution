@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, LookupOption } from '@/types';
 import { lookupOptions } from '@/lib/lookups';
+import { dateDimCount, shouldCollapseDisplayDims } from './pivotLayout';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -568,17 +569,20 @@ function renderCell(v: string | number | boolean | null | undefined, measureKey?
 const ROW_DIM_COL_WIDTH = 160;
 
 interface L1Group {
-  l1:     string;        // raw level-1 key (may carry "period:date" prefix)
+  l1:     string;        // raw level-1 key (may carry "period:date" prefix; joined date
+                         // segments via PIVOT_DIM_SEP when collapsing displayDims)
   period: string | null; // parsed period label key, or null for main data
-  date:   string;        // display date / value
+  dates:  string[];      // ordered date-segment values (length 1 in normal case;
+                         // >1 when collapsing along trailing non-date pivot dims)
   l2s:    string[];      // ordered level-2 sub-values (e.g. ["CR", "DR"])
 }
 
 // Module-level helper: top-level pivot group header cell.
 // Defined outside PivotTable so React never sees a "new component type" on re-render.
 function PivotGroupTh({
-  colSpan, period, date,
-}: { colSpan: number; period: string | null; date: string }) {
+  colSpan, period, dates,
+}: { colSpan: number; period: string | null; dates: string[] }) {
+  const isStacked = period !== null || dates.length > 1;
   return (
     <th
       colSpan={colSpan}
@@ -588,14 +592,29 @@ function PivotGroupTh({
           : 'text-accent-purple bg-accent-purple/5'
       }`}
     >
-      {period !== null ? (
+      {isStacked ? (
         <div className="flex flex-col items-center gap-0.5">
-          <span className="text-[8.5px] font-bold uppercase tracking-wider text-accent-amber/80 leading-none">
-            {PERIOD_DISPLAY[period]}
-          </span>
-          <span className="text-[10px] font-bold text-accent-amber leading-none">{date}</span>
+          {period !== null && (
+            <span className="text-[8.5px] font-bold uppercase tracking-wider text-accent-amber/80 leading-none">
+              {PERIOD_DISPLAY[period]}
+            </span>
+          )}
+          {dates.map((d, i) => (
+            <span
+              key={i}
+              className={`leading-none ${
+                period !== null
+                  ? 'text-[10px] font-bold text-accent-amber'
+                  : i === 0
+                    ? 'text-[10px] font-bold'
+                    : 'text-[9px] font-semibold text-accent-purple/70'
+              }`}
+            >
+              {d}
+            </span>
+          ))}
         </div>
-      ) : date}
+      ) : dates[0]}
     </th>
   );
 }
@@ -879,22 +898,29 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
   const { rowDimKeys, pivotValues, measureKeys, rows } = data;
 
   // Display-as-measure dims (e.g. tran_date_bal) are a date-keyed attribute —
-  // their value depends only on the pivoted date, not on any non-date pivot dim.
-  // In a multi-level pivot we collapse them to one column per level-1 (date)
-  // group, but ONLY when the level-2 pivot dim is non-date (e.g. part_tran_type).
-  // When level-2 is also a date dim (e.g. year_month × tran_date), the daily
-  // balance varies per (l1,l2) composite, so we keep per-composite rendering.
+  // their value depends only on the pivoted date dims, not on any non-date pivot
+  // dim. In a multi-level pivot we collapse them along trailing non-date pivot
+  // dims so they render once per unique date-prefix tuple. UI orders date pivot
+  // dims first, so the prefix-vs-suffix split is well-defined.
+  //
+  // Collapse fires when there is ≥1 leading date pivot dim AND ≥1 trailing
+  // non-date pivot dim. Examples:
+  //   • year_month × part_tran_type            → collapse (1 date + 1 non-date)
+  //   • year × year_month × part_tran_type     → collapse (2 date + 1 non-date),
+  //                                              displayDim renders once per (year,year_month)
+  //   • year_month × tran_date                 → no collapse (pure date) — balance
+  //                                              genuinely varies per composite
+  //   • part_tran_type × gam_branch            → no collapse (no date prefix anchor)
   const rawRegularMeasureKeys = measureKeys.filter((k) => !DISPLAY_AS_MEASURE_DIMS.has(k));
   const rawDisplayDimKeys     = measureKeys.filter((k) =>  DISPLAY_AS_MEASURE_DIMS.has(k));
 
   // Detect composite (multi-level) pivot keys: "2024-02-01\x01CR"
   const isMultiLevel = pivotValues.length > 0 && pivotValues[0].includes(PIVOT_DIM_SEP);
 
-  // Collapse rule: only when l1 is a date and l2 is non-date. UI orders date
-  // pivot dims first, so l1 is always a date dim when any date is pivoted.
-  const pivotL2Key      = pivotDimKeys[1];
-  const isPivotL2Date   = pivotL2Key ? (DATE_FIELD_ORDER as readonly string[]).includes(pivotL2Key) : false;
-  const collapseDisplayDims = isMultiLevel && pivotDimKeys.length >= 2 && !isPivotL2Date;
+  const collapseDisplayDims = shouldCollapseDisplayDims(pivotDimKeys, isMultiLevel);
+  // Number of leading date pivot dims — drives where the l1/l2 boundary sits when
+  // collapsing. 0 in non-collapse paths (boundary stays at the first segment).
+  const dateDepth = collapseDisplayDims ? dateDimCount(pivotDimKeys) : 1;
 
   // When not collapsing, displayDims render as ordinary measures under each
   // (l1,l2) composite — same as the pre-collapse path.
@@ -915,16 +941,36 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
 
   // Build ordered level-1 groups from composite pivot values.
   // Preserves the natural sort order established by buildPivotData.
+  //
+  // Split rule:
+  //   • normal multi-level    → l1 = first segment, l2 = rest
+  //   • collapse mode (≥1 date leading, ≥1 non-date trailing) → l1 = first
+  //     `dateDepth` segments joined (the date prefix), l2 = remaining segments
+  //     joined (the non-date suffix). Reconstructing the full pivot key with
+  //     `${l1}${PIVOT_DIM_SEP}${l2}` round-trips to the original composite.
   const level1Groups: L1Group[] = [];
   if (isMultiLevel) {
     const seen = new Map<string, L1Group>();
     for (const pv of pivotValues) {
-      const sepIdx = pv.indexOf(PIVOT_DIM_SEP);
-      const l1 = sepIdx === -1 ? pv : pv.slice(0, sepIdx);
-      const l2 = sepIdx === -1 ? ''  : pv.slice(sepIdx + 1);
+      let l1: string;
+      let l2: string;
+      if (collapseDisplayDims) {
+        const segments = pv.split(PIVOT_DIM_SEP);
+        l1 = segments.slice(0, dateDepth).join(PIVOT_DIM_SEP);
+        l2 = segments.slice(dateDepth).join(PIVOT_DIM_SEP);
+      } else {
+        const sepIdx = pv.indexOf(PIVOT_DIM_SEP);
+        l1 = sepIdx === -1 ? pv : pv.slice(0, sepIdx);
+        l2 = sepIdx === -1 ? ''  : pv.slice(sepIdx + 1);
+      }
       if (!seen.has(l1)) {
-        const parsed = parsePivotHeader(l1);
-        const g: L1Group = { l1, period: parsed.period, date: parsed.date, l2s: [] };
+        // Parse each l1 segment for period prefix (only the first segment can
+        // carry one in practice — the comparison stamper writes "period:date"
+        // onto a single date dim). Render the segments stacked in PivotGroupTh.
+        const segParsed = l1.split(PIVOT_DIM_SEP).map(parsePivotHeader);
+        const period = segParsed[0]?.period ?? null;
+        const dates  = segParsed.map((p) => p.date);
+        const g: L1Group = { l1, period, dates, l2s: [] };
         seen.set(l1, g);
         level1Groups.push(g);
       }
@@ -1052,12 +1098,12 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
 
               {isMultiLevel
                 // Multi-level: level-1 group headers spanning all their sub-columns
-                ? level1Groups.map(({ l1, period, date, l2s }) => (
+                ? level1Groups.map(({ l1, period, dates, l2s }) => (
                     <PivotGroupTh
                       key={l1}
                       colSpan={colsPerL1(l2s)}
                       period={period}
-                      date={date}
+                      dates={dates}
                     />
                   ))
                 // Single-level: each pivot value spans measure columns
@@ -1068,7 +1114,7 @@ function PivotTable({ data, title, subtitle, filters, pivotDimKeys }: { data: Pi
                         key={pv}
                         colSpan={measureKeys.length}
                         period={period}
-                        date={date}
+                        dates={[date]}
                       />
                     );
                   })
@@ -2828,14 +2874,18 @@ export default function PivotDashboard() {
                     ? `${pivotData.rows.length.toLocaleString()} pivoted rows · page ${page} of ${totalPages} (${backendTotal.toLocaleString()} raw)`
                     : `Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, backendTotal).toLocaleString()} of ${backendTotal.toLocaleString()} rows`}
                 </p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-text-muted">Per page:</span>
+                <div
+                  className="flex items-center gap-1.5"
+                  title={pivotActive ? 'Per-page is disabled while a pivot is active — pivot rows are computed from the current page only' : undefined}
+                >
+                  <span className={`text-[10px] ${pivotActive ? 'text-text-muted/40' : 'text-text-muted'}`}>Per page:</span>
                   {PAGE_SIZE_OPTIONS.map((n) => (
                     <button
                       key={n}
                       type="button"
+                      disabled={pivotActive}
                       onClick={() => { setPageSize(n); setPage(1); }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                         pageSize === n
                           ? 'bg-accent-blue text-white'
                           : 'bg-bg-input border border-border text-text-secondary hover:border-border-strong'
