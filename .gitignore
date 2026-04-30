@@ -181,6 +181,11 @@ tmp/storage/
 docs/_build/
 site/
 
+# Local-only Superpowers planning artifacts (specs, plans). Kept on disk
+# as design references but not pushed to the remote.
+docs/superpowers/
+docs
+
 # ----------------------------------------------------------
 # Ruby
 # ----------------------------------------------------------
