@@ -620,7 +620,7 @@ export default function SkillsPage() {
               { label: '19 Production Tables', color: 'blue' },
               { label: '26 Dimensions',         color: 'purple' },
               { label: '10 Measures',            color: 'green' },
-              { label: '9 Period Comparisons',   color: 'amber' },
+              { label: '80 Period × Measure Keys', color: 'amber' },
               { label: '20 Procedure Params',    color: 'red' },
               { label: '6 User Roles',           color: 'teal' },
             ].map((s) => (
@@ -933,7 +933,7 @@ SELECT * FROM deposit;`}</pre>
         <section>
           <SectionHeader
             label="Period Comparisons (9)"
-            sub="Each period translates to a WHERE clause passed to get_tran_summary. Empty string = inactive. Both tran_amt and tran_count can be computed per period."
+            sub="Each period translates to a WHERE clause passed to get_tran_summary. Empty string = inactive. Every standard measure (except tran_maxdate) can be tagged with any period — selections are per-(measure, period)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
             <ScrollTable
@@ -948,9 +948,10 @@ SELECT * FROM deposit;`}</pre>
           </div>
           <div className="mt-3 rounded-lg border border-border bg-bg-input px-4 py-3">
             <p className="text-[10.5px] text-text-muted leading-relaxed">
-              <strong className="text-text-secondary">Frontend fields:</strong> Each period generates two selectable measures —
-              <Mono>prevdate_amt</Mono> / <Mono>prevdate_count</Mono> — giving <strong className="text-text-secondary">18 time-comparison columns</strong> in total (9 periods × 2 metrics).
-              These are passed as the <Mono>time_comparisons</Mono> array to the API and trigger separate procedure calls that are merged into the result.
+              <strong className="text-text-secondary">Frontend fields:</strong> Each period × measure combination is its own selectable key —
+              <Mono>{'{period}__{measure}'}</Mono>, e.g. <Mono>prevdate__cr_amt</Mono>, <Mono>thismonth__signed_tranamt</Mono> — giving <strong className="text-text-secondary">80 time-comparison keys</strong> in total (9 periods × 9 standard measures, minus the <Mono>prevdate × tran_maxdate</Mono> pair which is meaningless: MAX(tran_date) for a single prior day just returns that day).
+              These are passed as the <Mono>time_comparisons</Mono> array to the API. The backend dedupes them by period for the WHERE clause; the frontend uses the per-(period, measure) selection to filter which comparison sub-columns render in the pivot.
+              Legacy <Mono>{'{period}_amt'}</Mono> / <Mono>{'{period}_count'}</Mono> URL keys are still accepted and aliased to <Mono>{'{period}__tran_amt'}</Mono> / <Mono>{'{period}__tran_count'}</Mono> on intake.
             </p>
           </div>
         </section>

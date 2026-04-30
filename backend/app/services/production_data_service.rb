@@ -315,28 +315,45 @@ class ProductionDataService
     'prevyearsamedate'  => { param: 'prevyearsamedate_where',  label: 'Prev Year Same Date',    description: 'Same day in the previous calendar year' }
   }.freeze
 
-  # Flat keys sent from the frontend — each encodes period + metric.
-  # Multiple keys for the same period collapse to a single *_where param.
-  TIME_COMPARISON_FIELDS = {
-    'prevdate_amt'            => { period: 'prevdate',          metric: 'tran_amt',   label: 'Prev Date — Amount' },
-    'prevdate_count'          => { period: 'prevdate',          metric: 'tran_count', label: 'Prev Date — Count' },
-    'thismonth_amt'           => { period: 'thismonth',         metric: 'tran_amt',   label: 'This Month — Amount' },
-    'thismonth_count'         => { period: 'thismonth',         metric: 'tran_count', label: 'This Month — Count' },
-    'thisyear_amt'            => { period: 'thisyear',          metric: 'tran_amt',   label: 'This Year — Amount' },
-    'thisyear_count'          => { period: 'thisyear',          metric: 'tran_count', label: 'This Year — Count' },
-    'prevmonth_amt'           => { period: 'prevmonth',         metric: 'tran_amt',   label: 'Prev Month — Amount' },
-    'prevmonth_count'         => { period: 'prevmonth',         metric: 'tran_count', label: 'Prev Month — Count' },
-    'prevyear_amt'            => { period: 'prevyear',          metric: 'tran_amt',   label: 'Prev Year — Amount' },
-    'prevyear_count'          => { period: 'prevyear',          metric: 'tran_count', label: 'Prev Year — Count' },
-    'prevmonthmtd_amt'        => { period: 'prevmonthmtd',      metric: 'tran_amt',   label: 'Prev Month MTD — Amount' },
-    'prevmonthmtd_count'      => { period: 'prevmonthmtd',      metric: 'tran_count', label: 'Prev Month MTD — Count' },
-    'prevyearytd_amt'         => { period: 'prevyearytd',       metric: 'tran_amt',   label: 'Prev Year YTD — Amount' },
-    'prevyearytd_count'       => { period: 'prevyearytd',       metric: 'tran_count', label: 'Prev Year YTD — Count' },
-    'prevmonthsamedate_amt'   => { period: 'prevmonthsamedate', metric: 'tran_amt',   label: 'Prev Month Same Date — Amount' },
-    'prevmonthsamedate_count' => { period: 'prevmonthsamedate', metric: 'tran_count', label: 'Prev Month Same Date — Count' },
-    'prevyearsamedate_amt'    => { period: 'prevyearsamedate',  metric: 'tran_amt',   label: 'Prev Year Same Date — Amount' },
-    'prevyearsamedate_count'  => { period: 'prevyearsamedate',  metric: 'tran_count', label: 'Prev Year Same Date — Count' }
+  # Standard measures that can be tagged with a period comparison.
+  COMPARISON_TARGET_MEASURES = %w[
+    tran_amt tran_count signed_tranamt
+    cr_amt cr_count dr_amt dr_count
+    tran_acct_count tran_maxdate
+  ].freeze
+
+  # (period, measure) pairs that don't make sense and are dropped from the
+  # cross-product. tran_maxdate is a MAX(tran_date) — pairing it with prevdate
+  # (a single prior day) would just return that day and tell the analyst nothing.
+  EXCLUDED_COMPARISON_PAIRS = {
+    'prevdate' => %w[tran_maxdate].freeze
   }.freeze
+
+  # Flat keys sent from the frontend — each encodes (period, measure) and is used
+  # both to resolve the *_where param to populate AND to gate which (period × measure)
+  # comparison cells the pivot renders. Key format: "{period}__{measure}" (double
+  # underscore separator avoids ambiguity with measure keys that contain underscores
+  # like prev_month_mtd_tran_acct_count).
+  #
+  # Multiple keys for the same period collapse to a single *_where param at query
+  # time; the per-measure granularity is enforced by the frontend's render filter.
+  TIME_COMPARISON_FIELDS = PERIOD_COMPARISONS.each_with_object({}) do |(period_key, period_meta), acc|
+    excluded = EXCLUDED_COMPARISON_PAIRS[period_key] || []
+    COMPARISON_TARGET_MEASURES.each do |measure_key|
+      next if excluded.include?(measure_key)
+      key   = "#{period_key}__#{measure_key}"
+      label = "#{period_meta[:label]} — #{MEASURES.fetch(measure_key)[:label]}"
+      acc[key] = { period: period_key, metric: measure_key, label: label }
+    end
+  end.freeze
+
+  # Legacy single-suffix keys kept so saved URLs from the previous (tran_amt /
+  # tran_count only) implementation continue to resolve. Mapped to the canonical
+  # double-underscore key on intake.
+  LEGACY_TIME_COMPARISON_ALIASES = PERIOD_COMPARISONS.keys.each_with_object({}) do |period_key, acc|
+    acc["#{period_key}_amt"]   = "#{period_key}__tran_amt"
+    acc["#{period_key}_count"] = "#{period_key}__tran_count"
+  end.freeze
 
   def initialize(connection: ActiveRecord::Base.connection)
     @connection = connection
@@ -595,7 +612,8 @@ class ProductionDataService
 
     # Count active comparison periods early
     requested_periods_count = Array(time_comparisons).map(&:to_s).filter_map { |key|
-      meta = TIME_COMPARISON_FIELDS[key]
+      resolved = LEGACY_TIME_COMPARISON_ALIASES[key] || key
+      meta = TIME_COMPARISON_FIELDS[resolved]
       meta[:period] if meta
     }.uniq.length
     has_comparisons = requested_periods_count > 0
@@ -755,10 +773,11 @@ class ProductionDataService
     period_dimension ||= 'tran_date'
 
     # Resolve which period-comparison params to populate.
-    # Multiple time_comparison keys (e.g. 'prevdate_amt', 'prevdate_count') sharing
-    # the same period collapse to a single *_where value.
+    # Multiple time_comparison keys (e.g. 'prevdate__tran_amt', 'prevdate__cr_amt')
+    # sharing the same period collapse to a single *_where value.
     requested_periods = Array(time_comparisons).map(&:to_s).filter_map do |key|
-      meta = TIME_COMPARISON_FIELDS[key]
+      resolved = LEGACY_TIME_COMPARISON_ALIASES[key] || key
+      meta = TIME_COMPARISON_FIELDS[resolved]
       meta[:period] if meta
     end.uniq
 
