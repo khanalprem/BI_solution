@@ -2167,7 +2167,7 @@ export default function PivotDashboard() {
               Sticky + viewport-fit on xl+: each collapsed section keeps its
               header always visible at its position; expanded sections share
               the remaining vertical space and scroll internally. */}
-          <div className="flex flex-col gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-hidden">
+          <div className="flex flex-col gap-4 xl:sticky xl:top-[60px] xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden">
 
             {/* DIMENSIONS */}
             <SidebarSection
