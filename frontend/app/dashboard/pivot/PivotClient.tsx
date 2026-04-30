@@ -291,32 +291,49 @@ const STANDARD_MEASURES: MeasureDef[] = [
 // Requires at least one date dimension to provide the EAB as-of reference date.
 const DISPLAY_AS_MEASURE_DIMS = new Set(['tran_date_bal']);
 
-// Dimension prerequisites: a dim can only be selected when at least one of the listed
-// companion dims is already chosen. The companion provides the join key / context
-// needed for the dim to be meaningful.
-//   • tran_date_bal: needs a date dim to resolve the EAB as-of date.
-//   • eod_balance:  needs an account identifier for the GAM join to be unique.
-//   • schm_code:    needs an account identifier — schm_code lives on `gam` and is
-//                   pulled in via outer_join_field. Without an account-level dim
-//                   in the inner GROUP BY, the join row would be ambiguous.
-const DIM_PREREQS: Record<string, { keys: string[]; label: string }> = {
-  tran_date_bal: {
-    keys: DATE_FIELD_ORDER as unknown as string[],
-    label: 'a date dimension (year / quarter / month / day)',
-  },
-  eod_balance: {
-    keys: ['cif_id', 'acid', 'acct_num'],
-    label: 'an account identifier (CIF Id / ACID / ACCT Num)',
-  },
-  schm_code: {
-    keys: ['cif_id', 'acid', 'acct_num'],
-    label: 'an account identifier (CIF Id / ACID / ACCT Num)',
-  },
+// Dimension prerequisites: a dim can only be selected when EVERY listed group has
+// at least one of its companion dims chosen (AND across groups, OR within each
+// group). Companions provide the join keys / context the dim needs to be meaningful.
+//   • tran_date_bal: needs a date dim (for the EAB as-of date) AND an account
+//                    identifier (so the balance is keyed to a specific account
+//                    rather than a meaningless aggregate of all accounts on a date).
+//   • eod_balance:   needs an account identifier for the GAM join to be unique.
+//   • schm_code:     needs an account identifier — schm_code lives on `gam` and is
+//                    pulled in via outer_join_field. Without an account-level dim
+//                    in the inner GROUP BY, the join row would be ambiguous.
+type DimPrereqGroup = { keys: string[]; label: string };
+
+const ACCOUNT_ID_KEYS = ['cif_id', 'acid', 'acct_num'];
+const ACCOUNT_ID_LABEL = 'an account identifier (CIF Id / ACID / ACCT Num)';
+
+const DIM_PREREQS: Record<string, DimPrereqGroup[]> = {
+  tran_date_bal: [
+    {
+      keys: DATE_FIELD_ORDER as unknown as string[],
+      label: 'a date dimension (year / quarter / month / day)',
+    },
+    {
+      keys: [...ACCOUNT_ID_KEYS, 'acct_name'],
+      label: 'an account identifier (CIF Id / ACID / ACCT Num / ACCT Name)',
+    },
+  ],
+  eod_balance: [{ keys: ACCOUNT_ID_KEYS, label: ACCOUNT_ID_LABEL }],
+  schm_code:   [{ keys: ACCOUNT_ID_KEYS, label: ACCOUNT_ID_LABEL }],
 };
 
 function prereqSatisfied(dimKey: string, selected: string[]): boolean {
-  const req = DIM_PREREQS[dimKey];
-  return !req || req.keys.some((k) => selected.includes(k));
+  const groups = DIM_PREREQS[dimKey];
+  if (!groups) return true;
+  return groups.every((g) => g.keys.some((k) => selected.includes(k)));
+}
+
+// Returns the labels of unsatisfied prereq groups (empty when all satisfied).
+function missingPrereqLabels(dimKey: string, selected: string[]): string[] {
+  const groups = DIM_PREREQS[dimKey];
+  if (!groups) return [];
+  return groups
+    .filter((g) => !g.keys.some((k) => selected.includes(k)))
+    .map((g) => g.label);
 }
 
 // Order strategy: grouped by time scale (Day → Month → Year), and within each
@@ -2413,11 +2430,12 @@ export default function PivotDashboard() {
                   const badge       = TYPE_BADGE[field.type];
                   const isMeasure   = field.type === 'measure_dim';
                   const hasFilter   = !isMeasure && field.filterKey;
-                  // Dims with prerequisites (tran_date_bal, eod_balance) are disabled
-                  // until a companion dim is selected — the tooltip explains which.
-                  const prereq      = DIM_PREREQS[field.key];
-                  const prereqOk    = !prereq || prereq.keys.some((k) => selectedDimensions.includes(k));
-                  const disabled    = !prereqOk && !selected;
+                  // Dims with prerequisites (tran_date_bal, eod_balance, schm_code) are
+                  // disabled until every prereq group has at least one companion dim
+                  // selected — the tooltip lists the missing groups.
+                  const prereqOk     = prereqSatisfied(field.key, selectedDimensions);
+                  const disabled     = !prereqOk && !selected;
+                  const missingPrereqs = disabled ? missingPrereqLabels(field.key, selectedDimensions) : [];
 
                   return (
                     <li key={field.key} className={`transition-colors border-l-2 ${selected ? (partitioned ? 'bg-accent-purple/5 border-accent-purple' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'} ${disabled ? 'opacity-40' : ''}`}>
@@ -2425,7 +2443,7 @@ export default function PivotDashboard() {
                       <div
                         className={`flex items-center gap-3 px-4 py-2.5 select-none ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                         onClick={disabled ? undefined : () => toggleDimension(field.key)}
-                        title={disabled && prereq ? `Select ${prereq.label} first` : undefined}
+                        title={disabled && missingPrereqs.length ? `Select ${missingPrereqs.join(' AND ')} first` : undefined}
                       >
                         {/* Dimension checkbox */}
                         <Checkbox
