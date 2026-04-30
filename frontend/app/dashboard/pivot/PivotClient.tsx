@@ -20,6 +20,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { DashboardFilters, FilterStatisticsResponse, FilterValuesResponse, LookupOption } from '@/types';
 import { lookupOptions } from '@/lib/lookups';
 import { dateDimCount, shouldCollapseDisplayDims } from './pivotLayout';
+import {
+  loadCollapsedSections,
+  saveCollapsedSections,
+  hasStoredCollapseState,
+  defaultExpanded,
+  type SidebarSectionId,
+} from './sidebarCollapseState';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -891,6 +898,79 @@ function PivotCell({
         {label && <span className="block text-text-primary mt-0.5">{label}</span>}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+// Top-level collapsible sidebar section. Module-scope so React doesn't see a
+// new component type on each parent render.
+function SidebarSection({
+  id,
+  title,
+  description,
+  selectedCount,
+  summary,
+  expanded,
+  onToggle,
+  headerExtra,
+  children,
+}: {
+  id: SidebarSectionId;
+  title: string;
+  description?: string;
+  selectedCount: number;
+  summary?: string;
+  expanded: boolean;
+  onToggle: () => void;
+  headerExtra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const sectionId = `pivot-sidebar-${id}`;
+  return (
+    <section className="rounded-xl border border-border bg-bg-card overflow-hidden">
+      <header className="border-b border-border">
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-controls={sectionId}
+            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              className={`w-3 h-3 flex-shrink-0 text-text-muted transition-transform duration-150 ${
+                expanded ? 'rotate-90' : ''
+              }`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <polyline points="5,3 10,8 5,13" />
+            </svg>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-text-primary">
+                  {title}
+                </p>
+                {selectedCount > 0 && (
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-blue/30 bg-accent-blue/10 text-accent-blue">
+                    {selectedCount} selected
+                  </span>
+                )}
+              </div>
+              {expanded && description && (
+                <p className="text-[10.5px] text-text-secondary mt-0.5">{description}</p>
+              )}
+              {!expanded && summary && (
+                <p className="text-[10.5px] text-text-secondary mt-0.5 truncate">{summary}</p>
+              )}
+            </div>
+          </button>
+          {headerExtra}
+        </div>
+      </header>
+      {expanded && <div id={sectionId}>{children}</div>}
+    </section>
   );
 }
 
