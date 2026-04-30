@@ -2704,11 +2704,13 @@ export default function PivotDashboard() {
                   const dir      = orderDirs[measure.key];
                   const spec     = havingFilters[measure.key] ?? { op: '>=' as MeasureOp, value: '' };
                   const isDate   = DATE_MEASURE_KEYS.has(measure.key);
-                  // Period-comparison children nest under tran_amt and tran_count only.
-                  const isComparisonParent = measure.key === 'tran_amt' || measure.key === 'tran_count';
-                  const childComps         = isComparisonParent ? comparisonsForBase(measure.key as MeasureChildBaseKey) : [];
-                  const activeChildCount   = isComparisonParent ? activeComparisonChildCount(measure.key as MeasureChildBaseKey) : 0;
                   const childrenExpanded   = expandedMeasureChildren.has(measure.key);
+                  // Show a "+N periods" badge only on the two measures whose suffix
+                  // actually owns the comparison keys; the inline expand panel under
+                  // every measure renders the full period grid for convenience,
+                  // but the badge stays accurate to the semantic owner.
+                  const isComparisonParent = measure.key === 'tran_amt' || measure.key === 'tran_count';
+                  const activeChildCount   = isComparisonParent ? activeComparisonChildCount(measure.key as MeasureChildBaseKey) : 0;
                   return (
                     <li key={measure.key} className={`block transition-colors border-l-2 ${active ? (ordered ? 'bg-accent-amber/5 border-accent-amber' : 'bg-accent-blue/5 border-accent-blue') : 'border-transparent hover:bg-row-hover'}`}>
                       <div className="flex items-center gap-2 px-4 py-2.5">
@@ -2791,104 +2793,131 @@ export default function PivotDashboard() {
                             );
                           })}
                         </div>
-                        {/* Period-comparison expand chevron — only on tran_amt / tran_count. */}
-                        {isComparisonParent && (
-                          <button
-                            type="button"
-                            aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
-                            aria-expanded={childrenExpanded}
-                            onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
-                            className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
-                            title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
+                        {/* Period-comparison expand chevron — every standard measure
+                            row gets one; the nested panel renders the same period grid
+                            (period header + tran_amt + tran_count chips with their own
+                            sort buttons) that used to live in the standalone Period
+                            Comparisons section. */}
+                        <button
+                          type="button"
+                          aria-label={childrenExpanded ? 'Collapse period comparisons' : 'Expand period comparisons'}
+                          aria-expanded={childrenExpanded}
+                          onClick={(e) => { e.stopPropagation(); toggleMeasureChildren(measure.key); }}
+                          className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-text-muted hover:text-text-primary hover:bg-bg-input transition-colors"
+                          title={childrenExpanded ? 'Hide period comparisons' : 'Show period comparisons'}
+                        >
+                          <svg
+                            width="12" height="12" viewBox="0 0 12 12" fill="none"
+                            className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
                           >
-                            <svg
-                              width="12" height="12" viewBox="0 0 12 12" fill="none"
-                              className={`transition-transform duration-200 ${childrenExpanded ? 'rotate-180' : ''}`}
-                            >
-                              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </button>
-                        )}
+                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
                       </div>
 
-                      {/* Nested period-comparison rows for tran_amt / tran_count. */}
-                      {isComparisonParent && childrenExpanded && (
-                        <ul className="border-t border-border/40" style={{ background: 'var(--bg-surface)' }}>
-                          {childComps.map((cm) => {
-                            const cOn       = selectedMeasures.includes(cm.key);
-                            const cOrdered  = orderFields.includes(cm.key);
-                            const cOrderIdx = orderFields.indexOf(cm.key);
-                            const cDir      = orderDirs[cm.key];
-                            const periodKey = cm.period ?? '';
-                            const periodLbl = COMPARISON_PERIOD_LABELS[periodKey] ?? periodKey;
+                      {/* Period Comparisons — same period-grouped layout that used
+                          to live in the standalone section, now nested inside each
+                          standard measure's expand. Header label + description on top,
+                          then one row per period with both tran_amt and tran_count
+                          chips and their independent sort buttons. */}
+                      {childrenExpanded && (
+                        <div className="border-t border-border/40" style={{ background: 'var(--bg-surface)' }}>
+                          <div className="px-4 pt-3 pb-1 pl-12">
+                            <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-muted">Period Comparisons</p>
+                            <p className="text-[10px] text-text-muted mt-0.5">
+                              WHERE clauses are built relative to the selected dimension and filter date.
+                            </p>
+                          </div>
+
+                          {Array.from(new Set(COMPARISON_MEASURES.map((m) => m.period!))).map((period) => {
+                            const pair      = COMPARISON_MEASURES.filter((m) => m.period === period);
+                            const anyActive = pair.some((m) => selectedMeasures.includes(m.key));
+                            const periodLbl = COMPARISON_PERIOD_LABELS[period] ?? period;
+
                             return (
-                              <li
-                                key={cm.key}
-                                className={`flex items-center gap-2 pl-12 pr-4 py-2 border-t border-border/30 first:border-t-0 transition-colors ${
-                                  cOn ? 'bg-accent-blue/8' : 'hover:bg-row-hover'
-                                }`}
-                              >
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => toggleMeasure(cm.key)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleMeasure(cm.key); }}
-                                  className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
-                                >
-                                  <Checkbox
-                                    checked={cOn}
-                                    onCheckedChange={() => {}}
-                                    tabIndex={-1}
-                                    className="pointer-events-none"
-                                  />
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <p className={`text-[11.5px] font-medium ${cOn ? 'text-accent-blue' : 'text-text-primary'}`}>{periodLbl}</p>
-                                      {cOrdered && (
-                                        <span className="text-[8.5px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
-                                          sort #{cOrderIdx + 1} {cDir === 'desc' ? '↓' : '↑'}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[9.5px] text-text-muted mt-0.5 font-mono">{cm.description}</p>
-                                  </div>
+                              <div key={period} className={`border-t border-border/40 ${anyActive ? 'bg-accent-blue/5' : ''}`}>
+                                <div className="px-4 pt-2.5 pb-1 pl-12 flex items-center gap-2">
+                                  <p className={`text-[11px] font-semibold ${anyActive ? 'text-accent-blue' : 'text-text-primary'}`}>
+                                    {periodLbl}
+                                  </p>
+                                  {anyActive && (
+                                    <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-blue/30 bg-accent-blue/15 text-accent-blue">
+                                      active
+                                    </span>
+                                  )}
                                 </div>
-                                {/* Sort buttons — comparison measures don't carry HAVING (not whitelisted in HAVING_EXPR). */}
-                                <div className="flex-shrink-0 inline-flex h-6 rounded-md border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                                  {(['asc', 'desc'] as const).map((d) => {
-                                    const isActive = cOrdered && cDir === d;
-                                    const arrow    = d === 'asc' ? '↑' : '↓';
+
+                                <div className="px-4 pb-2.5 pl-12 flex flex-wrap gap-2">
+                                  {pair.map((m) => {
+                                    const on          = selectedMeasures.includes(m.key);
+                                    const cOrdered    = orderFields.includes(m.key);
+                                    const cOrderIdx   = orderFields.indexOf(m.key);
+                                    const cDir        = orderDirs[m.key];
+                                    const metricLabel = m.key.endsWith('_amt') ? 'tran_amt' : 'tran_count';
                                     return (
-                                      <button
-                                        key={d}
-                                        type="button"
-                                        disabled={pivotActive}
-                                        onClick={(e) => {
-                                          if (!selectedMeasures.includes(cm.key)) toggleMeasure(cm.key);
-                                          setOrderFieldDir(cm.key, d, e);
-                                        }}
-                                        className={`px-1.5 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
-                                          pivotActive
-                                            ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
-                                            : isActive
-                                              ? 'bg-accent-amber/15 text-accent-amber'
-                                              : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
-                                        }`}
-                                        title={
-                                          pivotActive
-                                            ? 'Sort disabled while Pivot is on'
-                                            : `Sort by ${cm.label} ${d.toUpperCase()}`
-                                        }
-                                      >
-                                        {arrow}
-                                      </button>
+                                      <div key={m.key} className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleMeasure(m.key)}
+                                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10.5px] font-medium transition-colors ${
+                                            on
+                                              ? 'border-accent-blue/40 bg-accent-blue/15 text-accent-blue'
+                                              : 'border-border bg-bg-input text-text-secondary hover:border-border-strong hover:text-text-primary'
+                                          }`}
+                                        >
+                                          <span className={`w-2 h-2 rounded-sm border flex items-center justify-center flex-shrink-0 ${on ? 'border-accent-blue bg-accent-blue' : 'border-current'}`}>
+                                            {on && (
+                                              <svg viewBox="0 0 8 8" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="1,4 3,6 7,1.5" />
+                                              </svg>
+                                            )}
+                                          </span>
+                                          <span className="font-mono">{metricLabel}</span>
+                                          {cOrdered && (
+                                            <span className="text-[8px] font-bold px-1 rounded bg-accent-amber/20 text-accent-amber">
+                                              #{cOrderIdx + 1} {cDir === 'desc' ? '↓' : '↑'}
+                                            </span>
+                                          )}
+                                        </button>
+                                        <div className="inline-flex h-6 rounded-md border border-border overflow-hidden">
+                                          {(['asc', 'desc'] as const).map((d) => {
+                                            const isActive = cOrdered && cDir === d;
+                                            const arrow    = d === 'asc' ? '↑' : '↓';
+                                            return (
+                                              <button
+                                                key={d}
+                                                type="button"
+                                                disabled={pivotActive}
+                                                onClick={(e) => {
+                                                  if (!selectedMeasures.includes(m.key)) toggleMeasure(m.key);
+                                                  setOrderFieldDir(m.key, d, e);
+                                                }}
+                                                className={`px-1.5 text-[11px] font-mono flex items-center justify-center transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                                  pivotActive
+                                                    ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                                    : isActive
+                                                      ? 'bg-accent-amber/15 text-accent-amber'
+                                                      : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                                }`}
+                                                title={
+                                                  pivotActive
+                                                    ? 'Sort disabled while Pivot is on'
+                                                    : `Sort by ${m.label} ${d.toUpperCase()}`
+                                                }
+                                              >
+                                                {arrow}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
                                     );
                                   })}
                                 </div>
-                              </li>
+                              </div>
                             );
                           })}
-                        </ul>
+                        </div>
                       )}
                     </li>
                   );
