@@ -179,12 +179,11 @@ const PIVOT_CAPABLE_NON_DATE = new Set(['part_tran_type', 'tran_type', 'gl_sub_h
 // Dimensions sourced from the data dictionary (data dictionary.xlsx, type = "dimension").
 // Display labels match the dictionary's "display" column verbatim.
 //
-// Order strategy: BROAD → NARROW drill-down hierarchy within each section
-// (matches conventional BI tools like Power BI / Tableau).
-//   1. Date          — Year → Quarter → Month → Day
-//   2. Customer/Account — geo (Province → Cluster → Branch), then identity (CIF → ACID → ACCT Num → ACCT Name)
-//   3. Transaction   — geo (Province → Cluster → Branch), then channel/type, then accounting/product
-//   4. User          — entry then verifier
+// Order strategy: BROAD → NARROW within each section.
+//   1. Date         — Year → Quarter → Month → Day
+//   2. Geography (account, gam_*)     — Province → Cluster → Branch
+//   3. Geography (transaction, tran_*) — Province → Cluster → Branch
+//   4. Loan (LAM)   — categoricals → date columns → amount columns
 const DIMENSION_FIELDS: DimensionFieldDef[] = [
   // ── Date dimensions — broad → narrow (matches DATE_FIELD_ORDER for partition rendering) ──
   { key: 'year',         label: 'Year',          type: 'year',    filterKey: 'year',        fromKey: 'yearFrom',        toKey: 'yearTo',        description: 'Calendar year (YYYY)' },
@@ -268,16 +267,7 @@ const STANDARD_MEASURES: MeasureDef[] = [
 // Requires at least one date dimension to provide the EAB as-of reference date.
 const DISPLAY_AS_MEASURE_DIMS = new Set<string>([]);
 
-// Dimension prerequisites: a dim can only be selected when EVERY listed group has
-// at least one of its companion dims chosen (AND across groups, OR within each
-// group). Companions provide the join keys / context the dim needs to be meaningful.
-//   • tran_date_bal: needs a date dim (for the EAB as-of date) AND an account
-//                    identifier (so the balance is keyed to a specific account
-//                    rather than a meaningless aggregate of all accounts on a date).
-//   • eod_balance:   needs an account identifier for the GAM join to be unique.
-//   • schm_code:     needs an account identifier — schm_code lives on `gam` and is
-//                    pulled in via outer_join_field. Without an account-level dim
-//                    in the inner GROUP BY, the join row would be ambiguous.
+// No prerequisites apply to the loans dim set; left as an empty map for future use.
 type DimPrereqGroup = { keys: string[]; label: string };
 
 const ACCOUNT_ID_KEYS = ['cif_id', 'acid', 'acct_num'];
@@ -2187,7 +2177,6 @@ export default function LoansClient() {
   const dimensionLabels = useMemo(
     () => {
       const dimPart = selectedDimensions.map((d) => {
-        if (d === 'tran_date_bal') return 'TRAN Date Balance';
         return catalog?.dimension_options.find((o) => o.value === d)?.label ?? d;
       }).join(' × ');
       // Measure-only mode: title falls back to the measure list so users see
