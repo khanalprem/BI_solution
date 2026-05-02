@@ -148,7 +148,9 @@ class ProductionDataService
     'year_quarter'     => { label: 'Year Quarter',       sql: 'year_quarter' },
     'year'             => { label: 'Year',               sql: 'year' },
     # ── EAB outer-join dimension ──────────────────────────────────────────────
-    # tran_date_bal comes from the eab table via the outer LEFT JOIN.
+    # tran_date_bal comes from the eab table via the proc's `tail_join` (applied
+    # to tb2 AFTER pagination) — the as-of date is per-row, so the join cannot
+    # collapse into the inner CTE.
     # outer_join_field: true means it cannot be in the inner GROUP BY; it is injected
     # into select_outer so the column is available in the final result set.
     'tran_date_bal'    => { label: 'TRAN Date Balance',  sql: 'e.tran_date_bal', eab_required: true, outer_join_field: true },
@@ -156,11 +158,11 @@ class ProductionDataService
     # No GAM join required — treated as a regular inner dimension.
     'eod_balance'      => { label: 'GAM Balance',        sql: 'eod_balance' },
     # schm_code lives only on `gam` (account scheme code: saving / minor / woman /
-    # fixed / current). Pulled in via the GAM LEFT JOIN — same outer_join_field
-    # pattern as tran_date_bal, but routed through the gam join (not eab). The
-    # frontend gates this dim on an account-identifier prerequisite so the GAM
-    # join row is unique per account.
-    'schm_code'        => { label: 'Scheme Code',        sql: 'g.schm_code',     gam_required: true, outer_join_field: true }
+    # fixed / current). Pulled in via the proc's `inner_join` (applied INSIDE the
+    # inner CTE, before GROUP BY), so `g.schm_code` is visible to select_inner /
+    # groupby_clause. The frontend gates this dim on an account-identifier
+    # prerequisite so the GAM join row is unique per account.
+    'schm_code'        => { label: 'Scheme Code',        sql: 'g.schm_code',     gam_required: true }
   }.freeze
 
   # Dimensions available to the Deposit Portfolio report (driven by `public.get_deposit`).
@@ -635,9 +637,12 @@ class ProductionDataService
     include_eab = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:eab_required] }
     include_gam = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:gam_required] }
 
-    # Include acid in inner select/groupby whenever ANY outer join is needed, so the
-    # outer query can join on acid.
-    include_acid = include_eab || include_gam
+    # Include acid in inner select/groupby only when EAB's tail_join needs to find
+    # `tb2.acid`. The GAM inner_join joins on `ts.acid` (always projected from the
+    # union-all), so it does NOT require carrying acid through GROUP BY — adding
+    # it would needlessly explode cardinality (e.g. group by schm_code alone
+    # should yield one row per scheme, not one row per (scheme, acid)).
+    include_acid = include_eab
     acid_select  = include_acid ? ', acid' : ''
     acid_groupby = include_acid ? ', acid' : ''
 
@@ -726,40 +731,45 @@ class ProductionDataService
     # Non-empty = per-group ROW_NUMBER — the procedure uses it verbatim inside OVER(...).
     partitionby_clause = partitionby_clause.to_s.strip
 
-    # Outer joins — concatenated and passed to the procedure as a single clause.
-    # EAB: use >= eod_date AND < end_eod_date (end_eod_date is exclusive in production data)
+    # Procedure joins — split across `tail_join` (post-pagination, on tb2) and
+    # `inner_join` (inside the inner CTE, on ts before GROUP BY).
+    #
+    # tail_join — EAB only.
+    #   Per-row as-of join (>= eod_date AND < end_eod_date — end is exclusive).
     #   Main query: if a coarse date dim was selected, use that row's period-end column
     #               (tb2.month_enddate / quarter_enddate / year_enddate) as the as-of date,
     #               so every pivot row shows the balance at the end of ITS own period.
     #   Otherwise: fall back to the global filter end date (calc_end_date) — unchanged.
     #   Comparison query always uses calc_end_date because its GROUP BY excludes the date
     #   dim, so tb2 won't contain the *_enddate column.
-    # GAM: simple join on acid — g.eod_balance is a static per-account value.
+    #
+    # inner_join — GAM (and any future tables whose columns must be visible to
+    #   select_inner / groupby_clause). Joined on ts.acid because it sits between
+    #   the UNION ALL subquery and GROUP BY.
     quoted_end_date = @connection.quote(calc_end_date.to_s)
-    eab_join_main = if include_eab
+    tail_join_main = if include_eab
       reference = active_enddate_col ? "tb2.#{active_enddate_col}" : quoted_end_date
       "LEFT JOIN eab e ON e.acid = tb2.acid AND #{reference} >= e.eod_date::date AND #{reference} < e.end_eod_date::date"
     else
       ''
     end
-    eab_join_comparison = if include_eab
+    tail_join_comparison = if include_eab
       "LEFT JOIN eab e ON e.acid = tb2.acid AND #{quoted_end_date} >= e.eod_date::date AND #{quoted_end_date} < e.end_eod_date::date"
     else
       ''
     end
-    gam_join = include_gam ? 'LEFT JOIN gam g ON g.acid = tb2.acid' : ''
 
-    eab_join            = [eab_join_main, gam_join].reject(&:blank?).join(' ')
-    comparison_eab_join = [eab_join_comparison, gam_join].reject(&:blank?).join(' ')
+    tail_join            = tail_join_main
+    comparison_tail_join = tail_join_comparison
+    inner_join           = include_gam ? 'LEFT JOIN gam g ON g.acid = ts.acid' : ''
 
     # select_outer: always selects tb2.*, then appends any outer_join_field dimensions
-    # (e.g. e.tran_date_bal AS tran_date_bal from the eab join).
+    # (only `tran_date_bal` from the EAB tail_join — GAM-sourced dims now resolve
+    # inside the inner CTE via inner_join).
     outer_dim_selects = outer_dim_keys.map { |k| "#{DIMENSIONS.fetch(k).fetch(:sql)} AS #{k}" }
-    select_outer = if (include_eab || include_gam) && outer_dim_selects.any?
-      "SELECT tb2.*, #{outer_dim_selects.join(', ')}"
-    else
-      'SELECT tb2.*'
-    end
+    select_outer = outer_dim_selects.any? \
+      ? "SELECT tb2.*, #{outer_dim_selects.join(', ')}"
+      : 'SELECT tb2.*'
 
     # Primary date dimension drives period clause SQL.
     # First check selected GROUP BY dimensions, then fall back to whichever date filter is active,
@@ -826,7 +836,8 @@ class ProductionDataService
         having_clause => #{conn.quote(having_clause)},
         orderby_clause => #{conn.quote(orderby_clause)},
         partitionby_clause => #{conn.quote(partitionby_clause)},
-        eab_join => #{conn.quote(eab_join)},
+        tail_join => #{conn.quote(tail_join)},
+        inner_join => #{conn.quote(inner_join)},
         user_id => '',
         page => #{normalized_page},
         page_size => #{normalized_page_size}
@@ -959,7 +970,8 @@ class ProductionDataService
             having_clause => '',
             orderby_clause => #{conn.quote(comparison_orderby_clause)},
             partitionby_clause => '',
-            eab_join => #{conn.quote(comparison_eab_join)},
+            tail_join => #{conn.quote(comparison_tail_join)},
+            inner_join => #{conn.quote(inner_join)},
             user_id => '',
             page => 1,
             page_size => #{comparison_page_size}
@@ -1012,7 +1024,8 @@ class ProductionDataService
         having_clause:      having_clause,
         orderby_clause:     orderby_clause,
         partitionby_clause: partitionby_clause,
-        eab_join:           eab_join,
+        tail_join:          tail_join,
+        inner_join:         inner_join,
         include_eab:        include_eab,
         page:               normalized_page,
         page_size:          normalized_page_size,

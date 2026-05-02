@@ -1,20 +1,29 @@
--- Add "eod_balance" to public.get_tran_summary projection.
+-- public.get_tran_summary procedure DDL.
 --
--- Context:
---   The procedure's inner SELECT whitelists columns from tran_summary. eod_balance was
---   not in the list, so even though the column exists in tran_summary the procedure
---   stripped it before the outer SELECT ran — producing PG::UndefinedColumn when the
---   service added eod_balance as a dimension.
+-- Signature (live):
+--   The live proc accepts both `tail_join` (renamed from `eab_join`) and a new
+--   `inner_join` parameter. The Rails service in production_data_service.rb
+--   routes joins as:
+--     • EAB (tran_date_bal)   → tail_join  (per-row as-of join after pagination, on tb2)
+--     • GAM (schm_code)       → inner_join (joined inside the inner CTE, on ts.acid)
+--     • Any new joined table  → inner_join (default), unless the predicate genuinely
+--                               depends on tb2 alignment (e.g. another as-of join).
 --
--- Change:
---   Append , "eod_balance" after "signed_tranamt" in each of the 10 UNION ALL branches.
---   All other logic is unchanged.
+-- ⚠ Body authority:
+--   The proc body below is the pre-`inner_join` snapshot — it does NOT show where
+--   `inner_join` is interpolated in the live proc. The live body is owned by the
+--   DBA; refresh this file from `pg_dump --schema-only` (or equivalent) before
+--   running it back against any environment. The signature line below is current.
+--
+-- Earlier change (still in body):
+--   Added "eod_balance" to each of the 10 UNION ALL branches so the column is
+--   available without a GAM join.
 --
 -- Safety:
 --   CREATE OR REPLACE PROCEDURE swaps the definition atomically. To revert, restore
 --   the prior definition from git history (same file, previous revision).
 
-CREATE OR REPLACE PROCEDURE public.get_tran_summary(IN select_outer text, IN select_inner text, IN where_clause text, IN prevdate_where text, IN thismonth_where text, IN thisyear_where text, IN prevmonth_where text, IN prevyear_where text, IN prevmonthmtd_where text, IN prevyearytd_where text, IN prevmonthsamedate_where text, IN prevyearsamedate_where text, IN groupby_clause text, IN having_clause text, IN orderby_clause text, IN partitionby_clause text, IN eab_join text, IN user_id text, IN page integer, IN page_size integer)
+CREATE OR REPLACE PROCEDURE public.get_tran_summary(IN select_outer text, IN select_inner text, IN where_clause text, IN prevdate_where text, IN thismonth_where text, IN thisyear_where text, IN prevmonth_where text, IN prevyear_where text, IN prevmonthmtd_where text, IN prevyearytd_where text, IN prevmonthsamedate_where text, IN prevyearsamedate_where text, IN groupby_clause text, IN having_clause text, IN orderby_clause text, IN partitionby_clause text, IN tail_join text, IN inner_join text, IN user_id text, IN page integer, IN page_size integer)
  LANGUAGE plpgsql
 AS $procedure$
 
@@ -88,7 +97,7 @@ BEGIN
 	query := query || groupby_clause || ' ';
 	query := query || having_clause || ')tb ';
 	query := query || ' WHERE tb.RN > ' || p_offset || ' AND tb.RN <= ' || p_offset + page_size || ')tb2 ';
-	query := query || eab_join || ' ';
+	query := query || tail_join || ' ';
 
 	RAISE NOTICE 'Dynamic Query: %', query;
 

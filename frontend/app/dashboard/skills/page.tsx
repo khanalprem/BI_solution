@@ -454,8 +454,8 @@ const DIMENSIONS = [
   { key: 'acid',             label: 'ACID',               type: 'categorical', sql: 'acid',              description: 'Internal account identifier — dropdown backed by get_static_data(\'acid\')' },
   { key: 'acct_num',         label: 'ACCT Num',           type: 'categorical', sql: 'acct_num',          description: 'Account number — dropdown backed by get_static_data(\'acctnum\')' },
   { key: 'acct_name',        label: 'ACCT Name',          type: 'text',        sql: 'acct_name',         description: 'Account holder name (partial ILIKE match)' },
-  { key: 'schm_code',        label: 'Scheme Code',        type: 'categorical', sql: 'g.schm_code',       description: 'Account scheme code from GAM via acid LEFT JOIN — fixed dropdown of saving / minor / woman / fixed / current. Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique. Pivot path filters via `acid IN (SELECT acid FROM gam WHERE schm_code IN (...))`; deposit path applies the predicate directly on the joined `g.schm_code`.' },
-  { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'text',        sql: 'e.tran_date_bal',   description: 'Balance snapshot from EAB via acid LEFT JOIN — listed as a dimension but rendered under pivoted headings as a measure column. Never aggregated. Requires a date dimension to resolve the EAB as-of date.' },
+  { key: 'schm_code',        label: 'Scheme Code',        type: 'categorical', sql: 'g.schm_code',       description: 'Account scheme code from GAM via acid LEFT JOIN routed through the proc\'s `inner_join` (joined inside the inner CTE on `ts.acid`, before GROUP BY) — fixed dropdown of saving / minor / woman / fixed / current. Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique. Pivot path filters via `acid IN (SELECT acid FROM gam WHERE schm_code IN (...))`; deposit path applies the predicate directly on the joined `g.schm_code`.' },
+  { key: 'tran_date_bal',    label: 'TRAN Date Balance',  type: 'text',        sql: 'e.tran_date_bal',   description: 'Balance snapshot from EAB via acid LEFT JOIN routed through the proc\'s `tail_join` (joined on `tb2.acid` after pagination, with a per-row as-of date) — listed as a dimension but rendered under pivoted headings as a measure column. Never aggregated. Requires a date dimension to resolve the EAB as-of date.' },
   { key: 'eod_balance',      label: 'GAM Balance',        type: 'text',        sql: 'g.eod_balance',     description: 'Current balance from GAM via acid LEFT JOIN — normal dimension, static per account (does not vary by date). Requires an account identifier (CIF Id / ACID / ACCT Num) for the GAM join to be unique.' },
   // ── Transaction (geo broad → narrow, then channel / type, then accounting) ──
   { key: 'tran_province',    label: 'TRAN Province',      type: 'categorical', sql: 'tran_province',     description: 'Province of the transaction branch' },
@@ -531,7 +531,8 @@ const PROC_PARAMS = [
   { name: 'having_clause',           type: 'text',    desc: 'HAVING conditions (e.g. minimum amount threshold)' },
   { name: 'orderby_clause',          type: 'text',    desc: 'ORDER BY expression from the first selected measure' },
   { name: 'partitionby_clause',      type: 'text',    desc: 'PARTITION BY for ROW_NUMBER window used for server-side pagination' },
-  { name: 'eab_join',                type: 'text',    desc: 'LEFT JOIN to EAB table — injected only when eod_balance measure is selected' },
+  { name: 'tail_join',               type: 'text',    desc: 'Outer joins applied AFTER pagination (tb2) — EAB for tran_date_bal (per-row as-of join). EAB only.' },
+  { name: 'inner_join',              type: 'text',    desc: 'Joins applied INSIDE the inner CTE (before GROUP BY) — currently GAM for schm_code; default destination for any new joined tables.' },
   { name: 'prevdate_where',          type: 'text',    desc: 'WHERE for "Previous Date" period comparison (empty string = inactive)' },
   { name: 'thismonth_where',         type: 'text',    desc: 'WHERE for "This Month" MTD comparison' },
   { name: 'thisyear_where',          type: 'text',    desc: 'WHERE for "This Year" YTD comparison' },
@@ -840,7 +841,8 @@ export default function SkillsPage() {
   having_clause            => '',
   orderby_clause           => 'SUM(tran_amt) DESC',
   partitionby_clause       => 'gam_branch',
-  eab_join                 => '',        -- or LEFT JOIN eab ON ...
+  tail_join                => '',        -- or LEFT JOIN eab ON ... (applied to tb2, post-pagination)
+  inner_join               => '',        -- joins inside the inner CTE (pre-aggregation)
   prevdate_where           => '',        -- empty = inactive
   thismonth_where          => 'tran_date BETWEEN ''2024-03-01'' AND ''2024-03-31''',
   thisyear_where           => '',
@@ -1004,7 +1006,7 @@ SELECT * FROM deposit;`}</pre>
               { color: 'border-l-accent-amber',   title: 'Period comparison without date dim', tip: 'Without a date dimension, comparison rows appear as main vs prev. Add a date dimension to merge into columns.' },
               { color: 'border-l-accent-green',   title: 'Inspect the SQL preview',           tip: 'The SQL preview card on Pivot Analysis shows the exact CALL statement. Copy and run it directly in psql or DBeaver.' },
               { color: 'border-l-accent-teal',    title: 'Filter first for speed',            tip: 'Apply Branch or Province filters before choosing dimensions — smaller WHERE clause = faster procedure execution.' },
-              { color: 'border-l-accent-red',     title: 'EOD Balance requires EAB join',     tip: 'Selecting EOD Balance measure injects a LEFT JOIN to the eab table via the eab_join procedure parameter — slightly slower.' },
+              { color: 'border-l-accent-red',     title: 'TRAN Date Balance uses tail_join',  tip: 'Selecting TRAN Date Balance injects a per-row as-of LEFT JOIN to eab via the tail_join procedure parameter (applied after pagination on tb2) — slightly slower.' },
             ].map((t) => (
               <div key={t.title} className={`rounded-lg border border-border bg-bg-card px-4 py-3.5 border-l-4 ${t.color}`}>
                 <p className="text-[12px] font-semibold text-text-primary mb-1">{t.title}</p>
