@@ -788,7 +788,7 @@ class ProductionDataService
     inner_join_parts = []
     inner_join_parts << 'LEFT JOIN gam g ON g.acid = ts.acid' if include_gam
     inner_join_parts << 'LEFT JOIN lam l ON l.acid = ts.acid' if include_lam
-    inner_join          = inner_join_parts.join(' ')
+    inner_join           = inner_join_parts.join(' ')
 
     # select_outer: always selects tb2.*, then appends any outer_join_field dimensions
     # (only `tran_date_bal` from the EAB tail_join — GAM-sourced dims now resolve
