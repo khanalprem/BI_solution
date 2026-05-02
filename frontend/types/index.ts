@@ -362,7 +362,8 @@ export interface ProductionExplorerResponse {
     having_clause:      string;
     orderby_clause:     string;
     partitionby_clause: string;
-    eab_join:           string;
+    tail_join:          string;
+    inner_join:         string;
     include_eab:        boolean;
     period_wheres:      Record<string, string>;
     page:               number;

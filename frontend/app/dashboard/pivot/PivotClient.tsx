@@ -2272,10 +2272,18 @@ export default function PivotDashboard() {
       kind: 'partition',
     });
 
-    // ── EAB join ─────────────────────────────────────────────────────────────
-    const eabVal = sp.eab_join ?? '';
+    // ── Joins ────────────────────────────────────────────────────────────────
+    // tail_join: applied AFTER pagination (tb2). EAB / GAM live here.
+    // inner_join: applied INSIDE the inner CTE (before GROUP BY). Empty unless
+    // a future dim/measure needs columns from a join inside the aggregation.
+    const tailVal = sp.tail_join ?? '';
     lines.push({
-      text: `  eab_join                 => '${eabVal}',${eabVal ? '  -- ✓ tran_date_bal selected → LEFT JOIN eab' : '  -- empty: tran_date_bal not selected'}`,
+      text: `  tail_join                => '${tailVal}',${tailVal ? '  -- ✓ tran_date_bal selected → LEFT JOIN eab' : '  -- empty: tran_date_bal not selected'}`,
+      kind: 'eab',
+    });
+    const innerVal = sp.inner_join ?? '';
+    lines.push({
+      text: `  inner_join               => '${innerVal}',${innerVal ? '' : '  -- empty: no inner-CTE join required'}`,
       kind: 'eab',
     });
 
