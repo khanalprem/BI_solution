@@ -1650,7 +1650,7 @@ export default function LoansClient() {
     if (selectedMeasures.length > 0)   params.set('measures', selectedMeasures.join(','));
     if (page > 1) params.set('page', String(page));
     const qs = params.toString();
-    const newUrl = qs ? `?${qs}` : '/dashboard/pivot';
+    const newUrl = qs ? `?${qs}` : '/dashboard/loans';
     router.replace(newUrl, { scroll: false });
   }, [selectedDimensions, selectedMeasures, page, router]);
 
