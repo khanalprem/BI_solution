@@ -320,4 +320,26 @@ RSpec.describe ProductionDataService, type: :service do
     end
   end
 
+  describe 'LAM dimensions' do
+    LAM_KEYS = %w[
+      lam_rep_shdl_date lam_dis_shdl_date lam_dis_amt lam_oflow_amt
+      lam_last_adj_date lam_op_acid lam_cum_norm_int_amt lam_cum_pen_int_amt
+      lam_cum_addnl_int_amt lam_acct_state lam_loan_type lam_prin_dmd_os
+      lam_int_dmd_os
+    ].freeze
+
+    LAM_KEYS.each do |key|
+      it "registers #{key} as a LAM-required inner-join dimension" do
+        meta = described_class::DIMENSIONS[key]
+        expect(meta).not_to be_nil, "DIMENSIONS missing #{key}"
+        expect(meta[:lam_required]).to eq(true)
+        expect(meta[:gam_required]).to be_falsey
+        expect(meta[:eab_required]).to be_falsey
+        expect(meta[:outer_join_field]).to be_falsey
+        # Must reference the lam table alias 'l.' so the join target resolves.
+        expect(meta[:sql]).to start_with('l.')
+      end
+    end
+  end
+
 end

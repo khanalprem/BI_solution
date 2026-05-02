@@ -162,7 +162,26 @@ class ProductionDataService
     # inner CTE, before GROUP BY), so `g.schm_code` is visible to select_inner /
     # groupby_clause. The frontend gates this dim on an account-identifier
     # prerequisite so the GAM join row is unique per account.
-    'schm_code'        => { label: 'Scheme Code',        sql: 'g.schm_code',     gam_required: true }
+    'schm_code'        => { label: 'Scheme Code',        sql: 'g.schm_code',     gam_required: true },
+    # ── LAM (Loan Account Master) dimensions ──────────────────────────────────
+    # Pulled in via the proc's `inner_join` (applied INSIDE the inner CTE,
+    # before GROUP BY), so `l.<col>` is visible to select_inner / groupby_clause.
+    # All 13 entries flag `lam_required: true` so the inner-join builder knows
+    # to inject `LEFT JOIN lam l ON l.acid = ts.acid`. LEFT (not INNER) so empty
+    # LAM data does not zero out unrelated queries on /pivot.
+    'lam_rep_shdl_date'     => { label: 'Repayment Schedule Date',        sql: 'l.rep_shdl_date',     lam_required: true },
+    'lam_dis_shdl_date'     => { label: 'Disbursement Schedule Date',     sql: 'l.dis_shdl_date',     lam_required: true },
+    'lam_dis_amt'           => { label: 'Disbursement Amount',            sql: 'l.dis_amt',           lam_required: true },
+    'lam_oflow_amt'         => { label: 'Overflow Amount',                sql: 'l.oflow_amt',         lam_required: true },
+    'lam_last_adj_date'     => { label: 'Last Adjustment Date',           sql: 'l.last_adj_date',     lam_required: true },
+    'lam_op_acid'           => { label: 'Operative ACID',                 sql: 'l.op_acid',           lam_required: true },
+    'lam_cum_norm_int_amt'  => { label: 'Cumulative Normal Interest',     sql: 'l.cum_norm_int_amt',  lam_required: true },
+    'lam_cum_pen_int_amt'   => { label: 'Cumulative Penal Interest',      sql: 'l.cum_pen_int_amt',   lam_required: true },
+    'lam_cum_addnl_int_amt' => { label: 'Cumulative Additional Interest', sql: 'l.cum_addnl_int_amt', lam_required: true },
+    'lam_acct_state'        => { label: 'Account State',                  sql: 'l.acct_state',        lam_required: true },
+    'lam_loan_type'         => { label: 'Loan Type',                      sql: 'l.loan_type',         lam_required: true },
+    'lam_prin_dmd_os'       => { label: 'Principal Demand Outstanding',   sql: 'l.prin_dmd_os',       lam_required: true },
+    'lam_int_dmd_os'        => { label: 'Interest Demand Outstanding',    sql: 'l.int_dmd_os',        lam_required: true }
   }.freeze
 
   # Dimensions available to the Deposit Portfolio report (driven by `public.get_deposit`).
