@@ -655,6 +655,7 @@ class ProductionDataService
     # tran_date_bal → LEFT JOIN eab; eod_balance → LEFT JOIN gam.
     include_eab = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:eab_required] }
     include_gam = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:gam_required] }
+    include_lam = dimension_keys.any? { |k| DIMENSIONS.fetch(k)[:lam_required] }
 
     # Include acid in inner select/groupby only when EAB's tail_join needs to find
     # `tb2.acid`. The GAM inner_join joins on `ts.acid` (always projected from the
@@ -780,7 +781,14 @@ class ProductionDataService
 
     tail_join            = tail_join_main
     comparison_tail_join = tail_join_comparison
-    inner_join           = include_gam ? 'LEFT JOIN gam g ON g.acid = ts.acid' : ''
+    # Compose inner-join clauses. Each `*_required` flag adds one LEFT JOIN.
+    # All joins resolve on `ts.acid` (the inner CTE alias), and join types are
+    # all LEFT so empty target tables (e.g. LAM at 0 rows today) do not zero
+    # out unrelated queries.
+    inner_join_parts = []
+    inner_join_parts << 'LEFT JOIN gam g ON g.acid = ts.acid' if include_gam
+    inner_join_parts << 'LEFT JOIN lam l ON l.acid = ts.acid' if include_lam
+    inner_join          = inner_join_parts.join(' ')
 
     # select_outer: always selects tb2.*, then appends any outer_join_field dimensions
     # (only `tran_date_bal` from the EAB tail_join — GAM-sourced dims now resolve
