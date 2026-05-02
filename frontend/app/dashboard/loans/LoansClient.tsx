@@ -192,56 +192,33 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'year_month',   label: 'Year Month',    type: 'month',   filterKey: 'yearMonth',   fromKey: 'yearMonthFrom',   toKey: 'yearMonthTo',   description: 'Monthly period (YYYY-MM)' },
   { key: 'tran_date',    label: 'Tran Date',     type: 'date',    filterKey: 'tranDate',    fromKey: 'tranDateFrom',    toKey: 'tranDateTo',    description: 'Daily granularity (YYYY-MM-DD)' },
 
-  // ── Customer / Account (geo hierarchy, then identity broad → narrow) ─────
-  { key: 'gam_province',     label: 'GAM Province',     type: 'categorical', filterKey: 'province',      optionsKey: 'provinces',         description: 'Province of the account branch (GAM)' },
-  { key: 'gam_cluster',      label: 'GAM Cluster',      type: 'categorical', filterKey: 'cluster',       optionsKey: 'clusters',          description: 'Account branch cluster (GAM)' },
-  { key: 'gam_branch',       label: 'GAM Branch',       type: 'categorical', filterKey: 'branchCode',    optionsKey: 'branches',          description: 'Account registration branch (GAM)' },
-  { key: 'cif_id',           label: 'CIF Id',           type: 'categorical', filterKey: 'cifId',         optionsKey: 'cif_ids',           description: 'Customer CIF ID' },
-  { key: 'acid',             label: 'ACID',             type: 'categorical', filterKey: 'acid',          optionsKey: 'acids',             description: 'Internal account identifier' },
-  { key: 'acct_num',         label: 'ACCT Num',         type: 'categorical', filterKey: 'acctNum',       optionsKey: 'acct_nums',         description: 'Account number' },
-  { key: 'acct_name',        label: 'ACCT Name',        type: 'text',                                    description: 'Account holder name (partial match)' },
-  { key: 'schm_code',        label: 'Scheme Code',      type: 'categorical', filterKey: 'schmCode',      staticOptions: [
-    { name: 'saving',  value: 'saving'  },
-    { name: 'minor',   value: 'minor'   },
-    { name: 'woman',   value: 'woman'   },
-    { name: 'fixed',   value: 'fixed'   },
-    { name: 'current', value: 'current' },
-  ], description: 'Account scheme code from GAM (saving / minor / woman / fixed / current); requires an account identifier for the GAM join to be unique' },
-  { key: 'schm_type',        label: 'Scheme Type',      type: 'categorical', filterKey: 'schmType',      staticOptions: [
-    { name: 'A', value: 'A' },
-    { name: 'B', value: 'B' },
-    { name: 'C', value: 'C' },
-    { name: 'D', value: 'D' },
-    { name: 'E', value: 'E' },
-  ], description: 'Account scheme type classification (A–E)' },
-  { key: 'schm_sub_type',    label: 'Scheme Subtype',   type: 'categorical', filterKey: 'schmSubType',   staticOptions: [
-    { name: 'W', value: 'W' },
-    { name: 'X', value: 'X' },
-    { name: 'Y', value: 'Y' },
-    { name: 'Z', value: 'Z' },
-  ], description: 'Account scheme subtype classification (W–Z)' },
-  { key: 'tran_date_bal',    label: 'TRAN Date Balance', type: 'text',                                   description: 'Balance snapshot from EAB — renders under pivoted headings as a value column; requires a date dimension' },
-  { key: 'eod_balance',      label: 'GAM Balance',      type: 'text',                                    description: 'Current balance from GAM — static per account (does not vary by date); requires an account identifier' },
+  // ── Geography (account side, gam_*) ──────────────────────────────────────
+  { key: 'gam_province', label: 'GAM Province', type: 'categorical', filterKey: 'province',   optionsKey: 'provinces', description: 'Province of the account branch (GAM)' },
+  { key: 'gam_cluster',  label: 'GAM Cluster',  type: 'categorical', filterKey: 'cluster',    optionsKey: 'clusters',  description: 'Account branch cluster (GAM)' },
+  { key: 'gam_branch',   label: 'GAM Branch',   type: 'categorical', filterKey: 'branchCode', optionsKey: 'branches',  description: 'Account registration branch (GAM)' },
 
-  // ── Transaction (geo, then channel / type, then accounting / product) ────
-  { key: 'tran_province',    label: 'TRAN Province',    type: 'categorical', filterKey: 'tranProvince',  optionsKey: 'provinces',         description: 'Province of the transaction branch' },
-  { key: 'tran_cluster',     label: 'TRAN Cluster',     type: 'categorical', filterKey: 'tranCluster',   optionsKey: 'clusters',          description: 'Transaction branch cluster' },
-  { key: 'tran_branch',      label: 'TRAN Branch',      type: 'categorical', filterKey: 'tranBranch',    optionsKey: 'branches',          description: 'Branch where the transaction was processed' },
-  { key: 'tran_source',      label: 'TRAN Source',      type: 'text-multi',  filterKey: 'tranSource',    description: 'Transaction channel (free-text multi-value)' },
-  { key: 'tran_type',        label: 'TRAN Type',        type: 'text-multi',  filterKey: 'tranType',      description: 'Transaction type code (free-text multi-value)' },
-  { key: 'tran_sub_type',    label: 'TRAN Subtype',     type: 'categorical', filterKey: 'tranSubType',   staticOptions: [
-    { name: 'P', value: 'P' },
-    { name: 'I', value: 'I' },
-  ], description: 'Transaction subtype (P / I) — sparsely populated; most rows are NULL and group into a single bucket' },
-  { key: 'part_tran_type',   label: 'PART Tran Type',   type: 'categorical', filterKey: 'partTranType',  staticOptions: [{ name: 'CR', value: 'CR' }, { name: 'DR', value: 'DR' }], description: 'Credit or debit side — CR or DR' },
-  { key: 'gl_sub_head_code', label: 'GL Sub Head',      type: 'categorical', filterKey: 'glSubHeadCode', optionsKey: 'gl_sub_head_codes', description: 'General ledger sub-head code' },
-  { key: 'product',          label: 'Product',          type: 'categorical', filterKey: 'product',       optionsKey: 'products',          description: 'Banking product associated with the account' },
-  { key: 'service',          label: 'Service',          type: 'categorical', filterKey: 'service',       optionsKey: 'services',          description: 'Service type applied to the transaction' },
-  { key: 'merchant',         label: 'Merchant',         type: 'categorical', filterKey: 'merchant',      optionsKey: 'merchants',         description: 'Merchant identifier for payment transactions' },
+  // ── Geography (transaction side, tran_*) ─────────────────────────────────
+  { key: 'tran_province', label: 'TRAN Province', type: 'categorical', filterKey: 'tranProvince', optionsKey: 'provinces', description: 'Province of the transaction branch' },
+  { key: 'tran_cluster',  label: 'TRAN Cluster',  type: 'categorical', filterKey: 'tranCluster',  optionsKey: 'clusters',  description: 'Transaction branch cluster' },
+  { key: 'tran_branch',   label: 'TRAN Branch',   type: 'categorical', filterKey: 'tranBranch',   optionsKey: 'branches',  description: 'Branch where the transaction was processed' },
 
-  // ── User ─────────────────────────────────────────────────────────────────
-  { key: 'entry_user',       label: 'ENTRY User',       type: 'categorical', filterKey: 'entryUser',     optionsKey: 'users',             description: 'User who entered the transaction' },
-  { key: 'vfd_user',         label: 'VFD User',         type: 'categorical', filterKey: 'vfdUser',       optionsKey: 'users',             description: 'User who verified the transaction' },
+  // ── Loan (LAM) dimensions ────────────────────────────────────────────────
+  // All LAM fields are exposed as DIMENSIONS per design (numeric amounts group
+  // by raw value). No filterKey: filter UI for LAM is deferred until LAM is
+  // populated and we know the value distributions.
+  { key: 'lam_loan_type',         label: 'Loan Type',                      type: 'text', description: 'Loan type from LAM (e.g. term loan, cash credit)' },
+  { key: 'lam_acct_state',        label: 'Account State',                  type: 'text', description: 'Account state from LAM' },
+  { key: 'lam_op_acid',           label: 'Operative ACID',                 type: 'text', description: 'Operative account ACID — the operating account that backs this loan' },
+  { key: 'lam_dis_shdl_date',     label: 'Disbursement Schedule Date',     type: 'text', description: 'Scheduled disbursement date from LAM' },
+  { key: 'lam_rep_shdl_date',     label: 'Repayment Schedule Date',        type: 'text', description: 'Scheduled repayment date from LAM' },
+  { key: 'lam_last_adj_date',     label: 'Last Adjustment Date',           type: 'text', description: 'Last adjustment date on the loan account' },
+  { key: 'lam_dis_amt',           label: 'Disbursement Amount',            type: 'text', description: 'Disbursed amount on the loan' },
+  { key: 'lam_oflow_amt',         label: 'Overflow Amount',                type: 'text', description: 'Overflow amount on the loan' },
+  { key: 'lam_cum_norm_int_amt',  label: 'Cumulative Normal Interest',     type: 'text', description: 'Cumulative normal interest accrued on the loan' },
+  { key: 'lam_cum_pen_int_amt',   label: 'Cumulative Penal Interest',      type: 'text', description: 'Cumulative penal interest accrued on the loan' },
+  { key: 'lam_cum_addnl_int_amt', label: 'Cumulative Additional Interest', type: 'text', description: 'Cumulative additional interest accrued on the loan' },
+  { key: 'lam_prin_dmd_os',       label: 'Principal Demand Outstanding',   type: 'text', description: 'Outstanding principal demand on the loan' },
+  { key: 'lam_int_dmd_os',        label: 'Interest Demand Outstanding',    type: 'text', description: 'Outstanding interest demand on the loan' },
 ];
 
 // ─── Measure definitions ──────────────────────────────────────────────────────
@@ -289,7 +266,7 @@ const STANDARD_MEASURES: MeasureDef[] = [
 // labels. They are balance snapshots pulled via the EAB LEFT JOIN (outer_join_field)
 // and are never aggregated — values change every day so SUM would be meaningless.
 // Requires at least one date dimension to provide the EAB as-of reference date.
-const DISPLAY_AS_MEASURE_DIMS = new Set(['tran_date_bal']);
+const DISPLAY_AS_MEASURE_DIMS = new Set<string>([]);
 
 // Dimension prerequisites: a dim can only be selected when EVERY listed group has
 // at least one of its companion dims chosen (AND across groups, OR within each
@@ -306,20 +283,7 @@ type DimPrereqGroup = { keys: string[]; label: string };
 const ACCOUNT_ID_KEYS = ['cif_id', 'acid', 'acct_num'];
 const ACCOUNT_ID_LABEL = 'an account identifier (CIF Id / ACID / ACCT Num)';
 
-const DIM_PREREQS: Record<string, DimPrereqGroup[]> = {
-  tran_date_bal: [
-    {
-      keys: DATE_FIELD_ORDER as unknown as string[],
-      label: 'a date dimension (year / quarter / month / day)',
-    },
-    {
-      keys: [...ACCOUNT_ID_KEYS, 'acct_name'],
-      label: 'an account identifier (CIF Id / ACID / ACCT Num / ACCT Name)',
-    },
-  ],
-  eod_balance: [{ keys: ACCOUNT_ID_KEYS, label: ACCOUNT_ID_LABEL }],
-  schm_code:   [{ keys: ACCOUNT_ID_KEYS, label: ACCOUNT_ID_LABEL }],
-};
+const DIM_PREREQS: Record<string, DimPrereqGroup[]> = {};
 
 function prereqSatisfied(dimKey: string, selected: string[]): boolean {
   const groups = DIM_PREREQS[dimKey];
