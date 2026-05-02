@@ -4,6 +4,12 @@
 
 /* BankBI Design System */
 :root {
+  /* Font families — wired by tailwind.config.ts → font-sans/display/mono.
+     Self-hosted via @fontsource (loaded in app/layout.tsx). */
+  --font-sans:    'Inter';
+  --font-display: 'Plus Jakarta Sans';
+  --font-mono:    'JetBrains Mono';
+
   /* Backgrounds — slate-900/800 base */
   --bg-base:        #0F172A;
   --bg-surface:     #1E293B;
