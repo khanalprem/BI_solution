@@ -291,6 +291,7 @@ RSpec.describe ProductionDataService, type: :service do
       if sql.is_a?(String) && sql.include?('CALL public.get_tran_summary')
         $captured_proc_args = {
           orderby_clause: sql[/orderby_clause\s*=>\s*'([^']*)'/, 1].to_s,
+          inner_join:     sql[/inner_join\s*=>\s*'([^']*)'/, 1].to_s,
         }
         nil
       elsif sql.is_a?(String) && sql.start_with?('DROP TABLE')
@@ -317,6 +318,67 @@ RSpec.describe ProductionDataService, type: :service do
         expect(meta[:gam_required]).to be_falsey
         expect(meta[:outer_join_field]).to be_falsey
       end
+    end
+  end
+
+  describe 'LAM dimensions' do
+    LAM_KEYS = %w[
+      lam_rep_shdl_date lam_dis_shdl_date lam_dis_amt lam_oflow_amt
+      lam_last_adj_date lam_op_acid lam_cum_norm_int_amt lam_cum_pen_int_amt
+      lam_cum_addnl_int_amt lam_acct_state lam_loan_type lam_prin_dmd_os
+      lam_int_dmd_os
+    ].freeze
+
+    LAM_KEYS.each do |key|
+      it "registers #{key} as a LAM-required inner-join dimension" do
+        meta = described_class::DIMENSIONS[key]
+        expect(meta).not_to be_nil, "DIMENSIONS missing #{key}"
+        expect(meta[:lam_required]).to eq(true)
+        expect(meta[:gam_required]).to be_falsey
+        expect(meta[:eab_required]).to be_falsey
+        expect(meta[:outer_join_field]).to be_falsey
+        # Must reference the lam table alias 'l.' so the join target resolves.
+        expect(meta[:sql]).to start_with('l.')
+      end
+    end
+  end
+
+  describe 'inner_join composition' do
+    let(:svc) { described_class.new(connection: ActiveRecord::Base.connection) }
+    before { stub_proc_call!(svc) }
+
+    def call_explorer(dimensions:)
+      svc.tran_summary_explorer(
+        start_date: Date.new(2024, 1, 1),
+        end_date:   Date.new(2024, 1, 31),
+        dimensions: dimensions,
+        measures:   ['tran_amt'],
+        filters:    {},
+        page: 1, page_size: 10,
+      )
+      $captured_proc_args[:inner_join]
+    end
+
+    it 'is empty when no gam_required or lam_required dim is selected' do
+      expect(call_explorer(dimensions: ['gam_branch'])).to eq('')
+    end
+
+    it 'injects only the GAM join when schm_code is selected' do
+      result = call_explorer(dimensions: %w[acid schm_code])
+      expect(result).to include('LEFT JOIN gam g ON g.acid = ts.acid')
+      expect(result).not_to include('LEFT JOIN lam')
+    end
+
+    it 'injects only the LAM join when a lam_* dim is selected' do
+      result = call_explorer(dimensions: ['lam_loan_type'])
+      expect(result).to include('LEFT JOIN lam l ON l.acid = ts.acid')
+      expect(result).not_to include('LEFT JOIN gam')
+    end
+
+    it 'injects both GAM and LAM joins when schm_code and a lam_* dim are selected together' do
+      result = call_explorer(dimensions: %w[acid schm_code lam_loan_type])
+      expect(result).to include('LEFT JOIN gam g ON g.acid = ts.acid')
+      expect(result).to include('LEFT JOIN lam l ON l.acid = ts.acid')
     end
   end
 

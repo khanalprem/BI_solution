@@ -474,6 +474,20 @@ const DIMENSIONS = [
   // ── User ────────────────────────────────────────────────────────────────────
   { key: 'entry_user',       label: 'ENTRY User',         type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
   { key: 'vfd_user',         label: 'VFD User',           type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
+  // ── LAM (Loan Account Master) dimensions — surfaced on /dashboard/loans ──
+  { key: 'lam_rep_shdl_date',     label: 'Repayment Schedule Date',        type: 'text',        sql: 'l.rep_shdl_date',     description: 'Scheduled repayment date from LAM via acid LEFT JOIN routed through the proc\'s `inner_join` (joined on `ts.acid` inside the inner CTE, before GROUP BY).' },
+  { key: 'lam_dis_shdl_date',     label: 'Disbursement Schedule Date',     type: 'text',        sql: 'l.dis_shdl_date',     description: 'Scheduled disbursement date from LAM. Same inner_join routing as lam_rep_shdl_date.' },
+  { key: 'lam_dis_amt',           label: 'Disbursement Amount',            type: 'text',        sql: 'l.dis_amt',           description: 'Disbursed amount on the loan, exposed as a dimension (group by raw value).' },
+  { key: 'lam_oflow_amt',         label: 'Overflow Amount',                type: 'text',        sql: 'l.oflow_amt',         description: 'Overflow amount on the loan, exposed as a dimension.' },
+  { key: 'lam_last_adj_date',     label: 'Last Adjustment Date',           type: 'text',        sql: 'l.last_adj_date',     description: 'Last adjustment date on the loan account.' },
+  { key: 'lam_op_acid',           label: 'Operative ACID',                 type: 'text',        sql: 'l.op_acid',           description: 'Operative account ACID — the operating account that backs this loan facility.' },
+  { key: 'lam_cum_norm_int_amt',  label: 'Cumulative Normal Interest',     type: 'text',        sql: 'l.cum_norm_int_amt',  description: 'Cumulative normal interest accrued on the loan, exposed as a dimension.' },
+  { key: 'lam_cum_pen_int_amt',   label: 'Cumulative Penal Interest',      type: 'text',        sql: 'l.cum_pen_int_amt',   description: 'Cumulative penal interest accrued on the loan, exposed as a dimension.' },
+  { key: 'lam_cum_addnl_int_amt', label: 'Cumulative Additional Interest', type: 'text',        sql: 'l.cum_addnl_int_amt', description: 'Cumulative additional interest accrued on the loan, exposed as a dimension.' },
+  { key: 'lam_acct_state',        label: 'Account State',                  type: 'categorical', sql: 'l.acct_state',        description: 'Account state from LAM (free-text categorical; no fixed dropdown until LAM is populated).' },
+  { key: 'lam_loan_type',         label: 'Loan Type',                      type: 'categorical', sql: 'l.loan_type',         description: 'Loan type from LAM (e.g. term loan, cash credit; no fixed dropdown until LAM is populated).' },
+  { key: 'lam_prin_dmd_os',       label: 'Principal Demand Outstanding',   type: 'text',        sql: 'l.prin_dmd_os',       description: 'Outstanding principal demand on the loan, exposed as a dimension.' },
+  { key: 'lam_int_dmd_os',        label: 'Interest Demand Outstanding',    type: 'text',        sql: 'l.int_dmd_os',        description: 'Outstanding interest demand on the loan, exposed as a dimension.' },
 ];
 
 // ─── Measures ─────────────────────────────────────────────────────────────────
@@ -786,7 +800,7 @@ export default function SkillsPage() {
         {/* ── Dimensions ───────────────────────────────────────────────────── */}
         <section>
           <SectionHeader
-            label="Pivot Dimensions (29)"
+            label="Pivot Dimensions (42)"
             sub="All GROUP BY fields available in Pivot Analysis. Each becomes a column in the SELECT and GROUP BY clause of get_tran_summary. Fields marked pivot-capable can become column headers (tran_type, part_tran_type, gl_sub_head_code, and all date fields)."
           />
           <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
