@@ -474,7 +474,7 @@ const DIMENSIONS = [
   // ── User ────────────────────────────────────────────────────────────────────
   { key: 'entry_user',       label: 'ENTRY User',         type: 'categorical', sql: 'entry_user',        description: 'User who entered the transaction' },
   { key: 'vfd_user',         label: 'VFD User',           type: 'categorical', sql: 'vfd_user',          description: 'User who verified the transaction' },
-  // ── LAM (Loan Account Master) dimensions — surfaced on /dashboard/loans ──
+  // ── LAM (Loan Account Master) dimensions — surfaced on /dashboard/loans and /dashboard/pivot ──
   { key: 'lam_rep_shdl_date',     label: 'Repayment Schedule Date',        type: 'text',        sql: 'l.rep_shdl_date',     description: 'Scheduled repayment date from LAM via acid LEFT JOIN routed through the proc\'s `inner_join` (joined on `ts.acid` inside the inner CTE, before GROUP BY).' },
   { key: 'lam_dis_shdl_date',     label: 'Disbursement Schedule Date',     type: 'text',        sql: 'l.dis_shdl_date',     description: 'Scheduled disbursement date from LAM. Same inner_join routing as lam_rep_shdl_date.' },
   { key: 'lam_dis_amt',           label: 'Disbursement Amount',            type: 'text',        sql: 'l.dis_amt',           description: 'Disbursed amount on the loan, exposed as a dimension (group by raw value).' },
