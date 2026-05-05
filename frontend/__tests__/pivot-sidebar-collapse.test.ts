@@ -46,6 +46,14 @@ describe('loadExpandedSections', () => {
     const result = loadExpandedSections();
     expect([...result]).toEqual(['measures']);
   });
+
+  it('accepts loanDimensions as a known section id', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(['loanDimensions']));
+    const result = loadExpandedSections();
+    expect(result.has('loanDimensions')).toBe(true);
+    expect(result.has('dimensions')).toBe(false);
+    expect(result.has('measures')).toBe(false);
+  });
 });
 
 describe('saveExpandedSections', () => {
@@ -71,5 +79,14 @@ describe('saveExpandedSections', () => {
   it('writes an empty array when the set is empty', () => {
     saveExpandedSections(new Set());
     expect(localStorage.getItem(STORAGE_KEY)).toBe('[]');
+  });
+
+  it('orders loanDimensions between dimensions and measures', () => {
+    saveExpandedSections(
+      new Set<SidebarSectionId>(['measures', 'dimensions', 'loanDimensions']),
+    );
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(
+      JSON.stringify(['dimensions', 'loanDimensions', 'measures']),
+    );
   });
 });

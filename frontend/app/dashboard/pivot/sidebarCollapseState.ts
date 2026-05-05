@@ -1,10 +1,11 @@
 // Pure helpers for the Pivot sidebar expanded-section state.
 // No React / Next deps — unit-tested in __tests__/pivot-sidebar-collapse.test.ts.
 
-export type SidebarSectionId = 'dimensions' | 'measures';
+export type SidebarSectionId = 'dimensions' | 'loanDimensions' | 'measures';
 
 export const SIDEBAR_SECTION_IDS: readonly SidebarSectionId[] = [
   'dimensions',
+  'loanDimensions',
   'measures',
 ] as const;
 
