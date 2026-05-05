@@ -25,6 +25,7 @@ import {
   saveExpandedSections,
   type SidebarSectionId,
 } from './sidebarCollapseState';
+import { LOAN_DIMENSION_FIELDS, LOAN_DIM_KEY_SET } from './loanDimensions';
 
 // ─── SQL preview — module-level constants (never recreated per render) ─────────
 
@@ -407,9 +408,10 @@ function comparisonsForBase(baseKey: MeasureChildBaseKey): MeasureDef[] {
 // Falls back to underscore→space for unknown keys (e.g. raw catalog columns).
 const FIELD_LABELS: Map<string, string> = (() => {
   const m = new Map<string, string>();
-  for (const f of DIMENSION_FIELDS)    m.set(f.key, f.label);
-  for (const x of STANDARD_MEASURES)   m.set(x.key, x.label);
-  for (const x of COMPARISON_MEASURES) m.set(x.key, x.label);
+  for (const f of DIMENSION_FIELDS)      m.set(f.key, f.label);
+  for (const f of LOAN_DIMENSION_FIELDS) m.set(f.key, f.label);
+  for (const x of STANDARD_MEASURES)     m.set(x.key, x.label);
+  for (const x of COMPARISON_MEASURES)   m.set(x.key, x.label);
   return m;
 })();
 const labelFor = (k: string): string => FIELD_LABELS.get(k) ?? k.replaceAll('_', ' ');
@@ -1767,8 +1769,14 @@ export default function PivotDashboard() {
   // header and the expanded/collapsed summary line.
   const dimensionSelectedCount = useMemo(() => {
     const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
-    return selectedDimensions.length + (amountActive ? 1 : 0);
+    const nonLoanCount = selectedDimensions.filter((k) => !LOAN_DIM_KEY_SET.has(k)).length;
+    return nonLoanCount + (amountActive ? 1 : 0);
   }, [selectedDimensions, filters.minAmount, filters.maxAmount]);
+
+  const loanDimSelectedCount = useMemo(
+    () => selectedDimensions.filter((k) => LOAN_DIM_KEY_SET.has(k)).length,
+    [selectedDimensions],
+  );
 
   const measureSelectedCount = useMemo(
     () => selectedMeasures.filter((k) => STANDARD_MEASURES.some((m) => m.key === k)).length,
@@ -1789,11 +1797,20 @@ export default function PivotDashboard() {
   const dimensionSummary = useMemo(() => {
     if (dimensionSelectedCount === 0) return undefined;
     const labels = selectedDimensions
+      .filter((k) => !LOAN_DIM_KEY_SET.has(k))
       .map((k) => DIMENSION_FIELDS.find((f) => f.key === k)?.label ?? k);
     const amountActive = (filters.minAmount ?? '') !== '' || (filters.maxAmount ?? '') !== '';
     if (amountActive) labels.push('Amount Range');
     return summarizeLabels(labels);
   }, [selectedDimensions, dimensionSelectedCount, filters.minAmount, filters.maxAmount]);
+
+  const loanDimSummary = useMemo(() => {
+    if (loanDimSelectedCount === 0) return undefined;
+    const labels = selectedDimensions
+      .filter((k) => LOAN_DIM_KEY_SET.has(k))
+      .map((k) => LOAN_DIMENSION_FIELDS.find((f) => f.key === k)?.label ?? k);
+    return summarizeLabels(labels);
+  }, [selectedDimensions, loanDimSelectedCount]);
 
   const measureSummary = useMemo(() => {
     if (measureSelectedCount === 0) return undefined;
@@ -1807,8 +1824,9 @@ export default function PivotDashboard() {
   // Render-side decision: simply membership in the expanded-set. The smart
   // default ['dimensions'] is applied inside loadExpandedSections; user toggles
   // store their explicit preference verbatim.
-  const dimensionsExpanded  = expandedSections.has('dimensions');
-  const measuresExpanded    = expandedSections.has('measures');
+  const dimensionsExpanded   = expandedSections.has('dimensions');
+  const loanDimsExpanded     = expandedSections.has('loanDimensions');
+  const measuresExpanded     = expandedSections.has('measures');
 
   // Per-measure expand state for nested comparison children. Session-only —
   // not persisted (transient navigation aid).
@@ -2812,6 +2830,96 @@ export default function PivotDashboard() {
                   />
                 </div>
               </div>
+            </SidebarSection>
+
+            {/* LOAN DIMENSION — LAM-backed loan attributes (group-by only) */}
+            <SidebarSection
+              id="loanDimensions"
+              title="Loan Dimension"
+              description="Loan account attributes from LAM (group-by only; LAM is empty in prod today)"
+              selectedCount={loanDimSelectedCount}
+              summary={loanDimSummary}
+              expanded={loanDimsExpanded}
+              onToggle={() => toggleSection('loanDimensions')}
+            >
+              <ul className="divide-y divide-border">
+                {LOAN_DIMENSION_FIELDS.map((field) => {
+                  const selected = selectedDimensions.includes(field.key);
+                  const ordered  = effectiveOrderList.includes(field.key);
+                  const orderIdx = effectiveOrderList.indexOf(field.key);
+                  const badge    = TYPE_BADGE[field.type];
+                  return (
+                    <li
+                      key={field.key}
+                      className={`transition-colors border-l-2 ${selected ? 'bg-accent-blue/5 border-accent-blue' : 'border-transparent hover:bg-row-hover'}`}
+                    >
+                      <div
+                        className="flex items-center gap-3 px-4 py-2.5 select-none cursor-pointer"
+                        onClick={() => toggleDimension(field.key)}
+                      >
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => {}}
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className={`text-[12px] font-medium ${selected ? 'text-accent-blue' : 'text-text-primary'}`}>
+                              {field.label}
+                            </span>
+                            <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                            {ordered && (
+                              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border border-accent-amber/30 bg-accent-amber/10 text-accent-amber">
+                                sort #{orderIdx + 1}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-0.5 truncate">{field.description}</p>
+                        </div>
+
+                        {/* Sort buttons — disabled while pivot is on (orderby_clause is auto-built from pivot). */}
+                        {(() => {
+                          const sortDisabled = pivotActive;
+                          return (
+                            <div className="flex-shrink-0 inline-flex rounded-md border border-border overflow-hidden">
+                              {(['asc', 'desc'] as const).map((d) => {
+                                const isActive = ordered && (orderDirs[field.key] ?? 'desc') === d;
+                                const arrow    = d === 'asc' ? '↑' : '↓';
+                                return (
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={sortDisabled}
+                                    onClick={(e) => setOrderFieldDir(field.key, d, e)}
+                                    className={`px-2 py-1 text-[10.5px] font-mono transition-colors ${d === 'desc' ? 'border-l border-border' : ''} ${
+                                      sortDisabled
+                                        ? 'bg-bg-input/40 text-text-muted/40 cursor-not-allowed'
+                                        : isActive
+                                          ? 'bg-accent-amber/15 text-accent-amber'
+                                          : 'bg-bg-input text-text-muted hover:bg-accent-amber/10 hover:text-accent-amber'
+                                    }`}
+                                    title={
+                                      pivotActive
+                                        ? 'Sort disabled while Pivot is on (ORDER BY is auto-built from pivot)'
+                                        : `Sort ${field.label} ${d.toUpperCase()}`
+                                    }
+                                  >
+                                    {arrow}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </SidebarSection>
 
             {/* MEASURES — standard aggregations only */}
