@@ -255,3 +255,11 @@ UI_IMPROVEMENTS_COMPLETE.md
 # ----------------------------------------------------------
 CLAUDE.md
 .claude/
+
+# ----------------------------------------------------------
+# Local DB dumps — contains customer PII; NEVER commit.
+# ----------------------------------------------------------
+/db-backup/
+*.dump
+*.sql.gz
+*.pgdump
